@@ -26,6 +26,14 @@ Checks, each falsifiable and each able to actually fail:
       - FAIL     -- none of the above. This is the only outcome that fails the check, which is
                     the whole point: a scanner that flags things nobody can ever fix trains
                     everyone to ignore it, so only a genuinely unclassified hit fails the run.
+ 6. The generated `dist/install.sh`: none of 'pegasus' or 'harness' anywhere in it (unconditional
+    -- there is no accepted-residue register for a file DARQ generates itself; 'balerdis' is
+    deliberately not banned, see `FORBIDDEN_INSTALLER_TOKENS`'s comment -- it is the shared GitHub
+    account hosting both the engine and this distribution, not an engine brand string), its
+    identity header carries DARQ's own product id/names/base URL, `--help` exits 0 and never
+    mentions 'pegasus' (its usage text is brand-neutral prose by template design, so it names no
+    product at all -- see `verify_installer`'s docstring), and `--verify` exits 0 and names 'darq'
+    in its preflight report, never 'pegasus'.
 """
 from __future__ import annotations
 
@@ -42,7 +50,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REBRAND_JSON = ROOT / "rebrand.json"
+IDENTITY_JSON = ROOT / "identity.json"
 DEFAULT_BINARY = ROOT / "dist" / "darq"
+DEFAULT_INSTALLER = ROOT / "dist" / "install.sh"
+
+#: `dist/install.sh` is generated deterministically from `identity.json` by `tools/build_darq.py`
+#: (via the engine's `build_installer.py`), so unlike the binary's brand-leak scan there is no
+#: register of accepted residue or known defects to consult here: every one of these strings
+#: appearing anywhere in the generated installer -- including its header/comments -- is
+#: unconditionally a failure.
+#:
+#: Deliberately does NOT include 'balerdis': that is the shared GitHub account hosting both the
+#: engine (github.com/balerdis/pegasus-harness) and this distribution (github.com/balerdis/darq),
+#: not an engine-specific brand string. `identity.json`'s own `release.install_base_url_default`
+#: legitimately contains it -- banning it would fail every correctly-generated installer. What
+#: must not leak is the *engine's own* repo path, which the identity-header assignment check below
+#: already catches (it asserts the header names darq's own base URL, never the engine's).
+FORBIDDEN_INSTALLER_TOKENS = ("pegasus", "harness")
 
 # Only 'pegasus', never 'harness': every one of the 9 occurrences of 'harness' measured across a
 # clean install is the ordinary English noun in technical prose ("Runtime harness command/
@@ -224,6 +248,42 @@ def scan_text_for_findings(
     return findings
 
 
+def find_installer_brand_leaks(
+    text: str, tokens: tuple[str, ...] = FORBIDDEN_INSTALLER_TOKENS
+) -> list[tuple[int, str, str]]:
+    """Every line of `text` mentioning (case-insensitively) any of `tokens`, as
+    `(line_number, token, line_text)`.
+
+    Unlike `scan_text_for_findings`, there is no register here to sort a hit into NOTE/WARNING/
+    silent: `install.sh` is generated deterministically from `identity.json`, with no upstream
+    residue to account for, so every hit this finds is unconditionally a failure. Pure: takes
+    already-read text, returns plain data, touches no filesystem.
+    """
+    findings: list[tuple[int, str, str]] = []
+    lowered_tokens = tuple(token.lower() for token in tokens)
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        lowered_line = line.lower()
+        for token in lowered_tokens:
+            if token in lowered_line:
+                findings.append((line_number, token, line.strip()))
+                break
+    return findings
+
+
+def expected_installer_identity_assignments(identity: dict) -> dict[str, str]:
+    """The four `NAME='value'` identity-header assignments `dist/install.sh` must carry, derived
+    from `identity.json` the same way `build_installer.py::render` derives them -- so this check
+    can never quietly drift from what the generator actually fills in. Pure: takes an
+    already-parsed `identity.json` payload, returns plain data.
+    """
+    return {
+        "PRODUCT_ID": identity["product_id"],
+        "PRODUCT_DISPLAY_NAME": identity["display_name"],
+        "PRODUCT_PROGRAM_NAME": identity["program_name"],
+        "PRODUCT_RELEASE_BASE_URL_DEFAULT": identity["release"]["install_base_url_default"],
+    }
+
+
 # --- I/O: running the binary and driving the checks --------------------------------------------
 
 
@@ -262,7 +322,97 @@ def _report_findings(report: Report, label: str, findings: list[Finding], accept
             )
 
 
-def verify(binary: Path, scratch_root: Path) -> Report:
+def verify_installer(installer: Path, scratch_root: Path, report: Report) -> None:
+    """Behavioural verification of the generated `dist/install.sh`, run the same way
+    `verify()` runs the binary: real bytes scanned, and the installer run for real (twice, in two
+    safe modes), inside a throwaway `HOME` this function never lets be the real one.
+
+    Runs both `--help` and `--verify`, never a bare `./install.sh`: reading the template
+    (`tools/build_installer.py`'s source, and `install.sh`'s own top-of-file usage comment)
+    confirms `--verify` only ever reads the environment (`command -v`, file-existence checks
+    under `$HOME`) to report what it *would* install -- it never downloads or writes anything,
+    in or outside the scratch `HOME` this passes it.
+
+    The two modes are not redundant: `uso()` (what `--help` prints) is, by the template's own
+    design, the literal top-of-file comment block -- generic prose ("este producto") that never
+    names any product, this distribution's or the engine's, so it only proves the installer parses
+    and exits 0. The identity header actually surfacing is instead proven by `--verify`'s preflight
+    report, which names `$PRODUCT_PROGRAM_NAME` directly (confirmed by running the real generated
+    installer: `--verify` under a restricted PATH prints lines like "el binario darq, en ..." and
+    "se lanzaría: darq"). Both runs use a `PATH` restricted to `/usr/bin:/bin`, the same restriction
+    `verify()`'s own `_run` applies to the built binary, so neither run can pick up this machine's
+    own real Node/OpenCode/darq and produce a false pass or a spurious pipefail crash from a
+    broken local install.
+    """
+    if not installer.is_file():
+        report.fail(f"installer {installer} does not exist; run tools/build_darq.py first")
+        return
+
+    text = installer.read_text(encoding="utf-8")
+    leaks = find_installer_brand_leaks(text)
+    if leaks:
+        for line_number, token, line_text in leaks:
+            report.fail(
+                f"installer brand leak in {installer}:{line_number} (token {token!r}): {line_text}"
+            )
+    else:
+        report.ok(f"{installer} contains none of {FORBIDDEN_INSTALLER_TOKENS}")
+
+    identity = json.loads(IDENTITY_JSON.read_text(encoding="utf-8"))
+    for name, value in expected_installer_identity_assignments(identity).items():
+        assignment = f"{name}='{value}'"
+        if assignment in text:
+            report.ok(f"installer identity header carries {assignment}")
+        else:
+            report.fail(f"installer identity header is missing expected assignment {assignment!r}")
+
+    home = scratch_root / "installer-home"
+    home.mkdir(parents=True, exist_ok=True)
+    _require_scratch_home(home)
+    restricted_env = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
+
+    help_result = subprocess.run(
+        ["bash", str(installer), "--help"], env=restricted_env,
+        capture_output=True, text=True, timeout=30,
+    )
+    if help_result.returncode != 0:
+        report.fail(
+            f"'bash {installer} --help' exited {help_result.returncode}: {help_result.stderr}"
+        )
+    else:
+        report.ok("'install.sh --help' exited 0")
+    if "pegasus" in help_result.stdout.lower() or "pegasus" in help_result.stderr.lower():
+        report.fail(f"'install.sh --help' output mentions 'pegasus': {help_result.stdout!r}")
+    else:
+        report.ok("'install.sh --help' output does not mention 'pegasus'")
+
+    # `--verify` never installs or downloads anything (confirmed by reading the template and by
+    # running it here): it only inspects the environment and prints what a real run would do, so
+    # it is the one place that actually proves the identity header reached the printed output.
+    verify_result = subprocess.run(
+        ["bash", str(installer), "--verify"], env=restricted_env,
+        capture_output=True, text=True, timeout=30,
+    )
+    if verify_result.returncode != 0:
+        report.fail(
+            f"'bash {installer} --verify' exited {verify_result.returncode}: "
+            f"stdout={verify_result.stdout!r} stderr={verify_result.stderr!r}"
+        )
+    else:
+        report.ok("'install.sh --verify' exited 0")
+    combined_output = verify_result.stdout + verify_result.stderr
+    lowered_output = combined_output.lower()
+    if "darq" in lowered_output:
+        report.ok("'install.sh --verify' output names 'darq'")
+    else:
+        report.fail(f"'install.sh --verify' output does not mention 'darq': {combined_output!r}")
+    if "pegasus" in lowered_output:
+        report.fail(f"'install.sh --verify' output mentions 'pegasus': {combined_output!r}")
+    else:
+        report.ok("'install.sh --verify' output does not mention 'pegasus'")
+
+
+def verify(binary: Path, scratch_root: Path, installer: Path = DEFAULT_INSTALLER) -> Report:
     report = Report()
     _require_scratch_home(scratch_root)
 
@@ -353,22 +503,29 @@ def verify(binary: Path, scratch_root: Path) -> Report:
     if not report.failures:
         report.ok("no unclassified brand leak found (see NOTE/WARNING lines above for known residue)")
 
+    # 6. The generated installer: brand-free, identity header correct, --help works and names darq.
+    verify_installer(installer, scratch_root, report)
+
     return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
+    parser.add_argument("--installer", type=Path, default=DEFAULT_INSTALLER)
     parser.add_argument("--keep-scratch", action="store_true", help="do not delete the scratch HOME afterward (for debugging)")
     arguments = parser.parse_args()
 
     if not arguments.binary.is_file():
         print(f"ERROR: {arguments.binary} does not exist; run tools/build_darq.py first", file=sys.stderr)
         return 1
+    if not arguments.installer.is_file():
+        print(f"ERROR: {arguments.installer} does not exist; run tools/build_darq.py first", file=sys.stderr)
+        return 1
 
     scratch_root = Path(tempfile.mkdtemp(prefix="darq-verify-"))
     try:
-        report = verify(arguments.binary.resolve(), scratch_root)
+        report = verify(arguments.binary.resolve(), scratch_root, arguments.installer.resolve())
     finally:
         if not arguments.keep_scratch:
             shutil.rmtree(scratch_root, ignore_errors=True)

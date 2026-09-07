@@ -2,12 +2,13 @@
   "product_id": "darq",
   "display_name": "DARQ",
   "program_name": "darq",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "wordmark_words": ["DARQ"],
   "release": {
     "asset_url_template": "https://github.com/balerdis/darq/releases/download/{tag}/{asset}",
     "binary_asset": "darq",
     "latest_release_api_url": "https://api.github.com/repos/balerdis/darq/releases/latest",
-    "release_page_url": "https://github.com/balerdis/darq/releases"
+    "release_page_url": "https://github.com/balerdis/darq/releases",
+    "install_base_url_default": "https://github.com/balerdis/darq/releases/latest/download"
   }
 }

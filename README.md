@@ -14,8 +14,19 @@ le aplica un rebranding declarativo, y le superpone el contenido propio en
 
 ## Instalar
 
-Todavía no hay un instalador propio — ver [Fuera de alcance](#fuera-de-alcance-por-ahora)
-más abajo. El camino manual, hoy:
+```bash
+curl -fsSL https://github.com/balerdis/darq/releases/latest/download/install.sh | bash
+```
+
+Esto descarga, verifica e instala DARQ y sus dependencias (nvm, Node LTS y
+OpenCode) en una cuenta limpia. `install.sh` acepta además `--verify` (informa
+el estado sin cambiar nada), `--yes` (salta la confirmación), `--no-run`
+(instala lo que falte pero no lanza nada al final) y `--bin-dir` (para instalar
+el binario en un directorio distinto de `~/.local/bin`); correlo con `--help`
+para ver la lista completa.
+
+Si preferís no ejecutar un script bajado por `curl` directamente, el camino
+manual, hoy:
 
 ```bash
 # 1. Descargar el binario y su checksum del release que quieras instalar
@@ -34,7 +45,7 @@ darq install --cli opencode
 ```
 
 Reemplazá `<tag>` por el tag del release que vayas a instalar (por ejemplo
-`v1.0.0`). Si el checksum no coincide, no lo ejecutes — pedí el release de
+`v1.1.0`). Si el checksum no coincide, no lo ejecutes — pedí el release de
 nuevo o avisá al equipo de I+D.
 
 ## Build desde código fuente
@@ -58,17 +69,22 @@ Lo que hace cada paso, en el orden en que corre:
    lista fija, así que también atrapa algo agregado pero todavía no
    commiteado.
 2. **`tools/build_darq.py`** — descarga (o reusa, en `--offline`) el binario
-   `pegasus` y `build_zipapp.py` publicados en el tag fijado por `engine.pin`,
-   verifica ambos contra el sha256 pinneado ahí (un mismatch es siempre un
-   error fatal, nunca un warning), extrae el paquete, le aplica el rebranding
+   `pegasus`, `build_zipapp.py`, `build_installer.py` y la plantilla
+   `install.sh` publicados en el tag fijado por `engine.pin`, verifica los
+   cuatro contra el sha256 pinneado ahí (un mismatch es siempre un error
+   fatal, nunca un warning), extrae el paquete, le aplica el rebranding
    declarativo de `rebrand.json` vía `rebrand/transform.py`, superpone
-   `content/` encima del árbol ya rebrandeado, y arma `dist/darq` con el
-   `build_zipapp.py` recién descargado — nunca con una copia local.
+   `content/` encima del árbol ya rebrandeado, arma `dist/darq` con el
+   `build_zipapp.py` recién descargado — nunca con una copia local — y genera
+   `dist/install.sh` con el `build_installer.py` del motor, a partir del
+   `identity.json` propio de DARQ.
 3. **`tools/verify_darq.py`** — corre el binario ya construido de verdad,
    dentro de un `$HOME` descartable que el propio script crea y borra: chequea
    `darq --version`, `darq doctor --json`, un `darq install --cli opencode`
-   real, la ubicación del data dir, y escanea todo lo instalado en busca de
-   fugas de marca fuera de los tokens de wire protegidos.
+   real, la ubicación del data dir, escanea todo lo instalado en busca de
+   fugas de marca fuera de los tokens de wire protegidos, y además verifica
+   `dist/install.sh`: que no mencione al motor en ningún lado, que su
+   encabezado de identidad sea el de DARQ, y que `install.sh --help` ande.
 
 ### El pin
 
@@ -93,10 +109,6 @@ ese documento.
 - **Un solo producto por usuario del sistema operativo.** El motor no hizo
   seguro compartir `~/.config/opencode` entre dos productos en la misma
   cuenta de SO, así que DARQ y Pegasus no conviven en el mismo usuario.
-- **Todavía no hay instalador propio.** El `install.sh` del motor tiene 1081
-  líneas y cero parametrización; clonarlo recrearía exactamente el drift que
-  este diseño existe para evitar. Parametrizarlo es trabajo upstream en
-  Pegasus, pendiente.
 - **Quedan trazas de marca del motor en algunos artefactos instalados** —
   medidas y clasificadas explícitamente en `rebrand.json` (registros
   `accepted_residue` y `known_defects`), verificadas en cada corrida de

@@ -5,10 +5,17 @@ and classifying leak matches against them. No filesystem, no subprocess, no buil
 The one exception is `test_rebrand_json_registers_load_without_error`, which reads the repo's real
 `rebrand.json` to prove the registers this repo actually ships parse cleanly and cover the real
 inventory measured against a clean install.
+
+`InstallerBrandLeakTests` and `InstallerIdentityAssignmentTests` cover the pure helpers behind the
+generated-installer checks in the same way; `InstallerVerificationMutationTests` proves
+`verify_installer` itself can fail, against a scratch copy of an installer-shaped script -- never
+against the repo's own `dist/install.sh`.
 """
 from __future__ import annotations
 
+import stat
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -204,6 +211,136 @@ class VerifyEndToEndMutationTests(unittest.TestCase):
             ]
         )
         self.assertEqual(self._fail_count(mutated_text), 1)
+
+
+class InstallerBrandLeakTests(unittest.TestCase):
+    """`find_installer_brand_leaks` is unconditional -- no register, no exceptions -- so it is
+    tested directly against short synthetic snippets."""
+
+    def test_clean_text_has_no_leaks(self) -> None:
+        text = "PRODUCT_ID='darq'\nPRODUCT_DISPLAY_NAME='DARQ'\n"
+        self.assertEqual(verify_darq.find_installer_brand_leaks(text), [])
+
+    def test_pegasus_is_caught_case_insensitively(self) -> None:
+        text = "# Built for Pegasus\nPRODUCT_ID='darq'\n"
+        findings = verify_darq.find_installer_brand_leaks(text)
+        self.assertEqual(len(findings), 1)
+        line_number, token, line_text = findings[0]
+        self.assertEqual(line_number, 1)
+        self.assertEqual(token, "pegasus")
+        self.assertIn("Pegasus", line_text)
+
+    def test_harness_is_caught_unlike_the_binary_leak_scan(self) -> None:
+        # Unlike `_LEAK_PATTERN` (which drops bare 'harness' as an ordinary English word), the
+        # installer check is unconditional over the exact three tokens the brief names.
+        text = "some harness reference"
+        findings = verify_darq.find_installer_brand_leaks(text)
+        self.assertEqual([token for _line, token, _text in findings], ["harness"])
+
+    def test_balerdis_is_not_banned_since_it_is_the_shared_github_account(self) -> None:
+        # 'balerdis' hosts both github.com/balerdis/pegasus-harness (the engine) and
+        # github.com/balerdis/darq (this distribution) -- it is not an engine-specific brand
+        # string, and DARQ's own identity.json legitimately puts it in the installer's base URL.
+        text = "curl -fsSL https://github.com/balerdis/darq/releases/latest/download/install.sh"
+        self.assertEqual(verify_darq.find_installer_brand_leaks(text), [])
+
+
+class InstallerIdentityAssignmentTests(unittest.TestCase):
+    def test_derives_all_four_assignments_from_identity_payload(self) -> None:
+        identity = {
+            "product_id": "darq",
+            "display_name": "DARQ",
+            "program_name": "darq",
+            "release": {"install_base_url_default": "https://example.invalid/latest/download"},
+        }
+        assignments = verify_darq.expected_installer_identity_assignments(identity)
+        self.assertEqual(
+            assignments,
+            {
+                "PRODUCT_ID": "darq",
+                "PRODUCT_DISPLAY_NAME": "DARQ",
+                "PRODUCT_PROGRAM_NAME": "darq",
+                "PRODUCT_RELEASE_BASE_URL_DEFAULT": "https://example.invalid/latest/download",
+            },
+        )
+
+    def test_darq_identity_json_matches_what_the_generated_installer_must_carry(self) -> None:
+        import json
+
+        identity = json.loads((ROOT / "identity.json").read_text(encoding="utf-8"))
+        assignments = verify_darq.expected_installer_identity_assignments(identity)
+        self.assertEqual(assignments["PRODUCT_ID"], "darq")
+        self.assertEqual(assignments["PRODUCT_DISPLAY_NAME"], "DARQ")
+        self.assertEqual(assignments["PRODUCT_PROGRAM_NAME"], "darq")
+        self.assertTrue(assignments["PRODUCT_RELEASE_BASE_URL_DEFAULT"].startswith("https://"))
+
+
+# A minimal, installer-shaped fixture: an identity header block plus just enough --help handling
+# to exercise `verify_installer`'s subprocess check without needing a real build or network access.
+_INSTALLER_FIXTURE = """#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================================
+PRODUCT_ID='darq'
+PRODUCT_DISPLAY_NAME='DARQ'
+PRODUCT_PROGRAM_NAME='darq'
+PRODUCT_RELEASE_BASE_URL_DEFAULT='https://github.com/balerdis/darq/releases/latest/download'
+# ============================================================================
+
+case "${1-}" in
+  --help|-h)
+    echo "usage: install.sh [--help] [--verify]"
+    echo "installs a product; see identity block above for details"
+    exit 0
+    ;;
+  --verify)
+    echo "se instalaria: el binario $PRODUCT_PROGRAM_NAME"
+    exit 0
+    ;;
+esac
+"""
+
+
+class InstallerVerificationMutationTests(unittest.TestCase):
+    """Proves `verify_installer` can actually fail: run it against a scratch copy of an
+    installer-shaped fixture with an injected 'pegasus' brand string, and confirm it reports a
+    failure; then run it again against the same fixture unmutated and confirm it does not.
+
+    Never touches the repo's real `dist/install.sh` -- both copies live in a throwaway temp dir
+    created by this test and removed afterward.
+    """
+
+    def _run_against(self, installer_text: str) -> verify_darq.Report:
+        with tempfile.TemporaryDirectory(prefix="darq-installer-mutation-") as tmp:
+            tmp_path = Path(tmp)
+            installer_path = tmp_path / "install.sh"
+            installer_path.write_text(installer_text, encoding="utf-8")
+            mode = installer_path.stat().st_mode
+            installer_path.chmod(mode | stat.S_IXUSR)
+
+            scratch_root = tmp_path / "scratch"
+            scratch_root.mkdir()
+
+            report = verify_darq.Report()
+            verify_darq.verify_installer(installer_path, scratch_root, report)
+            return report
+
+    def test_clean_fixture_reports_no_failure(self) -> None:
+        report = self._run_against(_INSTALLER_FIXTURE)
+        self.assertEqual(report.failures, [])
+
+    def test_injected_pegasus_string_is_reported_as_a_failure(self) -> None:
+        mutated = _INSTALLER_FIXTURE.replace(
+            "# ============================================================================\n"
+            "PRODUCT_ID='darq'",
+            "# Adapted from pegasus\n"
+            "# ============================================================================\n"
+            "PRODUCT_ID='darq'",
+        )
+        self.assertIn("pegasus", mutated)
+        report = self._run_against(mutated)
+        self.assertGreater(len(report.failures), 0)
+        self.assertTrue(any("brand leak" in failure for failure in report.failures))
 
 
 if __name__ == "__main__":

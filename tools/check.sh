@@ -4,6 +4,8 @@
 #   tools/check.sh              # build (online) + verify + no-fork guard
 #   tools/check.sh --offline    # reuse whatever is already cached, still verifies checksums
 #   tools/check.sh --no-build   # skip the build step, verify whatever is already at dist/darq
+#
+# The build step produces both dist/darq and dist/install.sh; the verify step checks both.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

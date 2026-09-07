@@ -2,11 +2,12 @@
 """Build the `darq` distribution artifact from a pinned, published pegasus release.
 
 DARQ contains zero engine code and zero copies of engine content. Every build starts from the
-`pegasus` binary and `build_zipapp.py` published at the exact tag pinned in `engine.pin`,
-verifies both against the sha256 pinned there (the trust boundary: any mismatch is a hard
-refusal, never a warning), rebrands the extracted content tree in place with
-`rebrand/transform.py`, overlays this repo's own `content/` on top, and finally reuses the
-downloaded `build_zipapp.py` -- never a local copy of the engine's -- to produce `dist/darq`.
+`pegasus` binary, `build_zipapp.py`, `build_installer.py` and the `install.sh` template published
+at the exact tag pinned in `engine.pin`, verifies all four against the sha256 pinned there (the
+trust boundary: any mismatch is a hard refusal, never a warning), rebrands the extracted content
+tree in place with `rebrand/transform.py`, overlays this repo's own `content/` on top, and finally
+reuses the downloaded `build_zipapp.py` and `build_installer.py` -- never a local copy of the
+engine's -- to produce `dist/darq` and `dist/install.sh`.
 
     python3 tools/build_darq.py
     python3 tools/build_darq.py --offline   # reuse whatever is already in the cache dir
@@ -38,6 +39,12 @@ CONTENT_OVERLAY = ROOT / "content"
 DEFAULT_CACHE_DIR = ROOT / "build" / "cache"
 DEFAULT_WORK_DIR = ROOT / "build" / "work"
 DEFAULT_OUT = ROOT / "dist" / "darq"
+DEFAULT_INSTALLER_OUT = ROOT / "dist" / "install.sh"
+
+#: Every asset `engine.pin` pins and this build downloads (or reuses, under `--offline`) and
+#: verifies unconditionally. Order is insignificant -- `fetch_pinned_assets` verifies all of them
+#: before any is used -- but is kept stable here for readable build logs.
+PINNED_ASSETS = ("pegasus", "build_zipapp.py", "build_installer.py", "install.sh")
 
 
 class BuildError(RuntimeError):
@@ -73,12 +80,12 @@ def download(url: str, destination: Path) -> None:
 
 
 def fetch_pinned_assets(pin: dict, cache_dir: Path, *, offline: bool) -> dict[str, Path]:
-    """Download (or reuse, when `offline`) `pegasus` and `build_zipapp.py` into `cache_dir`,
-    then verify both against `engine.pin` unconditionally -- verification is never skipped, even
+    """Download (or reuse, when `offline`) every asset in `PINNED_ASSETS` into `cache_dir`, then
+    verify all of them against `engine.pin` unconditionally -- verification is never skipped, even
     when the download itself was.
     """
     paths: dict[str, Path] = {}
-    for asset_name in ("pegasus", "build_zipapp.py"):
+    for asset_name in PINNED_ASSETS:
         destination = cache_dir / asset_name
         if offline and destination.is_file():
             print(f"OFFLINE: reusing cached {asset_name} at {destination}")
@@ -148,7 +155,54 @@ def run_build_zipapp(build_zipapp_py: Path, source: Path, identity: Path, out: P
         raise BuildError(f"build_zipapp.py failed with exit code {result.returncode}")
 
 
-def build(*, offline: bool, cache_dir: Path = DEFAULT_CACHE_DIR, work_dir: Path = DEFAULT_WORK_DIR, out: Path = DEFAULT_OUT) -> Path:
+def format_checksum_sidecar(sha256_digest: str, filename: str) -> str:
+    """The exact `.sha256` sidecar format `build_zipapp.py` already writes for `dist/darq`
+    (`"<digest>  <filename>\\n"`), reused here so `dist/install.sh.sha256` matches it byte for byte
+    rather than inventing a second, subtly different checksum format for the same repo.
+    """
+    return f"{sha256_digest}  {filename}\n"
+
+
+def run_build_installer(
+    build_installer_py: Path, template: Path, package_source: Path, identity: Path, out: Path
+) -> None:
+    """Generate `dist/install.sh` by invoking the engine's own `build_installer.py` -- never a
+    local reimplementation of its templating -- against the downloaded, verified `install.sh`
+    template, DARQ's own `identity.json`, and the extracted `pegasus` package tree (used only to
+    validate the identity, per `build_installer.py --package-source`).
+    """
+    if out.exists():
+        out.unlink()
+    result = subprocess.run(
+        [
+            sys.executable, str(build_installer_py),
+            "--template", str(template),
+            "--package-source", str(package_source),
+            "--identity", str(identity),
+            "--out", str(out),
+        ],
+        capture_output=True, text=True,
+    )
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    if result.returncode != 0:
+        raise BuildError(f"build_installer.py failed with exit code {result.returncode}")
+    if not out.is_file():
+        raise BuildError(f"build_installer.py exited 0 but did not write {out}")
+
+    checksum_path = out.with_name(out.name + ".sha256")
+    checksum_path.write_text(format_checksum_sidecar(sha256_of(out), out.name), encoding="utf-8")
+    print(f"WROTE checksum: {checksum_path}")
+
+
+def build(
+    *,
+    offline: bool,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+    work_dir: Path = DEFAULT_WORK_DIR,
+    out: Path = DEFAULT_OUT,
+    installer_out: Path = DEFAULT_INSTALLER_OUT,
+) -> Path:
     pin = load_pin()
     print(f"PIN: pegasus-harness tag {pin['tag']}")
 
@@ -172,6 +226,13 @@ def build(*, offline: bool, cache_dir: Path = DEFAULT_CACHE_DIR, work_dir: Path 
         raise BuildError(f"build_zipapp.py did not write {checksum_path}")
     print(f"BUILT: {out}")
     print(f"CHECKSUM: {checksum_path.read_text(encoding='utf-8').strip()}")
+
+    installer_out.parent.mkdir(parents=True, exist_ok=True)
+    run_build_installer(assets["build_installer.py"], assets["install.sh"], package, IDENTITY_JSON, installer_out)
+    installer_checksum_path = installer_out.with_name(installer_out.name + ".sha256")
+    print(f"BUILT: {installer_out}")
+    print(f"CHECKSUM: {installer_checksum_path.read_text(encoding='utf-8').strip()}")
+
     return out
 
 
@@ -181,9 +242,16 @@ def main() -> int:
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--installer-out", type=Path, default=DEFAULT_INSTALLER_OUT)
     arguments = parser.parse_args()
     try:
-        build(offline=arguments.offline, cache_dir=arguments.cache_dir, work_dir=arguments.work_dir, out=arguments.out)
+        build(
+            offline=arguments.offline,
+            cache_dir=arguments.cache_dir,
+            work_dir=arguments.work_dir,
+            out=arguments.out,
+            installer_out=arguments.installer_out,
+        )
     except BuildError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
