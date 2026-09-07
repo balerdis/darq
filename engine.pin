@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.21.0",
+  "tag": "v5.22.0",
   "assets": {
     "pegasus": {
-      "sha256": "34bf6979842d6f7d42e8a05043ef36cc30e3fa3ee2ba3637f65656d6a90fe8a2",
+      "sha256": "d3e84e84d9fdc3244741cedb9ce0b300666093c493113358b88301920e203b78",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -12,18 +12,17 @@
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/build_zipapp.py"
     },
     "build_installer.py": {
-      "sha256": "3b3aea866610e6e4aacf2d81054f0dc39464c59acdc411751f360e032e498524",
+      "sha256": "ee1a3eb82474fd1477a7776bad41fe94a7350c2d1045e36143e91a43e897f139",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/build_installer.py"
     },
     "install.sh": {
-      "sha256": "ad1c78d0766082481251b110ce198023c0053d774dcdaf9c4830f3351d6815ba",
+      "sha256": "07af20172f7b64f3e021523d897a0fe9923262890e2a9fb0d27f98373031c245",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/install.sh"
     }
   },
   "verified_against": {
     "source": "release-manifest.json",
-    "release_manifest_sha256": "bee025c6ebe7e795943c96a9e4b46f32c50fbf7c27839c31a8580905299a25c3",
     "agrees": true,
-    "note": "Moved from v5.19.0 to v5.21.0: engine v5.21.0 makes the installer identity-driven, publishing its own `install.sh` template and `tools/build_installer.py` so a distribution can generate a rebranded installer instead of forking the engine's 1000-odd-line script. This pin now tracks four assets instead of two -- `pegasus` and `build_zipapp.py` as before, plus `build_installer.py` and the `install.sh` template it fills in -- so `tools/build_darq.py` can produce `dist/install.sh` alongside `dist/darq`. All four hashes were downloaded from the published v5.21.0 release assets and hashed independently; they match both the release manifest (commit 4a927766bf0fbe33082fe21092104cfa053b947b) and each asset's own published `.sha256` sidecar."
+    "note": "Hashes were downloaded from the published v5.22.0 release assets and hashed independently. v5.22.0 is the first engine release whose generated installer names its own product: v5.21.0 made install.sh identity-driven but left its --help text saying 'este producto' and explaining the build mechanism to whoever was installing, which is build-time detail aimed at the wrong audience."
   }
 }
