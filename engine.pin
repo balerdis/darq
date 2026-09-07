@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.22.0",
+  "tag": "v5.23.0",
   "assets": {
     "pegasus": {
-      "sha256": "d3e84e84d9fdc3244741cedb9ce0b300666093c493113358b88301920e203b78",
+      "sha256": "1a3cab503d2c48b8f69525c13298a197b586f3bab1fd606d92da415f2373b658",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -16,13 +16,13 @@
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/build_installer.py"
     },
     "install.sh": {
-      "sha256": "07af20172f7b64f3e021523d897a0fe9923262890e2a9fb0d27f98373031c245",
+      "sha256": "c389d87d9192e425a649d426cb02b1d3dc1b62ecc42d427ce2b2df2dcc856035",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/install.sh"
     }
   },
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.22.0 release assets and hashed independently. v5.22.0 is the first engine release whose generated installer names its own product: v5.21.0 made install.sh identity-driven but left its --help text saying 'este producto' and explaining the build mechanism to whoever was installing, which is build-time detail aimed at the wrong audience."
+    "note": "Hashes were downloaded from the published v5.23.0 release assets and hashed independently. v5.23.0 fixes a silent abort: install.sh detected versions with `cmd --version | head -1` under `set -euo pipefail`, so a command whose --version prints a banner made head close the pipe, the producer take SIGPIPE, and the whole script die with exit 141 and no output at all -- on any account that already had OpenCode, which is the ordinary update path."
   }
 }
