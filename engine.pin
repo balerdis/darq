@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.19.0",
+  "tag": "v5.20.0",
   "assets": {
     "pegasus": {
-      "sha256": "7191568aa6de67bae03e94c230fd30dc5728e3ea6bea6a87d1fbfe28d3dabd78",
+      "sha256": "7242b670394f60187e77d404625d853f1391dda87b59f5baebf29792a49c7cc9",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -14,8 +14,8 @@
   },
   "verified_against": {
     "source": "release-manifest.json",
-    "release_manifest_sha256": "89563faeab5c0e81f62781216db7239d6bf585b54a1e6ff4c0995241c439b580",
+    "release_manifest_sha256": "f5addc85a2a983b993bef8de57b69999fdf8d8d6a0a7d311e8a05df2909709f7",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.19.0 release assets and hashed independently; they match the release manifest and the published .sha256 sidecars for commit d437b2a6158462056abef5ac83853de12501577f. v5.19.0 is the first engine release DARQ can rename its orchestrator agent against: before it, the OpenCode adapter hardcoded the orchestrator's name, so a renamed orchestrator left every rendered slash command pointing at an agent that did not exist."
+    "note": "Hashes were downloaded from the published v5.20.0 release assets and hashed independently; they match the release manifest and the published .sha256 sidecars for commit 21d68b3db2e96644e876a3d2cb8fd887f516b31f. v5.20.0 is the first engine release in which a distribution declares its own version: before it, `darq --version` reported the engine's number and `darq upgrade` compared that against DARQ's own release tag by string equality, so it re-downloaded and replaced the binary on every run without ever converging to already-current."
   }
 }
