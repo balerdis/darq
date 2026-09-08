@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.24.0",
+  "tag": "v5.24.1",
   "assets": {
     "pegasus": {
-      "sha256": "a30e6a0ed95824606e12582d81e55bcfb7d5c298b98e7978b0ad2e932a7de360",
+      "sha256": "f62bc2fb27e2d48b09bd457ccc9a2e3522d4ed1af1aa0194a2b535ef50b4264d",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -23,6 +23,6 @@
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.24.0 release assets and hashed independently. v5.24.0 removes the last engine-side literal that made a DARQ install differ in behaviour from a Pegasus one: the OpenCode notifier plugin compared the live session's agent against a hardcoded \"pegasus-orchestrator\", so in DARQ -- which renames its orchestrator -- the comparison never matched and the plugin never fired. The engine now ships the plugin with an {{orchestrator}} placeholder filled at install time from the content-declared name, and renders every bundled adapter asset through that vocabulary rather than special-casing one file. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.23.0."
+    "note": "Hashes were downloaded from the published v5.24.1 release assets and hashed independently. v5.24.0 made a DARQ install behave like a Pegasus one by filling the notifier plugin's orchestrator name from the content-declared name instead of a hardcoded literal. v5.24.1 corrects a cosmetic defect that shipped with it: the comment explaining the mechanism named the placeholders it described, so substitution -- which runs over an asset's whole text, comments included -- rewrote the comment itself, leaving nonsense prose and the installing machine's absolute skills path inside a shipped plugin. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.23.0."
   }
 }
