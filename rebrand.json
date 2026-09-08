@@ -109,11 +109,6 @@
     }
   ],
   "accepted_residue_notes": "Cosmetic, deferred upstream debt: branded names DARQ ships as-is because they are journal-tracked artifact ids or static engine assets outside the rebrand transform's reach. Reported as a NOTE on a clean run; never fails the check. Every entry must carry both 'token' and a non-empty 'reason' -- tools/verify_darq.py fails loudly at load time if either is missing.",
-  "known_defects": [
-    {
-      "token": "pegasus-orchestrator",
-      "reason": "plugins/pegasus-orchestrator-notifier.ts:4 hardcodes `const ORCHESTRATOR_AGENT = \"pegasus-orchestrator\"`. DARQ renames its orchestrator agent to darq-orchestrator, so the notifier's session-agent comparison never matches and the plugin never fires in DARQ -- a functional defect, not cosmetic residue. This is the same class of bug engine v5.19.0 just fixed on the Python side (AGENT_FOR_ROLE in adapters/opencode/render.py); it survives in this .ts asset because the engine's AST-based identity scan only reads .py files. Upstream fix: render this plugin with the content-declared orchestrator name instead of shipping it as a static asset. Known and accepted for now -- reported as a WARNING on every run, never fails the check."
-    }
-  ],
+  "known_defects": [],
   "known_defects_notes": "Functional defects that survive rebranding, kept separate from cosmetic accepted_residue on purpose: mixing the two once let a live offender hide as an intentional exemption behind a false stated reason. Reported as a WARNING (loud, on every run) rather than silently or as a NOTE; never fails the check because it is a known, accepted-for-now state rather than a new regression. Every entry must carry both 'token' and a non-empty 'reason', enforced the same way as accepted_residue."
 }

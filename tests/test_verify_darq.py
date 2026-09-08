@@ -141,13 +141,42 @@ class RebrandJsonRegistersTests(unittest.TestCase):
     def test_rebrand_json_registers_load_without_error(self) -> None:
         self.assertIn("pegasus/cli-report/v1", self.protected)
         self.assertGreater(len(self.accepted), 0)
-        self.assertGreater(len(self.defects), 0)
+        # known_defects is deliberately NOT asserted non-empty: an empty register is the
+        # correct, desirable state, and demanding an entry would create pressure to keep a
+        # defect registered after it was fixed upstream. What must hold is that whatever it
+        # holds classifies correctly -- see the test below, which is derived from the data
+        # and therefore passes for zero entries and for any future one.
 
-    def test_known_orchestrator_notifier_defect_is_a_warning(self) -> None:
+    def test_every_registered_defect_classifies_as_a_warning(self) -> None:
+        """Derived from the register, not from a hardcoded token.
+
+        The orchestrator-notifier defect used to be the single entry here; engine v5.24.0
+        fixed it (the plugin now carries an {{orchestrator}} placeholder filled from the
+        content-declared name), so the register is empty again. Written this way, this test
+        keeps proving the WARNING contract for whatever the register holds next, instead of
+        having to be rewritten every time an entry arrives or leaves.
+        """
+        for token in self.defects:
+            with self.subTest(token=token):
+                finding = _classify_first_finding(
+                    f"a line that mentions {token} in passing",
+                    self.protected, self.accepted, self.defects,
+                )
+                self.assertIsNotNone(finding)
+                self.assertEqual(finding.outcome, verify_darq.WARNING)
+
+    def test_the_fixed_orchestrator_literal_is_now_a_fail(self) -> None:
+        """The complement of the register's removal, and the reason removing it matters.
+
+        While the defect was registered, `pegasus-orchestrator` in an installed tree was a
+        WARNING -- expected, tolerated, easy to scroll past. Now that the engine fills the
+        name from content, that literal has no legitimate reason to appear in a DARQ install
+        at all, so its reappearance is a regression and must fail the check rather than warn.
+        """
         line = 'const ORCHESTRATOR_AGENT = "pegasus-orchestrator"'
         finding = _classify_first_finding(line, self.protected, self.accepted, self.defects)
         self.assertIsNotNone(finding)
-        self.assertEqual(finding.outcome, verify_darq.WARNING)
+        self.assertEqual(finding.outcome, verify_darq.FAIL)
 
     def test_skill_registry_subtree_residue_is_a_note(self) -> None:
         line = 'PEGASUS_SKILL_REGISTRY_BIN=/home/x/.config/opencode/pegasus/skill-registry/pegasus-skill-registry'
@@ -195,7 +224,12 @@ class VerifyEndToEndMutationTests(unittest.TestCase):
                 '"schema": "pegasus/cli-report/v1"',
                 'PEGASUS_SKILL_ROOTS=/some/path',
                 'export default PegasusSkillRegistryPlugin',
-                'const ORCHESTRATOR_AGENT = "pegasus-orchestrator"',
+                # What a clean DARQ install actually contains since engine v5.24.0: the
+                # notifier's orchestrator name comes from DARQ's own content. This line used
+                # to read "pegasus-orchestrator" and passed only because known_defects
+                # downgraded it to a WARNING -- the register was masking a real occurrence
+                # inside the fixture that stands for a clean tree.
+                'const ORCHESTRATOR_AGENT = "darq-orchestrator"',
             ]
         )
         self.assertEqual(self._fail_count(clean_text), 0)
