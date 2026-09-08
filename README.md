@@ -110,9 +110,10 @@ ese documento.
   seguro compartir `~/.config/opencode` entre dos productos en la misma
   cuenta de SO, así que DARQ y Pegasus no conviven en el mismo usuario.
 - **Quedan trazas de marca del motor en algunos artefactos instalados** —
-  medidas y clasificadas explícitamente en `rebrand.json` (registros
-  `accepted_residue` y `known_defects`), verificadas en cada corrida de
-  `tools/verify_darq.py`:
+  medidas y clasificadas explícitamente en `rebrand.json` y verificadas en
+  cada corrida de `tools/verify_darq.py`. Son residuo cosmético, todas en el
+  registro `accepted_residue`: el registro `known_defects`, para trazas que
+  además rompen algo, está hoy vacío.
   - `pegasus-AGENTS.md` (el artefacto de system-prompt instalado), el
     subárbol `pegasus/skill-registry` con su ejecutable
     `pegasus-skill-registry` y su módulo `pegasus_skill_registry.py`, el
@@ -127,23 +128,17 @@ ese documento.
     título del toast de notificación del plugin de skill-registry
     (`"Pegasus skill registry"`) es, dentro de este grupo, el único caso
     genuinamente visible para quien usa DARQ, no solo plomería interna.
+    Lo que ya **no** está en esta lista es el *nombre del agente* orquestador:
+    hasta el motor v5.24.0 el plugin de notificaciones comparaba contra un
+    `"pegasus-orchestrator"` hardcodeado, así que en DARQ nunca coincidía y
+    nunca avisaba. El motor ahora lo llena en tiempo de instalación con el
+    nombre que declara el contenido, y una instalación de DARQ trae
+    `const ORCHESTRATOR_AGENT = "darq-orchestrator"`. Las notificaciones
+    funcionan.
   - Distinto es el caso de las variables de entorno `PEGASUS_*` y los ids de
     esquema versionados (`pegasus/cli-report/v1` y similares): esos son
     identificadores de wire estables, compartidos por cualquier distribución
     construida sobre el mismo motor, y están bien como están.
-- **Defecto funcional conocido: el notifier nunca dispara en DARQ.**
-  `plugins/pegasus-orchestrator-notifier.ts` tiene hardcodeado
-  `const ORCHESTRATOR_AGENT = "pegasus-orchestrator"` para decidir cuándo
-  avisar. DARQ renombra su agente orquestador a `darq-orchestrator`, así que
-  esa comparación nunca coincide y el plugin de notificaciones nunca dispara
-  en una instalación de DARQ. Es el mismo tipo de bug que el motor v5.19.0
-  acaba de arreglar del lado Python (`AGENT_FOR_ROLE` en
-  `adapters/opencode/render.py`), pero sobrevive en este asset `.ts` porque el
-  escaneo de identidad del motor (basado en AST) solo lee archivos `.py`. El
-  arreglo es upstream: que el motor renderice este plugin con el nombre de
-  orquestador declarado en el contenido, en vez de distribuirlo como asset
-  estático. Mientras tanto, si notás que las notificaciones no llegan, es
-  esto — no un bug nuevo de DARQ.
 
 ## Más contexto
 

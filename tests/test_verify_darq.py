@@ -377,5 +377,50 @@ class InstallerVerificationMutationTests(unittest.TestCase):
         self.assertTrue(any("brand leak" in failure for failure in report.failures))
 
 
+class ReadmeAgreesWithTheDefectRegisterTests(unittest.TestCase):
+    """The README's "Limitaciones conocidas" prose must not outlive the register it describes.
+
+    This class exists because it already went wrong: the README announced the
+    orchestrator-notifier defect as live for weeks after engine v5.24.0 fixed it, telling
+    readers their notifications were broken when they worked. Nothing caught it, because
+    the register and the prose were two independent statements of the same fact and only
+    one of them got updated.
+
+    Both directions are checked, because a stale README can fail either way: claiming a
+    defect nobody registered, or staying silent about one somebody did.
+    """
+
+    #: Matched as a literal substring, which is all this guard claims to do: it trips on a
+    #: verbatim reintroduction of this heading, not on the same claim reworded or translated.
+    #: A cheap tripwire for the regression that actually happened, not a proof of accuracy.
+    HEADING = "Defecto funcional conocido"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        cls.defects = verify_darq.parse_reason_register(
+            "known_defects", verify_darq.load_rebrand_config()
+        )
+
+    def test_the_readme_announces_no_defect_the_register_does_not_hold(self) -> None:
+        # Deliberately asserts nothing when the register is non-empty: a heading is then
+        # legitimate, and the sibling test below is what covers that branch.
+        if not self.defects:
+            self.assertNotIn(
+                self.HEADING,
+                self.readme,
+                "the README announces a known functional defect but known_defects is empty; "
+                "a fixed defect left in the prose tells readers something is broken when it is not",
+            )
+
+    def test_every_registered_defect_is_named_in_the_readme(self) -> None:
+        for token in self.defects:
+            with self.subTest(token=token):
+                self.assertIn(
+                    token,
+                    self.readme,
+                    f"known_defects registers {token!r} but the README never mentions it; "
+                    "a defect that reports as a tolerated WARNING has to be findable by a reader",
+                )
 if __name__ == "__main__":
     unittest.main()
