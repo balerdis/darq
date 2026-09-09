@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.25.0",
+  "tag": "v5.25.1",
   "assets": {
     "pegasus": {
-      "sha256": "79794fe15350996551caa553282af841a369b67dc35cb02f2e761f5065015d16",
+      "sha256": "65a4ef091a15244c2372812e40da4e526c39c2dea87dc93854a304e6db0e3ced",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -16,13 +16,13 @@
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/build_installer.py"
     },
     "install.sh": {
-      "sha256": "c389d87d9192e425a649d426cb02b1d3dc1b62ecc42d427ce2b2df2dcc856035",
+      "sha256": "ff1c4dddfc8fb46d708347446e96ff8f7fea7e48a6507ec232bc27bc4466037f",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/install.sh"
     }
   },
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.25.0 release assets and hashed independently. v5.25.0 replaces the SDD sub-agent delegation prohibition with a criterion the sub-agent applies itself: three gates (a tool that already compresses, independence of the parts, at least two of them) and two decisions (classify the deliverable's compression, pre-commit to the children's output schema). It adds `pegasus-general`, a generic worker with no phase contract, so a fan-out has a target that cannot collide with a phase result -- and that also removes `explore` and `general`, OpenCode built-ins the orchestrator used to name, from the allowlist, so every declared delegation target is now an agent Pegasus actually ships. DARQ inherits all of it renamed: the new agent installs as `darq-general`. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.23.0."
+    "note": "Hashes were downloaded from the published v5.25.1 release assets and hashed independently. v5.25.1 routes every download in install.sh through one seam, which is what makes it able to tell a transient failure from a permanent one: an HTTP 5xx, a 429 or a curl transport error says it is transient and says to retry later, and a 404 deliberately does not. It does not retry on its own -- a silent retry hides that the problem is on the other side. The nvm download was the only one of the five without -f, so curl exited 0 on an HTTP error and piped the error body into bash; a 503 from the Buenos Aires CDN edge reached bash as a script and killed a clean-account install with two syntax errors. Downloaded installers are now saved and run from a file instead of piped, and their temp directory is removed by a trap. Separately, the five version probes gained || true: under set -e an assignment whose command substitution exits non-zero aborted the whole script with no output at all. Unlike the previous two releases, install.sh is NOT byte-identical to v5.23.0 -- it is the file this release changed, so DARQ's own installer changes with it. build_zipapp.py and build_installer.py stay byte-identical."
   }
 }
