@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.27.0",
+  "tag": "v5.27.1",
   "assets": {
     "pegasus": {
-      "sha256": "ba5803584e3abde4e9236a954f124cd86b1f245319cac2c2bf4cd8ac789624ad",
+      "sha256": "808fd57b8c067c256f39cb88ecca353b977405d5b79a2325586961483252e245",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -23,6 +23,6 @@
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.27.0 release assets and hashed independently. v5.27.0 reconverts the teaching voice: what limits it is now an obligation its prompt carries, not a shorter toolbox. It used to declare read, write, edit, skill and ask -- no bash, no grep, no glob -- so the voice whose whole purpose is to explain the code could not search it, and its body forbade it from checking what it had just written four lines after telling it to write it. It now declares the same reach as the orchestrator and every MCP server the release ships, and two rules replace the old prohibition: work out loud or not at all, and close the loop you open. The difference is in kind, not degree -- working in silence is not a tool a permission can deny, so that discipline can only live in the prompt. Third-party credentials (GDE & MVP) and one person's editor and terminal (LazyVim, Tmux, Zellij) were removed from the persona: this content ships rebranded to a public-sector institution, and neither belonged in it. The character itself is unchanged. In DARQ the voice installs as arquitecto-darq, as it already did. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.25.1, so DARQ's own installer does not change in this re-pin either."
+    "note": "Hashes were downloaded from the published v5.27.1 release assets and hashed independently, then checked again by re-fetching the URL this pin itself names. v5.27.1 fixes one sentence the v5.27.0 reconversion left unswept: the graph server convention section for the teaching voice still told it that, when that convention file is unreadable, it should read the files themselves -- calling that the one discovery tool the voice is granted. True while the voice declared only read; since the reconversion it has read, grep and glob, so the sentence told it its only recourse was reading, in exactly the situation the reconversion existed to fix. The permission was always right; what was wrong was what the prompt told the voice it had. The fix is not a corrected count: the sentence went stale because it enumerated a capability, so it no longer does -- it names the fallback by what it is for, which cannot age the next time the toolbox changes. Found by reading the prompt as installed on a real machine, after the suite was green and a fresh-context review had passed; neither checks whether a convention prose still agrees with the agent declared tools. Only the pegasus artifact changed; install.sh and the two builder scripts are byte-identical to v5.25.1."
   }
 }
