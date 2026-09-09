@@ -54,19 +54,29 @@ IDENTITY_JSON = ROOT / "identity.json"
 DEFAULT_BINARY = ROOT / "dist" / "darq"
 DEFAULT_INSTALLER = ROOT / "dist" / "install.sh"
 
+
+def load_rebrand_config(path: Path = REBRAND_JSON) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 #: `dist/install.sh` is generated deterministically from `identity.json` by `tools/build_darq.py`
 #: (via the engine's `build_installer.py`), so unlike the binary's brand-leak scan there is no
 #: register of accepted residue or known defects to consult here: every one of these strings
 #: appearing anywhere in the generated installer -- including its header/comments -- is
 #: unconditionally a failure.
 #:
-#: Deliberately does NOT include 'balerdis': that is the shared GitHub account hosting both the
-#: engine (github.com/balerdis/pegasus-harness) and this distribution (github.com/balerdis/darq),
-#: not an engine-specific brand string. `identity.json`'s own `release.install_base_url_default`
-#: legitimately contains it -- banning it would fail every correctly-generated installer. What
-#: must not leak is the *engine's own* repo path, which the identity-header assignment check below
-#: already catches (it asserts the header names darq's own base URL, never the engine's).
-FORBIDDEN_INSTALLER_TOKENS = ("pegasus", "harness")
+#: Read from `rebrand.json`'s `forbidden_fragments` register -- the same register
+#: `rebrand/transform.py`'s transform-time mirror check reads -- so there is exactly one
+#: declaration of "what counts as a brand leak" inside DARQ (the engine keeps its own, separate
+#: declaration upstream in `tests/brand_fragments.py`; that is out of DARQ's control and out of
+#: scope here). Deliberately does NOT include 'balerdis': that is the shared GitHub account
+#: hosting both the engine (github.com/balerdis/pegasus-harness) and this distribution
+#: (github.com/balerdis/darq), not an engine-specific brand string. `identity.json`'s own
+#: `release.install_base_url_default` legitimately contains it -- banning it would fail every
+#: correctly-generated installer. What must not leak is the *engine's own* repo path, which the
+#: identity-header assignment check below already catches (it asserts the header names darq's own
+#: base URL, never the engine's).
+FORBIDDEN_INSTALLER_TOKENS = tuple(load_rebrand_config()["forbidden_fragments"])
 
 # Only 'pegasus', never 'harness': every one of the 9 occurrences of 'harness' measured across a
 # clean install is the ordinary English noun in technical prose ("Runtime harness command/
@@ -119,13 +129,10 @@ class Report:
 
 # --- Pure register loading and classification -------------------------------------------------
 #
-# Everything below `load_rebrand_config` (I/O) down to `scan_text_for_findings` is pure: it takes
-# already-loaded data or plain text and returns plain data structures. No filesystem or subprocess
-# access, so it is fully unit-testable without a build or an install.
-
-
-def load_rebrand_config(path: Path = REBRAND_JSON) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+# `load_rebrand_config` itself (I/O) is defined above, next to `FORBIDDEN_INSTALLER_TOKENS`, which
+# needs it at module-load time. Everything below down to `scan_text_for_findings` is pure: it
+# takes already-loaded data or plain text and returns plain data structures. No filesystem or
+# subprocess access, so it is fully unit-testable without a build or an install.
 
 
 def parse_protected_tokens(payload: dict) -> tuple[str, ...]:

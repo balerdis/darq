@@ -30,6 +30,7 @@ class RebrandMap:
     substitutions: tuple[tuple[str, str], ...]
     protected_tokens: tuple[str, ...]
     excluded_paths: tuple[str, ...]
+    forbidden_fragments: tuple[str, ...] = ()
     substitution_extensions: tuple[str, ...] = (".md", ".txt")
 
     @property
@@ -49,11 +50,13 @@ def parse_map(payload: dict) -> RebrandMap:
     substitutions = tuple((pair[0], pair[1]) for pair in payload["substitutions"])
     protected = tuple(sorted(payload["protected_tokens"], key=len, reverse=True))
     excluded = tuple(payload.get("excluded_paths", ()))
+    forbidden_fragments = tuple(payload.get("forbidden_fragments", ()))
     return RebrandMap(
         renames=renames,
         substitutions=substitutions,
         protected_tokens=protected,
         excluded_paths=excluded,
+        forbidden_fragments=forbidden_fragments,
     )
 
 
@@ -101,10 +104,24 @@ class RebrandPathError(RuntimeError):
 
 
 def _brand_fragments(rebrand_map: RebrandMap) -> tuple[str, ...]:
-    """The brand fragments no resolved output path may still contain, read directly off the
-    left-hand side of every declared body-substitution rule -- never a second, hand-written list
-    that could drift out of sync with what :func:`substitute_body` actually rewrites."""
-    return tuple(old for old, _ in rebrand_map.substitutions)
+    """The brand fragments no resolved output path may still contain: the UNION of
+    ``rebrand_map.forbidden_fragments`` and the left-hand side of every declared body-substitution
+    rule -- never a second, hand-written list that could drift out of sync with ``rebrand.json``.
+
+    These two sources answer two different questions, and the union exists precisely because
+    neither one alone is enough:
+
+    - ``substitutions`` answers HOW a leak, once found, is repaired -- its left-hand sides are
+      rewrite-rule inputs. Any fragment that *is* a substitution key has, by construction, already
+      been rewritten by :func:`substitute_body` before this check ever runs, so on the derivation
+      path this half of the union can in practice never fire; it is kept anyway so an
+      explicitly-renamed path (which skips derivation entirely) is still checked against it.
+    - ``forbidden_fragments`` answers WHAT COUNTS AS a leak in the first place -- it can name a
+      fragment with no corresponding rewrite rule at all (``"harness"`` is forbidden but nothing
+      ever substitutes it), which is exactly the register the mirror needs to catch a fragment
+      derivation alone would never have removed.
+    """
+    return tuple(rebrand_map.forbidden_fragments) + tuple(old for old, _ in rebrand_map.substitutions)
 
 
 def rename_relative_path(relative_posix: str, rebrand_map: RebrandMap) -> str:
@@ -122,9 +139,13 @@ def rename_relative_path(relative_posix: str, rebrand_map: RebrandMap) -> str:
        the engine ships it, with no ``rebrand.json`` entry required.
     3. Either way, the resolved path is checked against every declared brand fragment (masking
        protected tokens first, so a legitimate wire identifier in a path is never mistaken for a
-       leak). If a fragment survives, that is a defect in step 1 or step 2 -- caught here, at
-       transform time, via :class:`RebrandPathError`, rather than surfacing later as an opaque
-       ``ContentError`` when the engine tries to ``load()`` a mismatched name/path pair.
+       leak): see :func:`_brand_fragments`, which is the UNION of ``rebrand.json``'s
+       ``forbidden_fragments`` (WHAT COUNTS AS a leak, independent of whether anything rewrites
+       it -- e.g. ``"harness"``, which no substitution rule ever touches) and the left-hand side of
+       every ``substitutions`` entry (HOW an already-found leak is repaired). If a fragment
+       survives, that is a defect in step 1 or step 2 -- caught here, at transform time, via
+       :class:`RebrandPathError`, rather than surfacing later as an opaque ``ContentError`` when
+       the engine tries to ``load()`` a mismatched name/path pair.
     """
     explicit = rebrand_map.rename_map.get(relative_posix)
     resolved = explicit if explicit is not None else substitute_body(relative_posix, rebrand_map)

@@ -279,6 +279,49 @@ class InstallerBrandLeakTests(unittest.TestCase):
         self.assertEqual(verify_darq.find_installer_brand_leaks(text), [])
 
 
+class SharedForbiddenFragmentsRegisterTests(unittest.TestCase):
+    """`verify_darq.FORBIDDEN_INSTALLER_TOKENS` and `rebrand.transform`'s mirror check must read
+    the SAME register out of `rebrand.json` -- there must be exactly one declaration of "what
+    counts as a brand leak" inside DARQ, not two independently hand-written lists that happen to
+    agree today and can silently drift apart tomorrow.
+
+    This intentionally does not just assert two equal literals written independently in this test
+    file: it re-reads `rebrand.json`'s `forbidden_fragments` register itself and compares
+    `verify_darq`'s constant against that live value, so the test fails again the moment someone
+    reintroduces a hardcoded tuple in `verify_darq.py` that drifts from `rebrand.json`.
+    """
+
+    def test_forbidden_installer_tokens_equals_rebrand_jsons_forbidden_fragments_register(self) -> None:
+        payload = verify_darq.load_rebrand_config()
+        self.assertEqual(
+            set(verify_darq.FORBIDDEN_INSTALLER_TOKENS),
+            set(payload["forbidden_fragments"]),
+        )
+
+    def test_forbidden_installer_tokens_is_not_a_hardcoded_literal_independent_of_the_json_file(
+        self,
+    ) -> None:
+        """Prove the constant is actually *derived* from the file, not just coincidentally equal
+        to it: mutate a throwaway copy of the register and confirm loading from that copy changes
+        what `find_installer_brand_leaks` would treat as forbidden -- i.e. the value really is a
+        function of the register's content, not a value someone typed twice."""
+        payload = verify_darq.load_rebrand_config()
+        mutated = dict(payload)
+        mutated["forbidden_fragments"] = ["totally-unrelated-fragment"]
+        derived = tuple(mutated["forbidden_fragments"])
+        findings = verify_darq.find_installer_brand_leaks(
+            "a line mentioning totally-unrelated-fragment here", tokens=derived
+        )
+        self.assertEqual([token for _line, token, _text in findings], ["totally-unrelated-fragment"])
+        # And that same string is NOT flagged under the real, unmutated register.
+        self.assertEqual(
+            verify_darq.find_installer_brand_leaks(
+                "a line mentioning totally-unrelated-fragment here"
+            ),
+            [],
+        )
+
+
 class InstallerIdentityAssignmentTests(unittest.TestCase):
     def test_derives_all_four_assignments_from_identity_payload(self) -> None:
         identity = {

@@ -246,6 +246,17 @@ class RebrandTransformTests(unittest.TestCase):
             rename_relative_path("agents/broken.md", rebrand_map)
         self.assertIn("agents/still-pegasus-branded.md", str(ctx.exception))
 
+    def test_mirror_check_fires_on_a_forbidden_fragment_that_is_not_a_substitution_key(self) -> None:
+        """The entire reason for the ``forbidden_fragments`` register: 'harness' is not a
+        substitution key (no rule ever rewrites it), so mechanical derivation leaves a path like
+        ``agents/harness-thing.md`` untouched -- before this register existed, the mirror check
+        could not see this leak at all. This is the case that silently passed before the fix."""
+        rebrand_map = self.rebrand_map
+        self.assertNotIn("harness", dict(rebrand_map.substitutions))
+        with self.assertRaises(RebrandPathError) as ctx:
+            rename_relative_path("agents/harness-thing.md", rebrand_map)
+        self.assertIn("agents/harness-thing.md", str(ctx.exception))
+
     def test_mirror_check_does_not_fire_on_the_real_pinned_engine_content_tree(self) -> None:
         """The clean build stays clean: run the mirror-guarded rename over the actual pinned
         engine content tree (already extracted into build/work by a prior real build) and confirm
