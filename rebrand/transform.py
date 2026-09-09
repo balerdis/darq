@@ -91,15 +91,54 @@ def substitute_body(text: str, rebrand_map: RebrandMap) -> str:
     return unmask(masked, rebrand_map.protected_tokens)
 
 
+class RebrandPathError(RuntimeError):
+    """Raised at transform time when a resolved output path still carries one of the engine's
+    brand fragments after both the explicit ``renames`` lookup and mechanical derivation have run.
+
+    This is deliberately a hard failure during the transform itself, not something left to surface
+    later as an install-time ``ContentError`` -- see :func:`rename_relative_path`.
+    """
+
+
+def _brand_fragments(rebrand_map: RebrandMap) -> tuple[str, ...]:
+    """The brand fragments no resolved output path may still contain, read directly off the
+    left-hand side of every declared body-substitution rule -- never a second, hand-written list
+    that could drift out of sync with what :func:`substitute_body` actually rewrites."""
+    return tuple(old for old, _ in rebrand_map.substitutions)
+
+
 def rename_relative_path(relative_posix: str, rebrand_map: RebrandMap) -> str:
     """The path a file should be written to, relative to the content root.
 
-    Only the four explicitly declared renames in ``rebrand.json`` change a path; every other file
-    keeps its own relative path unchanged. This is a lookup, not a general filename transform --
-    the engine's content tree today has exactly four filenames containing ``pegasus``, and all four
-    are declared explicitly, so there is nothing left for a heuristic rule to guess at.
+    Resolution order:
+
+    1. An explicit entry in ``rebrand.json``'s ``renames`` wins outright. This is reserved for
+       deliberate, non-mechanical re-namings -- a path whose target isn't a textual substitution
+       of its source (``agents/king-pegasus.md`` -> ``agents/arquitecto-darq.md`` is the persona's
+       new name, not a string swap of ``pegasus``).
+    2. Otherwise, the path is run through the same substitution map (and the same protected-token
+       masking) already applied to file bodies by :func:`substitute_body`. A content filename that
+       merely carries the brand -- ``agents/pegasus-general.md`` -- is renamed for free, the moment
+       the engine ships it, with no ``rebrand.json`` entry required.
+    3. Either way, the resolved path is checked against every declared brand fragment (masking
+       protected tokens first, so a legitimate wire identifier in a path is never mistaken for a
+       leak). If a fragment survives, that is a defect in step 1 or step 2 -- caught here, at
+       transform time, via :class:`RebrandPathError`, rather than surfacing later as an opaque
+       ``ContentError`` when the engine tries to ``load()`` a mismatched name/path pair.
     """
-    return rebrand_map.rename_map.get(relative_posix, relative_posix)
+    explicit = rebrand_map.rename_map.get(relative_posix)
+    resolved = explicit if explicit is not None else substitute_body(relative_posix, rebrand_map)
+
+    masked_resolved = mask(resolved, rebrand_map.protected_tokens)
+    leaked = [fragment for fragment in _brand_fragments(rebrand_map) if fragment in masked_resolved]
+    if leaked:
+        raise RebrandPathError(
+            f"rebrand output path {resolved!r} (from {relative_posix!r}) still contains brand "
+            f"fragment(s) {leaked!r} after rename resolution. Fix by adding an explicit semantic "
+            f"rename for this path to rebrand.json's 'renames' list, or by extending "
+            f"'substitutions' so mechanical derivation covers it."
+        )
+    return resolved
 
 
 def is_excluded(relative_posix: str, rebrand_map: RebrandMap) -> bool:

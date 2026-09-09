@@ -6,12 +6,14 @@ tree under a temporary directory. Everything else exercises the pure string func
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 from rebrand.transform import (
     RebrandMap,
+    RebrandPathError,
     apply_to_tree,
     is_excluded,
     mask,
@@ -24,6 +26,7 @@ from rebrand.transform import (
 
 ROOT = Path(__file__).resolve().parents[1]
 REBRAND_JSON = ROOT / "rebrand.json"
+ENGINE_CONTENT_ROOT = ROOT / "build" / "work" / "extracted" / "pegasus" / "content"
 
 
 class RebrandTransformTests(unittest.TestCase):
@@ -33,13 +36,16 @@ class RebrandTransformTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.rebrand_map: RebrandMap = parse_map(json.loads(REBRAND_JSON.read_text(encoding="utf-8")))
 
-    def test_rebrand_json_parses_and_has_the_four_declared_renames(self) -> None:
+    def test_rebrand_json_declares_only_the_semantic_renames_that_derivation_cannot_produce(self) -> None:
+        """``renames`` now holds only the two deliberate re-namings (king-pegasus's persona name
+        does not textually derive from the brand substitution map); the purely mechanical
+        pegasus-orchestrator renames were removed once verified byte-identical to what
+        ``rename_relative_path`` derives on its own -- see
+        ``test_derivation_reproduces_the_removed_pegasus_orchestrator_renames_byte_for_byte``."""
         rebrand_map = self.rebrand_map
         self.assertEqual(
             set(rebrand_map.rename_map),
             {
-                "agents/pegasus-orchestrator.md",
-                "agents/mcp/cbm@pegasus-orchestrator.md",
                 "agents/king-pegasus.md",
                 "agents/mcp/cbm@king-pegasus.md",
             },
@@ -49,12 +55,17 @@ class RebrandTransformTests(unittest.TestCase):
             rebrand_map.rename_map["agents/mcp/cbm@king-pegasus.md"],
             "agents/mcp/cbm@arquitecto-darq.md",
         )
+
+    def test_derivation_reproduces_the_removed_pegasus_orchestrator_renames_byte_for_byte(self) -> None:
+        """The two entries removed from ``renames`` must be exactly reproducible by mechanical
+        derivation -- this is the byte-for-byte proof the brief requires before removing them."""
+        rebrand_map = self.rebrand_map
         self.assertEqual(
-            rebrand_map.rename_map["agents/pegasus-orchestrator.md"],
+            substitute_body("agents/pegasus-orchestrator.md", rebrand_map),
             "agents/darq-orchestrator.md",
         )
         self.assertEqual(
-            rebrand_map.rename_map["agents/mcp/cbm@pegasus-orchestrator.md"],
+            substitute_body("agents/mcp/cbm@pegasus-orchestrator.md", rebrand_map),
             "agents/mcp/cbm@darq-orchestrator.md",
         )
 
@@ -157,12 +168,119 @@ class RebrandTransformTests(unittest.TestCase):
         self.assertTrue(is_excluded("__init__.py", excluded_map))
         self.assertFalse(should_substitute_body("__init__.py", excluded_map))
 
-    def test_rename_relative_path_is_a_lookup_not_a_heuristic(self) -> None:
+    def test_rename_relative_path_prefers_the_explicit_semantic_rename_over_derivation(self) -> None:
         rebrand_map = self.rebrand_map
         self.assertEqual(
             rename_relative_path("agents/king-pegasus.md", rebrand_map), "agents/arquitecto-darq.md"
         )
         self.assertEqual(rename_relative_path("agents/sdd-apply.md", rebrand_map), "agents/sdd-apply.md")
+
+    def test_rename_relative_path_derives_a_mechanical_rename_with_no_rebrand_json_entry(self) -> None:
+        """The whole point of the fix: a brand-new content filename the engine ships (like
+        ``pegasus-general.md`` in v5.25.0) is renamed correctly with zero ``rebrand.json`` changes,
+        because the path goes through the same substitution map applied to file bodies."""
+        rebrand_map = self.rebrand_map
+        self.assertNotIn("agents/pegasus-whatever.md", rebrand_map.rename_map)
+        self.assertEqual(
+            rename_relative_path("agents/pegasus-whatever.md", rebrand_map),
+            "agents/darq-whatever.md",
+        )
+        self.assertNotIn("agents/pegasus-general.md", rebrand_map.rename_map)
+        self.assertEqual(
+            rename_relative_path("agents/pegasus-general.md", rebrand_map),
+            "agents/darq-general.md",
+        )
+
+    def test_rename_relative_path_leaves_a_protected_token_in_a_path_untouched(self) -> None:
+        """Path-level substitution must go through the same masking as body substitution, or a
+        path containing a protected wire token would get clobbered by the bare 'pegasus' rule."""
+        payload = json.loads(REBRAND_JSON.read_text(encoding="utf-8"))
+        payload["renames"] = []
+        rebrand_map = parse_map(payload)
+        result = rename_relative_path("mcp/pegasus/cli-report/v1.md", rebrand_map)
+        self.assertIn("pegasus/cli-report/v1", result)
+        self.assertEqual(result, "mcp/pegasus/cli-report/v1.md")
+
+    def test_accepted_residue_paths_are_out_of_scope_for_rename_relative_path(self) -> None:
+        """``apply_to_tree`` (the only caller of ``rename_relative_path``) is invoked with
+        ``package / "content"`` as its content root (see tools/build_darq.py). The
+        ``accepted_residue`` entries that name a path (e.g. the notifier/skill-registry plugin
+        assets) live under ``adapters/opencode/assets/`` in the extracted engine package, entirely
+        outside that content root, so ``rename_relative_path`` never sees them -- no exemption
+        code is needed. This is verified against the real extracted engine tree, not assumed."""
+        if not ENGINE_CONTENT_ROOT.is_dir():
+            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+        payload = json.loads(REBRAND_JSON.read_text(encoding="utf-8"))
+        residue_paths = [
+            entry["token"] for entry in payload["accepted_residue"] if "/" in entry["token"]
+        ]
+        self.assertTrue(residue_paths, "expected at least one path-shaped accepted_residue entry")
+        content_files = {
+            p.relative_to(ENGINE_CONTENT_ROOT).as_posix()
+            for p in ENGINE_CONTENT_ROOT.rglob("*")
+            if p.is_file()
+        }
+        for residue_path in residue_paths:
+            with self.subTest(residue_path=residue_path):
+                self.assertNotIn(
+                    residue_path,
+                    content_files,
+                    f"{residue_path!r} unexpectedly lives under the content root apply_to_tree "
+                    "governs; it would need an explicit exemption after all",
+                )
+                matches = [f for f in content_files if residue_path in f]
+                self.assertEqual(
+                    matches,
+                    [],
+                    f"{residue_path!r} unexpectedly appears under the content root: {matches!r}",
+                )
+
+    def test_mirror_check_fires_when_an_explicit_rename_still_leaves_the_brand_in_the_output(self) -> None:
+        """The transform-time mirror must catch a path neither the explicit list nor derivation
+        actually resolves -- here, a (deliberately broken) explicit entry whose own target still
+        carries the brand. The error names the offending path."""
+        payload = json.loads(REBRAND_JSON.read_text(encoding="utf-8"))
+        payload["renames"] = [{"from": "agents/broken.md", "to": "agents/still-pegasus-branded.md"}]
+        rebrand_map = parse_map(payload)
+        with self.assertRaises(RebrandPathError) as ctx:
+            rename_relative_path("agents/broken.md", rebrand_map)
+        self.assertIn("agents/still-pegasus-branded.md", str(ctx.exception))
+
+    def test_mirror_check_does_not_fire_on_the_real_pinned_engine_content_tree(self) -> None:
+        """The clean build stays clean: run the mirror-guarded rename over the actual pinned
+        engine content tree (already extracted into build/work by a prior real build) and confirm
+        it does not raise."""
+        if not ENGINE_CONTENT_ROOT.is_dir():
+            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+        rebrand_map = self.rebrand_map
+        for path in sorted(p for p in ENGINE_CONTENT_ROOT.rglob("*") if p.is_file()):
+            relative_posix = path.relative_to(ENGINE_CONTENT_ROOT).as_posix()
+            if is_excluded(relative_posix, rebrand_map):
+                continue
+            rename_relative_path(relative_posix, rebrand_map)  # must not raise
+
+    def test_no_output_filename_stem_carries_a_banned_brand_fragment_after_a_real_transform(self) -> None:
+        """Complement of the whole change: transform a fresh copy of the real pinned engine content
+        tree and confirm no resulting filename stem contains any brand fragment declared in
+        rebrand.json's own substitutions -- the banned-fragment list is never hand-written here."""
+        if not ENGINE_CONTENT_ROOT.is_dir():
+            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+        rebrand_map = self.rebrand_map
+        work_root = Path(tempfile.mkdtemp(prefix="darq-rebrand-test-"))
+        self.addCleanup(shutil.rmtree, work_root, ignore_errors=True)
+        content_copy = work_root / "content"
+        shutil.copytree(ENGINE_CONTENT_ROOT, content_copy)
+
+        apply_to_tree(content_copy, rebrand_map)
+
+        banned_fragments = tuple(old for old, _ in rebrand_map.substitutions)
+        for path in sorted(p for p in content_copy.rglob("*") if p.is_file()):
+            for fragment in banned_fragments:
+                self.assertNotIn(
+                    fragment,
+                    path.stem,
+                    f"{path.relative_to(content_copy)} still carries brand fragment {fragment!r}",
+                )
 
     def test_apply_to_tree_renames_and_substitutes_on_disk(self) -> None:
         rebrand_map = self.rebrand_map
