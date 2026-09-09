@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.26.0",
+  "tag": "v5.27.0",
   "assets": {
     "pegasus": {
-      "sha256": "f5f9fa06d946498c96fc7cea86da5f5e5bfce68f1a958194fe2f93cdbccc168b",
+      "sha256": "ba5803584e3abde4e9236a954f124cd86b1f245319cac2c2bf4cd8ac789624ad",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -23,6 +23,6 @@
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.26.0 release assets and hashed independently. v5.26.0 stops a bare `install` (no --mcp) from silently revoking the recorded MCP selection: on a live installation that had stripped the context7, engram and codebase-memory-mcp permissions from all thirteen agents, deleted three convention files and cleared the journal bindings, while the servers stayed configured so nothing looked wrong. The asymmetry was documented on both sides -- `update` reconstructs the selection from the journal precisely because a bare reinstall retires what is not repeated -- and the defence had been added to one side only. Now install over a recorded selection refuses, writes nothing, and names three remedies; --mcp carries three meanings (absent refuses, an empty selection proceeds, a named selection is that selection), --mcp none spells the empty one as a CLI-only spelling, and --dry-run is exempt because it writes nothing. It also fixes the TUI models screen, which stored a model assignment without saying that the rendered configuration does not carry it until an install or update runs -- so the screen reported a model the running agent was not using. A third fix, pruning the directory a retired file leaves empty, was built, reviewed and deliberately pulled: a symlink in the ancestor chain let it delete directories outside the installation, and its boundary tests were green only because they ran against an in-memory filesystem double that has no symlinks. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.25.1, so DARQ's own installer does not change in this re-pin."
+    "note": "Hashes were downloaded from the published v5.27.0 release assets and hashed independently. v5.27.0 reconverts the teaching voice: what limits it is now an obligation its prompt carries, not a shorter toolbox. It used to declare read, write, edit, skill and ask -- no bash, no grep, no glob -- so the voice whose whole purpose is to explain the code could not search it, and its body forbade it from checking what it had just written four lines after telling it to write it. It now declares the same reach as the orchestrator and every MCP server the release ships, and two rules replace the old prohibition: work out loud or not at all, and close the loop you open. The difference is in kind, not degree -- working in silence is not a tool a permission can deny, so that discipline can only live in the prompt. Third-party credentials (GDE & MVP) and one person's editor and terminal (LazyVim, Tmux, Zellij) were removed from the persona: this content ships rebranded to a public-sector institution, and neither belonged in it. The character itself is unchanged. In DARQ the voice installs as arquitecto-darq, as it already did. Only the `pegasus` artifact changed; install.sh and the two builder scripts are byte-identical to v5.25.1, so DARQ's own installer does not change in this re-pin either."
   }
 }
