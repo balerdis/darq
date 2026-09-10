@@ -109,32 +109,28 @@ ese documento.
 - **Un solo producto por usuario del sistema operativo.** El motor no hizo
   seguro compartir `~/.config/opencode` entre dos productos en la misma
   cuenta de SO, así que DARQ y Pegasus no conviven en el mismo usuario.
-- **Quedan trazas de marca del motor en algunos artefactos instalados** —
-  medidas y clasificadas explícitamente en `rebrand.json` y verificadas en
-  cada corrida de `tools/verify_darq.py`. Son residuo cosmético, todas en el
-  registro `accepted_residue`: el registro `known_defects`, para trazas que
-  además rompen algo, está hoy vacío.
-  - `pegasus-AGENTS.md` (el artefacto de system-prompt instalado), el
-    subárbol `pegasus/skill-registry` con su ejecutable
-    `pegasus-skill-registry` y su módulo `pegasus_skill_registry.py`, el
-    archivo generado `pegasus-skill-registry.env`, el nombre de paquete npm
-    `pegasus-opencode-notifier` (en `notifier/package.json` y su lockfile), y
-    los tres archivos de plugin `plugins/pegasus-*.ts` junto con los símbolos
-    que exportan (`PegasusOrchestratorNotifier`, `PegasusSkillRegistryPlugin`,
-    `PegasusZellijStatePlugin`). Son ids de artefacto que el journal rastrea
-    por ese nombre, o assets `.ts` que el transform de rebrand nunca reescribe
-    (solo toca `.md` y `.txt`); renombrarlos es trabajo upstream pendiente en
-    Pegasus, no algo que DARQ pueda resolver rebrandeando su propia copia. El
-    título del toast de notificación del plugin de skill-registry
-    (`"Pegasus skill registry"`) es, dentro de este grupo, el único caso
-    genuinamente visible para quien usa DARQ, no solo plomería interna.
-    Lo que ya **no** está en esta lista es el *nombre del agente* orquestador:
-    hasta el motor v5.24.0 el plugin de notificaciones comparaba contra un
-    `"pegasus-orchestrator"` hardcodeado, así que en DARQ nunca coincidía y
-    nunca avisaba. El motor ahora lo llena en tiempo de instalación con el
-    nombre que declara el contenido, y una instalación de DARQ trae
-    `const ORCHESTRATOR_AGENT = "darq-orchestrator"`. Las notificaciones
-    funcionan.
+- **Quedan trazas de marca del motor en dos puntos de los artefactos
+  instalados** — medidas y clasificadas explícitamente en `rebrand.json` y
+  verificadas en cada corrida de `tools/verify_darq.py`, que además falla si
+  alguna de las dos entradas de abajo deja de ocurrir (una entrada que no
+  clasifica ningún hit real es una entrada obsoleta que hay que sacar del
+  registro, no dejar ahí afirmando un residuo que ya no existe). Son residuo
+  cosmético, ambas en el registro `accepted_residue`: el registro
+  `known_defects`, para trazas que además rompen algo, está hoy vacío. Desde
+  el motor v5.28.0 los nombres de artefacto en disco se derivan de
+  `identity.json` en vez de ser literales, así que esta lista es mucho más
+  corta que antes de esa versión:
+  - `pegasus-zellij-state`, el nombre del directorio de estado bajo
+    `~/.config/` y `~/.cache/` que usa el plugin de Zellij. Es una decisión
+    deliberada del motor, no una limitación de alcance: esos directorios
+    viven fuera del directorio de configuración del CLI, ningún journal los
+    reclama, y derivarlos huerfanaría en silencio el estado que la persona ya
+    tiene en disco.
+  - `"Pegasus skill index"`, una línea de docstring autorreferencial dentro
+    del módulo del skill-registry — el único lugar donde ese archivo, ya
+    llamado con el nombre del producto, todavía menciona el nombre del motor.
+    Arreglo upstream de una sola línea, diferido a la próxima release del
+    motor.
   - Distinto es el caso de las variables de entorno `PEGASUS_*` y los ids de
     esquema versionados (`pegasus/cli-report/v1` y similares): esos son
     identificadores de wire estables, compartidos por cualquier distribución

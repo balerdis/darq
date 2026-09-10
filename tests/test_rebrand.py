@@ -207,14 +207,26 @@ class RebrandTransformTests(unittest.TestCase):
         ``accepted_residue`` entries that name a path (e.g. the notifier/skill-registry plugin
         assets) live under ``adapters/opencode/assets/`` in the extracted engine package, entirely
         outside that content root, so ``rename_relative_path`` never sees them -- no exemption
-        code is needed. This is verified against the real extracted engine tree, not assumed."""
+        code is needed. This is verified against the real extracted engine tree, not assumed.
+
+        As of engine v5.28.0, on-disk artifact names derive from ``identity.json`` instead of
+        being literal, so every path-shaped ``accepted_residue`` entry this test used to check
+        stopped occurring and was pruned from the register (see ``rebrand.json``'s
+        ``accepted_residue_notes``). Only two non-path tokens remain (a self-referential docstring
+        line and a deliberately-kept state-directory name), so this check has nothing to exercise
+        right now; it is skipped rather than deleted so it starts enforcing again the moment a
+        future engine release reintroduces a path-shaped residue entry."""
         if not ENGINE_CONTENT_ROOT.is_dir():
             self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
         payload = json.loads(REBRAND_JSON.read_text(encoding="utf-8"))
         residue_paths = [
             entry["token"] for entry in payload["accepted_residue"] if "/" in entry["token"]
         ]
-        self.assertTrue(residue_paths, "expected at least one path-shaped accepted_residue entry")
+        if not residue_paths:
+            self.skipTest(
+                "no path-shaped accepted_residue entry remains as of engine v5.28.0; "
+                "this check re-activates automatically if one is reintroduced upstream"
+            )
         content_files = {
             p.relative_to(ENGINE_CONTENT_ROOT).as_posix()
             for p in ENGINE_CONTENT_ROOT.rglob("*")

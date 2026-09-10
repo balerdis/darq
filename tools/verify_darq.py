@@ -26,6 +26,12 @@ Checks, each falsifiable and each able to actually fail:
       - FAIL     -- none of the above. This is the only outcome that fails the check, which is
                     the whole point: a scanner that flags things nobody can ever fix trains
                     everyone to ignore it, so only a genuinely unclassified hit fails the run.
+    The mirror of that scan: every `accepted_residue`/`known_defects` entry must itself have
+    classified at least one real hit in this run (see `find_stale_reason_entries`), or the check
+    FAILs naming the stale entry, because an allowlist entry that matches nothing is a standing,
+    unexercised permission for that exact string to reappear without ever failing again.
+    `protected_tokens` is deliberately exempt from this mirror check -- see the comment above the
+    loop that applies it in `verify()` for why.
  6. The generated `dist/install.sh`: none of 'pegasus' or 'harness' anywhere in it (unconditional
     -- there is no accepted-residue register for a file DARQ generates itself; 'balerdis' is
     deliberately not banned, see `FORBIDDEN_INSTALLER_TOKENS`'s comment -- it is the shared GitHub
@@ -219,6 +225,33 @@ def classify_match(
     if token is not None:
         return WARNING, token
     return FAIL, None
+
+
+def find_stale_reason_entries(reasons: dict[str, str], corpus_texts: list[str]) -> tuple[str, ...]:
+    """Tokens registered in an `accepted_residue` or `known_defects` map (already parsed by
+    `parse_reason_register`) that do not literally occur anywhere in `corpus_texts` -- the exact
+    texts this run scanned for brand leaks (every installed file's bytes, plus the two commands'
+    rendered stdout).
+
+    This is the guard `accepted_residue`/`known_defects` lacked: without it, an entry that no
+    longer occurs classifies nothing, produces no NOTE/WARNING, and nobody notices -- the register
+    only ever grows or goes stale, never shrinks, and a stale entry is a standing permission for
+    that exact string to come back leaked without failing the check.
+
+    Deliberately checks literal substring occurrence, not "won the classification for some match
+    in this run": `classify_match` (via `_find_containing_token`) checks tokens longest-first and
+    returns the first one whose occurrence fully contains the match, so a *shorter* registered
+    token whose every occurrence happens to sit inside a *longer* registered token's occurrence
+    will never be returned as the winning classifier -- the longer entry always claims that match
+    first. That is expected overlap between two live entries, not the shorter one being obsolete:
+    both tokens are still genuinely present in the artifact, just at the same spot. Testing literal
+    presence in the corpus instead of "ever won a classification" keeps a shadowed-but-present
+    token out of this stale list; only a token that plain-text never occurs at all -- winning or
+    losing a classification -- is reported.
+
+    Pure: takes already-collected text and an already-parsed register, returns plain data.
+    """
+    return tuple(token for token in reasons if not any(token in text for text in corpus_texts))
 
 
 @dataclass(frozen=True)
@@ -491,12 +524,14 @@ def verify(binary: Path, scratch_root: Path, installer: Path = DEFAULT_INSTALLER
         report.ok(f"data dir {pegasus_data_dir} correctly does not exist")
 
     # 5. Brand leak scan, classified into silent / NOTE / WARNING / FAIL.
+    scanned_corpus: list[str] = []
     config_dir = home / ".config" / "opencode"
     for path in sorted(p for p in config_dir.rglob("*") if p.is_file()):
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
+        scanned_corpus.append(text)
         findings = scan_text_for_findings(text, protected_tokens, accepted_residue, known_defects)
         _report_findings(report, str(path), findings, accepted_residue, known_defects)
 
@@ -504,11 +539,41 @@ def verify(binary: Path, scratch_root: Path, installer: Path = DEFAULT_INSTALLER
         ("darq --version stdout", version_result.stdout if version_result.returncode == 0 else ""),
         ("darq doctor --json stdout", doctor_result.stdout if doctor_result.returncode == 0 else ""),
     ):
+        scanned_corpus.append(output)
         findings = scan_text_for_findings(output, protected_tokens, accepted_residue, known_defects)
         _report_findings(report, label, findings, accepted_residue, known_defects)
 
     if not report.failures:
         report.ok("no unclassified brand leak found (see NOTE/WARNING lines above for known residue)")
+
+    # 5b. The mirror of the scan above: every accepted_residue/known_defects entry must itself
+    # have classified at least one real hit in this run, or it is a stale allowlist entry -- a
+    # standing, unexercised permission for that exact string to leak back in without failing.
+    #
+    # `protected_tokens` deliberately does NOT get this same guard, for two independent reasons:
+    #   1. Direction of risk. accepted_residue/known_defects each *excuse* an occurrence of the
+    #      brand that would otherwise fail the check -- a stale entry there is a live permission
+    #      for a regression to slip back in silently, which is exactly the failure mode this task
+    #      is closing. protected_tokens does the opposite: it marks a string SILENT, i.e. the
+    #      scan's strictest, safest outcome. A protected_tokens entry that currently matches
+    #      nothing costs nothing if it stays registered -- it can never mask a brand-leak
+    #      regression, because nothing is being excused, only a wire identifier is being
+    #      recognised. There is no latent-permission risk here to guard against.
+    #   2. What it actually protects. protected_tokens exists to keep stable wire identifiers
+    #      (schema strings, env var names, journal/report keys, data-dir prefixes) byte-identical
+    #      even when some of them only ever surface on install paths this run's single
+    #      `darq install --cli opencode` doesn't exercise (e.g. an env var only written for a
+    #      different --cli target). Demanding a hit every run would force pruning entries that
+    #      are correct and still needed, just not exercised by *this* scenario -- unlike
+    #      accepted_residue/known_defects, which this run's scan corpus is specifically meant to
+    #      cover completely.
+    for register_name, reasons in (("accepted_residue", accepted_residue), ("known_defects", known_defects)):
+        for token in find_stale_reason_entries(reasons, scanned_corpus):
+            report.fail(
+                f"{register_name} entry {token!r} matched no hit in this run; remove it from "
+                "rebrand.json -- an entry that classifies nothing is a stale allowlist grant, "
+                "not evidence of anything to fix"
+            )
 
     # 6. The generated installer: brand-free, identity header correct, --help works and names darq.
     verify_installer(installer, scratch_root, report)

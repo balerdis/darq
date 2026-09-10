@@ -125,6 +125,60 @@ class ParseReasonRegisterTests(unittest.TestCase):
         self.assertEqual(list(parsed)[0], "pegasus-much-longer-token")
 
 
+class FindStaleReasonEntriesTests(unittest.TestCase):
+    """The guard closing the gap `accepted_residue`/`known_defects` used to have: an entry that
+    classifies nothing in a run must be reported, naming it, so the register can never grow stale
+    without anyone noticing.
+    """
+
+    def test_entry_with_a_real_hit_is_not_stale(self) -> None:
+        reasons = {"pegasus-something": "cosmetic reason"}
+        corpus = ['const NAME = "pegasus-something"']
+        self.assertEqual(verify_darq.find_stale_reason_entries(reasons, corpus), ())
+
+    def test_entry_with_no_hit_anywhere_is_stale(self) -> None:
+        reasons = {"pegasus-AGENTS.md": "obsolete reason"}
+        corpus = ['const NAME = "pegasus-something-else"', "no relevant text here"]
+        self.assertEqual(
+            verify_darq.find_stale_reason_entries(reasons, corpus), ("pegasus-AGENTS.md",)
+        )
+
+    def test_empty_corpus_makes_every_entry_stale(self) -> None:
+        reasons = {"pegasus-a": "reason a", "pegasus-b": "reason b"}
+        self.assertEqual(
+            set(verify_darq.find_stale_reason_entries(reasons, [])), {"pegasus-a", "pegasus-b"}
+        )
+
+    def test_empty_register_reports_no_stale_entries(self) -> None:
+        self.assertEqual(verify_darq.find_stale_reason_entries({}, ["anything"]), ())
+
+    def test_a_shorter_entry_shadowed_by_a_longer_one_is_not_reported_stale(self) -> None:
+        """The edge case the guard has to get right: two registered tokens where the shorter
+        one's only occurrence sits entirely inside the longer one's occurrence. `classify_match`
+        always attributes that match to the longer token (registers are longest-token-first), so
+        the shorter one never 'wins' a classification here -- but its text is still genuinely
+        present, so it must NOT be reported stale. Obsolescence means the literal string never
+        occurs at all, not merely that another entry claims the same spot first."""
+        reasons = {
+            "pegasus/skill-registry/pegasus-skill-registry": "longer, wins classification",
+            "pegasus-skill-registry": "shorter, shadowed by the entry above at this exact spot",
+        }
+        corpus = ["PEGASUS_SKILL_REGISTRY_BIN=/x/pegasus/skill-registry/pegasus-skill-registry"]
+        self.assertEqual(verify_darq.find_stale_reason_entries(reasons, corpus), ())
+
+    def test_a_token_absent_from_the_corpus_even_when_a_longer_relative_is_present_is_stale(self) -> None:
+        """The complement of the shadowing case above: the longer token's presence does not
+        excuse a *different*, unrelated shorter token that plain-text never occurs at all."""
+        reasons = {
+            "pegasus/skill-registry/pegasus-skill-registry": "present",
+            "pegasus-AGENTS.md": "not present anywhere",
+        }
+        corpus = ["PEGASUS_SKILL_REGISTRY_BIN=/x/pegasus/skill-registry/pegasus-skill-registry"]
+        self.assertEqual(
+            verify_darq.find_stale_reason_entries(reasons, corpus), ("pegasus-AGENTS.md",)
+        )
+
+
 class RebrandJsonRegistersTests(unittest.TestCase):
     """The registers this repo actually ships must load without error and classify the real,
     measured residue correctly -- proof by mutation that the check can still fail follows in
@@ -178,11 +232,17 @@ class RebrandJsonRegistersTests(unittest.TestCase):
         self.assertIsNotNone(finding)
         self.assertEqual(finding.outcome, verify_darq.FAIL)
 
-    def test_skill_registry_subtree_residue_is_a_note(self) -> None:
+    def test_skill_registry_env_value_is_now_a_fail_since_names_derive_from_identity(self) -> None:
+        """As of engine v5.28.0 the skill-registry subtree, its executable and its module all
+        derive their names from identity.json, so a value naming the literal engine path is no
+        longer accepted residue -- it went from a NOTE (see git history of this test) to exactly
+        the kind of unclassified hit the register is meant to keep failing. The environment
+        variable name itself stays SILENT (it is still `protected_tokens`, a stable wire key);
+        only the path value it points at is a regression now."""
         line = 'PEGASUS_SKILL_REGISTRY_BIN=/home/x/.config/opencode/pegasus/skill-registry/pegasus-skill-registry'
         finding = _classify_first_finding(line, self.protected, self.accepted, self.defects)
         self.assertIsNotNone(finding)
-        self.assertEqual(finding.outcome, verify_darq.NOTE)
+        self.assertEqual(finding.outcome, verify_darq.FAIL)
 
     def test_new_registry_assets_schema_is_protected_and_silent(self) -> None:
         line = '"schema": "pegasus-registry-assets/v3",'
@@ -223,7 +283,13 @@ class VerifyEndToEndMutationTests(unittest.TestCase):
             [
                 '"schema": "pegasus/cli-report/v1"',
                 'PEGASUS_SKILL_ROOTS=/some/path',
-                'export default PegasusSkillRegistryPlugin',
+                # What a clean DARQ install actually contains since engine v5.28.0: the
+                # exported plugin symbol derives from identity.json too, so it reads
+                # "DarqSkillRegistryPlugin", never the engine-named literal. This line used
+                # to read "PegasusSkillRegistryPlugin" and passed only because accepted_residue
+                # downgraded it to a NOTE -- that entry was pruned once names stopped being
+                # literal (see rebrand.json's accepted_residue_notes).
+                'export default DarqSkillRegistryPlugin',
                 # What a clean DARQ install actually contains since engine v5.24.0: the
                 # notifier's orchestrator name comes from DARQ's own content. This line used
                 # to read "pegasus-orchestrator" and passed only because known_defects
