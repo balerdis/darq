@@ -1,10 +1,10 @@
 {
   "engine": "pegasus-harness",
   "repo": "balerdis/pegasus-harness",
-  "tag": "v5.27.1",
+  "tag": "v5.28.0",
   "assets": {
     "pegasus": {
-      "sha256": "808fd57b8c067c256f39cb88ecca353b977405d5b79a2325586961483252e245",
+      "sha256": "735ebe6b57336116a1f24b4fcad58b1f54738fa56a4db01019c2a3d0c20f2d75",
       "url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/pegasus"
     },
     "build_zipapp.py": {
@@ -23,6 +23,6 @@
   "verified_against": {
     "source": "release-manifest.json",
     "agrees": true,
-    "note": "Hashes were downloaded from the published v5.27.1 release assets and hashed independently, then checked again by re-fetching the URL this pin itself names. v5.27.1 fixes one sentence the v5.27.0 reconversion left unswept: the graph server convention section for the teaching voice still told it that, when that convention file is unreadable, it should read the files themselves -- calling that the one discovery tool the voice is granted. True while the voice declared only read; since the reconversion it has read, grep and glob, so the sentence told it its only recourse was reading, in exactly the situation the reconversion existed to fix. The permission was always right; what was wrong was what the prompt told the voice it had. The fix is not a corrected count: the sentence went stale because it enumerated a capability, so it no longer does -- it names the fallback by what it is for, which cannot age the next time the toolbox changes. Found by reading the prompt as installed on a real machine, after the suite was green and a fresh-context review had passed; neither checks whether a convention prose still agrees with the agent declared tools. Only the pegasus artifact changed; install.sh and the two builder scripts are byte-identical to v5.25.1."
+    "note": "Hashes were downloaded from the published v5.28.0 release assets and hashed independently, then checked again by re-fetching the URL this pin itself names. Only the pegasus artifact changed: install.sh and the two builder scripts are byte-identical to v5.27.1 and v5.25.1. v5.28.0 matters to this distribution more than any release since the fork question was settled, because it is the one that stops the engine name from reaching a DARQ disk. On-disk artifact names now derive from identity.json rather than being literals, so the system prompt, the skill-registry subtree with its binary and module, the env contract, the three plugin files with their exported symbols and the notifier npm package all carry this product name instead of the engine one. The accepted_residue register in rebrand.json shrinks accordingly and must be pruned to match, because an entry that no longer occurs is not harmless: it stays a standing permission for the leak to come back without failing the check. Two entries stay on purpose. The Zellij state directories under config and cache keep the engine name because they live outside the CLI configuration directory, no journal claims them, and deriving them would silently orphan whatever state the person already has. The playwright lockfile root name is neutral now, so that one goes. One migration consequence to expect on an existing DARQ installation: the artifacts with the old names are retired and the new ones created in the same run, which works because v5.28.0 also fixes a defect where an id scheme change deleted a file instead of replacing it, but the directory the old name held is left empty rather than pruned, because pruning only removes directories an installation recorded creating and an installation from before v5.28.0 recorded none."
   }
 }
