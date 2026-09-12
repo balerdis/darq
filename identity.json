@@ -2,8 +2,10 @@
   "product_id": "darq",
   "display_name": "DARQ",
   "program_name": "darq",
-  "version": "1.11.0",
-  "wordmark_words": ["DARQ"],
+  "version": "1.12.0",
+  "wordmark_words": [
+    "DARQ"
+  ],
   "release": {
     "asset_url_template": "https://github.com/balerdis/darq/releases/download/{tag}/{asset}",
     "binary_asset": "darq",
