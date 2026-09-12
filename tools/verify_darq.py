@@ -15,10 +15,13 @@ Checks, each falsifiable and each able to actually fail:
     -- deliberately still Pegasus's, asserted explicitly so nobody "fixes" it later.
  3. `darq install --cli opencode` exits 0 -- the real proof content-load-time invariants held.
  4. The data dir is `<home>/.local/share/darq`; `<home>/.local/share/pegasus-harness` must not exist.
- 5. Brand leak scan: every installed artifact's bytes and both commands' rendered stdout are
-    scanned for `pegasus` (case-insensitive; see `_LEAK_PATTERN` below for why 'harness' was
-    dropped). Every hit is classified into exactly one of four outcomes, using the three named
-    registers declared in `rebrand.json`:
+ 5. Brand leak scan: the UTF-8-decodable *text* of every file under the scratch home's
+    `<home>/.config/opencode`, plus the rendered stdout of checks 1 and 2, is scanned for
+    `pegasus` (case-insensitive; see `_LEAK_PATTERN` below for why 'harness' was dropped).
+    That is the whole corpus -- it is narrower than "everything the install wrote", and the
+    four ways it is narrower are listed under "Known limitations of check 5" below. Every hit
+    is classified into exactly one of four outcomes, using the three named registers declared
+    in `rebrand.json`:
       - silent   -- falls inside a `protected_tokens` entry (a stable wire identifier).
       - NOTE     -- falls inside an `accepted_residue` entry (cosmetic, deferred upstream debt).
       - WARNING  -- falls inside a `known_defects` entry (a known functional defect, not cosmetic,
@@ -32,6 +35,30 @@ Checks, each falsifiable and each able to actually fail:
     unexercised permission for that exact string to reappear without ever failing again.
     `protected_tokens` is deliberately exempt from this mirror check -- see the comment above the
     loop that applies it in `verify()` for why.
+
+    Known limitations of check 5. The scan proves that nothing unclassified leaked *within the
+    corpus described above*; it is not a proof of absence across the installation. Four gaps,
+    none of them currently hiding anything, all four latent:
+      - One directory, not the whole install. Only `<home>/.config/opencode` is walked. The
+        product's own data directory `<home>/.local/share/darq` is never opened, and the
+        journal that lives there does contain the engine's brand -- today only in the shapes
+        `pegasus-harness/journal/v4` and `pegasus_version`, both registered in
+        `protected_tokens`, so scanning it would classify them silent and change no outcome.
+        Nothing forces that to stay true as the journal grows.
+      - File contents only, never file names. A path reaches `_report_findings` purely as a
+        report label; it is never itself matched. An installed file whose *name* carried the
+        engine's brand would pass unseen. No installed artifact is named that way today.
+      - Undecodable files leave no trace. The read is wrapped in
+        `except (UnicodeDecodeError, OSError): continue` with no report line, so a file that
+        cannot be read as UTF-8 simply drops out of the corpus silently. Every installed file
+        decodes today, so nothing is being dropped -- a future binary asset would be, without
+        a line saying so.
+      - One CLI adapter, hardcoded. The whole run is driven by the single
+        `install --cli opencode` of check 3, so a second CLI adapter's installed tree would
+        be outside the corpus entirely. `opencode` is the engine's only adapter today.
+    These are limitations of this guard, not of the distribution's rebranding; widening the
+    scan is deliberately a separate decision from writing them down. The same four are stated
+    for readers of the repository under "Limitaciones conocidas" in `README.md`.
  6. The generated `dist/install.sh`: none of 'pegasus' or 'harness' anywhere in it (unconditional
     -- there is no accepted-residue register for a file DARQ generates itself; 'balerdis' is
     deliberately not banned, see `FORBIDDEN_INSTALLER_TOKENS`'s comment -- it is the shared GitHub
@@ -524,6 +551,11 @@ def verify(binary: Path, scratch_root: Path, installer: Path = DEFAULT_INSTALLER
         report.ok(f"data dir {pegasus_data_dir} correctly does not exist")
 
     # 5. Brand leak scan, classified into silent / NOTE / WARNING / FAIL.
+    # The corpus is exactly this directory's decodable file *contents* plus the two stdouts
+    # below -- not the data dir, not file names, not what a second CLI adapter would install,
+    # and a file that fails to decode drops out here without a report line. All four gaps are
+    # spelled out under "Known limitations of check 5" in this module's docstring; do not
+    # widen this loop without moving that text first.
     scanned_corpus: list[str] = []
     config_dir = home / ".config" / "opencode"
     for path in sorted(p for p in config_dir.rglob("*") if p.is_file()):
