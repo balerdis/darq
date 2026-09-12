@@ -15,13 +15,14 @@ Checks, each falsifiable and each able to actually fail:
     -- deliberately still Pegasus's, asserted explicitly so nobody "fixes" it later.
  3. `darq install --cli opencode` exits 0 -- the real proof content-load-time invariants held.
  4. The data dir is `<home>/.local/share/darq`; `<home>/.local/share/pegasus-harness` must not exist.
- 5. Brand leak scan: the UTF-8-decodable *text* of every file under the scratch home's
-    `<home>/.config/opencode`, plus the rendered stdout of checks 1 and 2, is scanned for
+ 5. Brand leak scan: every file's relative *path* plus its UTF-8-decodable *content* under the
+    scratch home's `<home>/.config/opencode` and `<home>/.local/share/darq` (see
+    `SCAN_DIR_RELATIVE_PATHS`), plus the rendered stdout of checks 1 and 2, is scanned for
     `pegasus` (case-insensitive; see `_LEAK_PATTERN` below for why 'harness' was dropped).
-    That is the whole corpus -- it is narrower than "everything the install wrote", and the
-    four ways it is narrower are listed under "Known limitations of check 5" below. Every hit
-    is classified into exactly one of four outcomes, using the three named registers declared
-    in `rebrand.json`:
+    That is the whole corpus -- it is still narrower than "everything the install wrote", and
+    the one remaining way it is narrower is listed under "Known limitations of check 5" below.
+    Every hit is classified into exactly one of four outcomes, using the three named registers
+    declared in `rebrand.json`:
       - silent   -- falls inside a `protected_tokens` entry (a stable wire identifier).
       - NOTE     -- falls inside an `accepted_residue` entry (cosmetic, deferred upstream debt).
       - WARNING  -- falls inside a `known_defects` entry (a known functional defect, not cosmetic,
@@ -37,28 +38,37 @@ Checks, each falsifiable and each able to actually fail:
     loop that applies it in `verify()` for why.
 
     Known limitations of check 5. The scan proves that nothing unclassified leaked *within the
-    corpus described above*; it is not a proof of absence across the installation. Four gaps,
-    none of them currently hiding anything, all four latent:
-      - One directory, not the whole install. Only `<home>/.config/opencode` is walked. The
-        product's own data directory `<home>/.local/share/darq` is never opened, and the
-        journal that lives there does contain the engine's brand -- today only in the shapes
-        `pegasus-harness/journal/v4` and `pegasus_version`, both registered in
-        `protected_tokens`, so scanning it would classify them silent and change no outcome.
-        Nothing forces that to stay true as the journal grows.
-      - File contents only, never file names. A path reaches `_report_findings` purely as a
-        report label; it is never itself matched. An installed file whose *name* carried the
-        engine's brand would pass unseen. No installed artifact is named that way today.
-      - Undecodable files leave no trace. The read is wrapped in
-        `except (UnicodeDecodeError, OSError): continue` with no report line, so a file that
-        cannot be read as UTF-8 simply drops out of the corpus silently. Every installed file
-        decodes today, so nothing is being dropped -- a future binary asset would be, without
-        a line saying so.
-      - One CLI adapter, hardcoded. The whole run is driven by the single
-        `install --cli opencode` of check 3, so a second CLI adapter's installed tree would
-        be outside the corpus entirely. `opencode` is the engine's only adapter today.
-    These are limitations of this guard, not of the distribution's rebranding; widening the
-    scan is deliberately a separate decision from writing them down. The same four are stated
-    for readers of the repository under "Limitaciones conocidas" in `README.md`.
+    corpus described above*; it is not a proof of absence across the installation. Three former
+    gaps are now closed; one remains open:
+      - CLOSED -- one directory, not the whole install. `<home>/.local/share/darq`, the
+        product's own data directory, is now walked alongside `<home>/.config/opencode` (see
+        `SCAN_DIR_RELATIVE_PATHS`, applied by `run_brand_leak_directory_scan`). Confirmed against
+        a real run: the journal it writes carries the engine's brand only in the shapes
+        `pegasus-harness/journal/v4` and `pegasus_version`, both already registered in
+        `protected_tokens`, so opening this directory classifies every hit silent and changes no
+        outcome -- see `tools/check.sh --offline`'s output for the run that confirmed this.
+      - CLOSED -- file contents only, never file names. Every scanned file's relative path is now
+        classified the same way its content is (`run_brand_leak_directory_scan` runs
+        `scan_text_for_findings` against the path string too, reported as `"<path> (file name)"`),
+        so a file whose *name* carried the engine's brand no longer passes unseen.
+      - CLOSED -- undecodable files leave no trace. A file that cannot be read as UTF-8 no longer
+        drops silently out of the corpus: `run_brand_leak_directory_scan` reports it as a WARNING
+        naming the file, chosen over NOTE because an undecodable file appearing in a real run is
+        actionable (an unregistered binary asset, or corruption) rather than cosmetic residue.
+        Every installed file still decodes today, so this WARNING has never yet fired for real --
+        it exists so a future binary asset would be seen, not silently dropped.
+      - OPEN -- one CLI adapter, hardcoded. The whole run is still driven by the single
+        `install --cli opencode` of check 3, so a second CLI adapter's installed tree would be
+        outside the corpus entirely. This is deliberately NOT closed here: `opencode` is the only
+        adapter the engine ships (confirmed against `adapters/` in the pinned engine release --
+        there is no second adapter to run this check against), so there is no second real
+        scenario to widen the scan against yet. Closing it would mean inventing a scenario rather
+        than proving one, which is exactly the kind of inert coverage this guard must not carry.
+    The three closed gaps are limitations this task fixed; the one open gap is a limitation of
+    this guard, not of the distribution's rebranding -- widening it further stays a separate
+    decision from writing it down. NOTE: `README.md`'s own "Limitaciones conocidas" prose still
+    describes the old four-gap state as of this writing; it was deliberately left untouched by
+    this change (out of scope here) and now needs its own follow-up update to match.
  6. The generated `dist/install.sh`: none of 'pegasus' or 'harness' anywhere in it (unconditional
     -- there is no accepted-residue register for a file DARQ generates itself; 'balerdis' is
     deliberately not banned, see `FORBIDDEN_INSTALLER_TOKENS`'s comment -- it is the shared GitHub
@@ -315,6 +325,83 @@ def scan_text_for_findings(
     return findings
 
 
+#: Directories, relative to the scratch `home`, that check 5 walks for its brand-leak corpus.
+#: `.config/opencode` is the CLI adapter's config dir (the only adapter the engine ships, see
+#: "Known limitations of check 5" gap 4, still open); `.local/share/darq` is the product's own
+#: data dir, added so the journal it writes is no longer outside the scanned corpus.
+SCAN_DIR_RELATIVE_PATHS: tuple[Path, ...] = (
+    Path(".config") / "opencode",
+    Path(".local") / "share" / "darq",
+)
+
+
+def _scan_corpus_files(home: Path) -> list[Path]:
+    """Every file under `SCAN_DIR_RELATIVE_PATHS`, resolved against `home` and sorted for a
+    deterministic report order. A directory that does not exist yet (nothing installed there in
+    this run) contributes no files rather than raising.
+
+    Pure with respect to program state -- it reads the filesystem but returns plain data, so
+    `tests/test_check5_directory_scan.py` can drive it against a synthetic scratch tree with no
+    subprocess or built binary involved.
+    """
+    files: list[Path] = []
+    for relative_dir in SCAN_DIR_RELATIVE_PATHS:
+        directory = home / relative_dir
+        if directory.is_dir():
+            files.extend(p for p in directory.rglob("*") if p.is_file())
+    return sorted(files)
+
+
+def run_brand_leak_directory_scan(
+    home: Path,
+    report: Report,
+    protected_tokens: tuple[str, ...],
+    accepted_residue: dict[str, str],
+    known_defects: dict[str, str],
+) -> list[str]:
+    """The filesystem half of check 5: walk `_scan_corpus_files(home)` and classify, for each
+    file, both its relative *path* and its decodable *content* into silent / NOTE / WARNING / FAIL
+    via `scan_text_for_findings` + `_report_findings`. Returns every scanned text (path strings and
+    file contents alike) so the caller can extend it with command stdout before running the
+    stale-entry mirror check.
+
+    A file that fails to decode as UTF-8 is never silently dropped: it produces a WARNING naming
+    it, chosen over NOTE because it flags something actionable for whoever is reading the
+    report -- an undecodable file that shows up under a real run is either a binary asset nobody
+    registered as expected, or actual corruption, and either way it is exactly the kind of thing a
+    cosmetic NOTE would bury. Its content is excluded from the corpus (it was never read as text),
+    but the WARNING line itself is proof it did not vanish silently.
+    """
+    scanned_corpus: list[str] = []
+    for path in _scan_corpus_files(home):
+        relative_display = str(path.relative_to(home))
+
+        name_findings = scan_text_for_findings(
+            relative_display, protected_tokens, accepted_residue, known_defects
+        )
+        scanned_corpus.append(relative_display)
+        _report_findings(
+            report, f"{relative_display} (file name)", name_findings, accepted_residue, known_defects
+        )
+
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as error:
+            report.warn(
+                f"{relative_display} could not be decoded as UTF-8 ({error.__class__.__name__}); "
+                f"excluded from the brand-leak content scan corpus -- verify it by hand if it is "
+                f"expected to carry text"
+            )
+            continue
+        scanned_corpus.append(text)
+        content_findings = scan_text_for_findings(
+            text, protected_tokens, accepted_residue, known_defects
+        )
+        _report_findings(report, relative_display, content_findings, accepted_residue, known_defects)
+
+    return scanned_corpus
+
+
 def find_installer_brand_leaks(
     text: str, tokens: tuple[str, ...] = FORBIDDEN_INSTALLER_TOKENS
 ) -> list[tuple[int, str, str]]:
@@ -551,21 +638,14 @@ def verify(binary: Path, scratch_root: Path, installer: Path = DEFAULT_INSTALLER
         report.ok(f"data dir {pegasus_data_dir} correctly does not exist")
 
     # 5. Brand leak scan, classified into silent / NOTE / WARNING / FAIL.
-    # The corpus is exactly this directory's decodable file *contents* plus the two stdouts
-    # below -- not the data dir, not file names, not what a second CLI adapter would install,
-    # and a file that fails to decode drops out here without a report line. All four gaps are
-    # spelled out under "Known limitations of check 5" in this module's docstring; do not
-    # widen this loop without moving that text first.
-    scanned_corpus: list[str] = []
-    config_dir = home / ".config" / "opencode"
-    for path in sorted(p for p in config_dir.rglob("*") if p.is_file()):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        scanned_corpus.append(text)
-        findings = scan_text_for_findings(text, protected_tokens, accepted_residue, known_defects)
-        _report_findings(report, str(path), findings, accepted_residue, known_defects)
+    # The corpus is `SCAN_DIR_RELATIVE_PATHS` (config dir + data dir) walked by
+    # `run_brand_leak_directory_scan` -- both path and decodable content of every file there --
+    # plus the two stdouts below. Still not everything the install wrote: what a second CLI
+    # adapter would install is the one gap left open, spelled out under "Known limitations of
+    # check 5" in this module's docstring; do not widen this further without moving that text.
+    scanned_corpus = run_brand_leak_directory_scan(
+        home, report, protected_tokens, accepted_residue, known_defects
+    )
 
     for label, output in (
         ("darq --version stdout", version_result.stdout if version_result.returncode == 0 else ""),

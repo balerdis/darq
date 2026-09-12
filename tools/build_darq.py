@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from rebrand.transform import RebrandMap, apply_to_tree, parse_map  # noqa: E402
+from rebrand.transform import RebrandMap, _brand_fragments, apply_to_tree, mask, parse_map  # noqa: E402
 
 ENGINE_PIN = ROOT / "engine.pin"
 REBRAND_JSON = ROOT / "rebrand.json"
@@ -159,19 +159,125 @@ def persist_raw_content_copy(content_root: Path, raw_content_dir: Path) -> None:
     shutil.copytree(content_root, raw_content_dir)
 
 
-def overlay_content(package: Path, overlay_root: Path) -> None:
-    """Copy every file from `overlay_root` into `<package>/content`, adding to and replacing by
-    path, never wiping the inherited tree the rebrand transform already rewrote.
+class OverlayCollisionError(RuntimeError):
+    """A content-overlay file would overwrite a path the rebranded engine tree already provides --
+    either the overlay file's own leaf path, or one of the directories it needs along the way.
+
+    Always fatal: DARQ's own content is only ever added on top of the engine's tree, never
+    replacing it. There is deliberately no declarable exception mechanism for this (no
+    `accepted_residue`-style allowlist) -- see `overlay_content`'s docstring for why.
+    """
+
+
+class OverlayBrandLeakError(RuntimeError):
+    """A content-overlay file's path or body still carries an engine brand fragment.
+
+    Always fatal: unlike `rebrand.transform.rename_relative_path`/`substitute_body`, which REWRITE
+    a leak found in the engine's own inherited tree, DARQ's own `content/` is never rewritten --
+    it is rejected outright, because a leak in content DARQ itself authored is a defect in that
+    content, not something the rebrand mirror should paper over.
+    """
+
+
+def _overlay_brand_leaks(text: str, rebrand_map: RebrandMap) -> list[str]:
+    """The brand fragments (see `rebrand.transform._brand_fragments`) that survive in `text`
+    after protected tokens are masked out -- empty if `text` is clean.
+
+    Reuses the same detection machinery `rename_relative_path` uses to reject an engine path that
+    still carries the brand after rewriting, but here purely to DETECT and never to rewrite:
+    overlay content is DARQ's own, so a leak in it is rejected outright rather than repaired.
+    """
+    masked = mask(text, rebrand_map.protected_tokens)
+    return [fragment for fragment in _brand_fragments(rebrand_map) if fragment in masked]
+
+
+def overlay_content(package: Path, overlay_root: Path, rebrand_map: RebrandMap) -> None:
+    """Copy every file from `overlay_root` into `<package>/content`, adding to the inherited tree
+    the rebrand transform already rewrote -- never replacing any of it.
+
+    Two hard failures, both unconditional:
+
+    - `OverlayCollisionError`: an overlay file's relative path already exists in the rebranded
+      engine tree, or one of that path's intermediate directories exists there as a *file*
+      instead (an overlay file needing `skills/x/y.md` when the engine tree already has a plain
+      file at `skills/x` is caught the same way, before `Path.mkdir` would otherwise fail with a
+      bare, path-less `FileExistsError`). Deliberately has no declarable exception (no
+      `accepted_residue`-style allowlist for a permitted collision): none of DARQ's content today
+      collides with the engine's ~90 content paths (verified directly, see
+      `tests/test_overlay_content.py`), so adding one now would be an empty, inert permission
+      list -- exactly the kind of debt this repo already flags as a problem (see `rebrand.json`'s
+      `PEGASUS_INSTALL_BASE_URL` precedent). The day a real collision is needed, this failure is
+      what stops it in front of whoever introduces it, and that is when the exception mechanism
+      gets designed, against a real case.
+    - `OverlayBrandLeakError`: an overlay file's path or body still carries an engine brand
+      fragment (via `_overlay_brand_leaks`, reusing `rebrand.transform`'s own fragment detection).
+      DARQ's own content must never carry the engine's brand; `protected_tokens` remain a valid
+      exception (a stable wire identifier is not a leak).
+
+    `OVERLAY:` in the printed log names a file added fresh; a collision is never silently logged
+    that way -- it always raises, naming the path, instead.
     """
     if not overlay_root.is_dir():
         return
     destination_root = package / "content"
     for source_path in sorted(p for p in overlay_root.rglob("*") if p.is_file()):
         relative = source_path.relative_to(overlay_root)
+        relative_posix = relative.as_posix()
+
+        path_leaks = _overlay_brand_leaks(relative_posix, rebrand_map)
+        if path_leaks:
+            raise OverlayBrandLeakError(
+                f"content overlay file path {relative_posix!r} still carries engine brand "
+                f"fragment(s) {path_leaks!r}; DARQ's own content must never carry the engine's "
+                f"brand in a file name -- rename the file instead of overlaying it as is."
+            )
+        try:
+            body = source_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            body = None
+        if body is not None:
+            body_leaks = _overlay_brand_leaks(body, rebrand_map)
+            if body_leaks:
+                raise OverlayBrandLeakError(
+                    f"content overlay file {relative_posix!r} body still carries engine brand "
+                    f"fragment(s) {body_leaks!r}; DARQ's own content must never carry the "
+                    f"engine's brand -- fix the file's own text instead of overlaying it as is."
+                )
+
         destination_path = destination_root / relative
+        if destination_path.exists():
+            raise OverlayCollisionError(
+                f"OVERLAY-COLLISION: {relative_posix} would overwrite {destination_path}, which "
+                f"the rebranded engine tree already provides at this path. DARQ's content/ only "
+                f"ever adds to the engine's tree, never replaces it -- this path is frozen "
+                f"against future upstream engine changes until a real collision is designed for; "
+                f"see OverlayCollisionError's docstring."
+            )
+        # The check above only sees a collision once the destination *leaf* exists. If the
+        # engine tree instead has a *file* sitting at one of the destination's intermediate
+        # directories, the leaf doesn't exist yet, so that check never fires -- and without this
+        # loop the collision would surface later as a raw `FileExistsError` out of `Path.mkdir`,
+        # naming nothing and explaining nothing. Walk every intermediate component, top-down, so
+        # it is reported the same way as a leaf collision.
+        intermediate_ancestors = []
+        ancestor = destination_path.parent
+        while ancestor != destination_root:
+            intermediate_ancestors.append(ancestor)
+            ancestor = ancestor.parent
+        for ancestor_path in reversed(intermediate_ancestors):
+            if ancestor_path.exists() and not ancestor_path.is_dir():
+                ancestor_relative = ancestor_path.relative_to(destination_root).as_posix()
+                raise OverlayCollisionError(
+                    f"OVERLAY-COLLISION: {relative_posix} needs {ancestor_relative!r} as a "
+                    f"directory, but the rebranded engine tree already provides "
+                    f"{ancestor_relative!r} as a file at {ancestor_path}. DARQ's content/ only "
+                    f"ever adds to the engine's tree, never replaces it -- this path is frozen "
+                    f"against future upstream engine changes until a real collision is designed "
+                    f"for; see OverlayCollisionError's docstring."
+                )
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, destination_path)
-        print(f"OVERLAY: {relative}")
+        print(f"OVERLAY: {relative_posix}")
 
 
 def run_build_zipapp(build_zipapp_py: Path, source: Path, identity: Path, out: Path) -> None:
@@ -258,7 +364,7 @@ def build(
     apply_to_tree(package / "content", rebrand_map)
     print("REBRANDED: content tree rewritten in place")
 
-    overlay_content(package, CONTENT_OVERLAY)
+    overlay_content(package, CONTENT_OVERLAY, rebrand_map)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     run_build_zipapp(assets["build_zipapp.py"], package, IDENTITY_JSON, out)

@@ -113,7 +113,7 @@ class OfflinePipelineTests(unittest.TestCase):
         overlay_dir = self.work_root / "overlay"
         (overlay_dir / "skills").mkdir(parents=True)
         (overlay_dir / "skills" / "extra.md").write_text("overlay content\n", encoding="utf-8")
-        build_darq.overlay_content(package, overlay_dir)
+        build_darq.overlay_content(package, overlay_dir, rebrand_map)
         self.assertEqual(
             (package / "content" / "skills" / "extra.md").read_text(encoding="utf-8"),
             "overlay content\n",
