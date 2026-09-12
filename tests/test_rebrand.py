@@ -26,7 +26,12 @@ from rebrand.transform import (
 
 ROOT = Path(__file__).resolve().parents[1]
 REBRAND_JSON = ROOT / "rebrand.json"
-ENGINE_CONTENT_ROOT = ROOT / "build" / "work" / "extracted" / "pegasus" / "content"
+#: The engine's content tree as `tools.build_darq.persist_raw_content_copy` persists it --
+#: extracted from the pinned zipapp but *before* `apply_to_tree` rewrites it in place. Using this
+#: raw copy (rather than `build/work/extracted/pegasus/content`, which a real build always
+#: rewrites in place) is what makes the tests below check real derivation instead of asserting
+#: that an already-transformed tree survives a second transform unchanged.
+ENGINE_CONTENT_ROOT = ROOT / "build" / "work" / "extracted-raw" / "content"
 
 
 class RebrandTransformTests(unittest.TestCase):
@@ -207,7 +212,9 @@ class RebrandTransformTests(unittest.TestCase):
         ``accepted_residue`` entries that name a path (e.g. the notifier/skill-registry plugin
         assets) live under ``adapters/opencode/assets/`` in the extracted engine package, entirely
         outside that content root, so ``rename_relative_path`` never sees them -- no exemption
-        code is needed. This is verified against the real extracted engine tree, not assumed.
+        code is needed. This is verified against the real, unrebranded engine content tree that
+        ``tools.build_darq.persist_raw_content_copy`` persists (see ``ENGINE_CONTENT_ROOT``
+        above), not assumed.
 
         As of engine v5.28.0, on-disk artifact names derive from ``identity.json`` instead of
         being literal, so every path-shaped ``accepted_residue`` entry this test used to check
@@ -217,7 +224,11 @@ class RebrandTransformTests(unittest.TestCase):
         right now; it is skipped rather than deleted so it starts enforcing again the moment a
         future engine release reintroduces a path-shaped residue entry."""
         if not ENGINE_CONTENT_ROOT.is_dir():
-            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+            self.skipTest(
+                f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py "
+                "(--offline is fine with a populated build/cache/) once first to persist "
+                "the raw content copy"
+            )
         payload = json.loads(REBRAND_JSON.read_text(encoding="utf-8"))
         residue_paths = [
             entry["token"] for entry in payload["accepted_residue"] if "/" in entry["token"]
@@ -271,10 +282,14 @@ class RebrandTransformTests(unittest.TestCase):
 
     def test_mirror_check_does_not_fire_on_the_real_pinned_engine_content_tree(self) -> None:
         """The clean build stays clean: run the mirror-guarded rename over the actual pinned
-        engine content tree (already extracted into build/work by a prior real build) and confirm
+        engine content tree, persisted raw (before rebranding) by a prior real build, and confirm
         it does not raise."""
         if not ENGINE_CONTENT_ROOT.is_dir():
-            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+            self.skipTest(
+                f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py "
+                "(--offline is fine with a populated build/cache/) once first to persist "
+                "the raw content copy"
+            )
         rebrand_map = self.rebrand_map
         for path in sorted(p for p in ENGINE_CONTENT_ROOT.rglob("*") if p.is_file()):
             relative_posix = path.relative_to(ENGINE_CONTENT_ROOT).as_posix()
@@ -283,11 +298,16 @@ class RebrandTransformTests(unittest.TestCase):
             rename_relative_path(relative_posix, rebrand_map)  # must not raise
 
     def test_no_output_filename_stem_carries_a_banned_brand_fragment_after_a_real_transform(self) -> None:
-        """Complement of the whole change: transform a fresh copy of the real pinned engine content
-        tree and confirm no resulting filename stem contains any brand fragment declared in
-        rebrand.json's own substitutions -- the banned-fragment list is never hand-written here."""
+        """Complement of the whole change: transform a fresh copy of the real, raw (unrebranded)
+        pinned engine content tree and confirm no resulting filename stem contains any brand
+        fragment declared in rebrand.json's own substitutions -- the banned-fragment list is never
+        hand-written here."""
         if not ENGINE_CONTENT_ROOT.is_dir():
-            self.skipTest(f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py once first")
+            self.skipTest(
+                f"{ENGINE_CONTENT_ROOT} not present; run tools/build_darq.py "
+                "(--offline is fine with a populated build/cache/) once first to persist "
+                "the raw content copy"
+            )
         rebrand_map = self.rebrand_map
         work_root = Path(tempfile.mkdtemp(prefix="darq-rebrand-test-"))
         self.addCleanup(shutil.rmtree, work_root, ignore_errors=True)

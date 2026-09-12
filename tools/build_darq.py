@@ -38,6 +38,22 @@ IDENTITY_JSON = ROOT / "identity.json"
 CONTENT_OVERLAY = ROOT / "content"
 DEFAULT_CACHE_DIR = ROOT / "build" / "cache"
 DEFAULT_WORK_DIR = ROOT / "build" / "work"
+def raw_content_dir_for(work_dir: Path) -> Path:
+    """Where the engine's content tree is persisted *before* `rebrand.transform.apply_to_tree`
+    rewrites it in place, for a given `work_dir`. Always a sibling of `<work_dir>/extracted`, so
+    two builds run with different `--work-dir` values never collide on the same raw copy location.
+
+    This is verification input only -- it sits outside `<work_dir>/extracted/pegasus`, the tree
+    that `run_build_zipapp`/`run_build_installer` package, so it never reaches `dist/`. See
+    `tests/test_build_darq.py::RawContentCopyTests` for the checks that it stays out of what gets
+    packaged and that it derives from `work_dir` rather than a fixed path.
+    """
+    return work_dir / "extracted-raw" / "content"
+
+
+#: `raw_content_dir_for`'s value for `DEFAULT_WORK_DIR`, kept as today's default so passing no
+#: `--work-dir` changes nothing.
+DEFAULT_RAW_CONTENT_DIR = raw_content_dir_for(DEFAULT_WORK_DIR)
 DEFAULT_OUT = ROOT / "dist" / "darq"
 DEFAULT_INSTALLER_OUT = ROOT / "dist" / "install.sh"
 
@@ -127,6 +143,22 @@ def extract_pegasus_package(pegasus_binary: Path, work_dir: Path) -> Path:
     return package
 
 
+def persist_raw_content_copy(content_root: Path, raw_content_dir: Path) -> None:
+    """Copy `content_root` (the freshly extracted, not-yet-rebranded `pegasus/content` tree) to
+    `raw_content_dir` before `apply_to_tree` rewrites `content_root` in place.
+
+    This is the only copy of the engine's raw content DARQ ever persists, and it exists solely so
+    `tests/test_rebrand.py` can assert what the transform actually *derives* from real engine
+    content, rather than asserting idempotence against content the previous build already
+    rewrote. It is never read by the build itself again and must never be packaged -- see
+    `DEFAULT_RAW_CONTENT_DIR`'s docstring for how that is kept true.
+    """
+    if raw_content_dir.exists():
+        shutil.rmtree(raw_content_dir)
+    raw_content_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(content_root, raw_content_dir)
+
+
 def overlay_content(package: Path, overlay_root: Path) -> None:
     """Copy every file from `overlay_root` into `<package>/content`, adding to and replacing by
     path, never wiping the inherited tree the rebrand transform already rewrote.
@@ -202,15 +234,25 @@ def build(
     work_dir: Path = DEFAULT_WORK_DIR,
     out: Path = DEFAULT_OUT,
     installer_out: Path = DEFAULT_INSTALLER_OUT,
+    raw_content_dir: Path | None = None,
 ) -> Path:
+    """`raw_content_dir` defaults to `raw_content_dir_for(work_dir)` -- a sibling of
+    `work_dir/extracted` -- rather than to a fixed path, so a custom `work_dir` never collides
+    with another build's raw content copy. Pass it explicitly only to override that derivation."""
     pin = load_pin()
     print(f"PIN: pegasus-harness tag {pin['tag']}")
+
+    if raw_content_dir is None:
+        raw_content_dir = raw_content_dir_for(work_dir)
 
     assets = fetch_pinned_assets(pin, cache_dir, offline=offline)
 
     work_dir.mkdir(parents=True, exist_ok=True)
     package = extract_pegasus_package(assets["pegasus"], work_dir)
     print(f"EXTRACTED: {package}")
+
+    persist_raw_content_copy(package / "content", raw_content_dir)
+    print(f"PERSISTED: raw (unrebranded) content copy at {raw_content_dir}")
 
     rebrand_map = parse_map(json.loads(REBRAND_JSON.read_text(encoding="utf-8")))
     apply_to_tree(package / "content", rebrand_map)
