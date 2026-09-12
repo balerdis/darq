@@ -99,11 +99,31 @@ def fetch_pinned_assets(pin: dict, cache_dir: Path, *, offline: bool) -> dict[st
     """Download (or reuse, when `offline`) every asset in `PINNED_ASSETS` into `cache_dir`, then
     verify all of them against `engine.pin` unconditionally -- verification is never skipped, even
     when the download itself was.
+
+    `offline` means what its own `--help` text promises: reuse whatever is already cached, never
+    touch the network. If an asset is not present at `cache_dir / asset_name`, this is a hard
+    refusal naming the missing asset and where it was expected -- never a silent fall-back to
+    downloading it. See `tests/test_fetch_pinned_assets.py::test_offline_with_a_missing_cached_
+    asset_is_a_hard_refusal_naming_it` for the behaviour this fixes: before this, `offline and
+    destination.is_file()` was the only gate, so a cache miss fell straight into the `else`
+    branch and quietly reached the network regardless of `offline`.
+
+    There are exactly three ways a pinned asset can turn out to be unusable, and all three are
+    named `BuildError`s -- never a raw traceback: not cached (above), sha256 mismatch (below), and
+    -- cached (or freshly downloaded) but unreadable, e.g. broken permissions -- also below, where
+    `sha256_of` opens it. That last one applies in both modes: a file just downloaded can be just
+    as unreadable as one reused from a stale cache.
     """
     paths: dict[str, Path] = {}
     for asset_name in PINNED_ASSETS:
         destination = cache_dir / asset_name
-        if offline and destination.is_file():
+        if offline:
+            if not destination.is_file():
+                raise BuildError(
+                    f"--offline refused: {asset_name} is not cached at {destination}. "
+                    f"Populate the cache first by running `python3 tools/build_darq.py` "
+                    f"(without --offline) once, then retry with --offline."
+                )
             print(f"OFFLINE: reusing cached {asset_name} at {destination}")
         else:
             url = asset_url(pin, asset_name)
@@ -116,7 +136,15 @@ def fetch_pinned_assets(pin: dict, cache_dir: Path, *, offline: bool) -> dict[st
             raise BuildError(
                 f"{asset_name} is not present at {path}; run without --offline to download it"
             )
-        actual = sha256_of(path)
+        try:
+            actual = sha256_of(path)
+        except OSError as exc:
+            raise BuildError(
+                f"REFUSED: {asset_name} at {path} could not be read to verify its sha256 -- {exc}. "
+                f"This is the third way an asset can be unusable (after: not cached, hash "
+                f"mismatch) -- fix its permissions (or whatever the OS error above names) and "
+                f"retry."
+            ) from exc
         expected = expected_sha256(pin, asset_name)
         if actual != expected:
             raise BuildError(
@@ -205,10 +233,13 @@ def overlay_content(package: Path, overlay_root: Path, rebrand_map: RebrandMap) 
       `accepted_residue`-style allowlist for a permitted collision): none of DARQ's content today
       collides with the engine's ~90 content paths (verified directly, see
       `tests/test_overlay_content.py`), so adding one now would be an empty, inert permission
-      list -- exactly the kind of debt this repo already flags as a problem (see `rebrand.json`'s
-      `PEGASUS_INSTALL_BASE_URL` precedent). The day a real collision is needed, this failure is
-      what stops it in front of whoever introduces it, and that is when the exception mechanism
-      gets designed, against a real case.
+      list -- exactly the kind of debt this repo has already removed elsewhere once found: both
+      `rebrand.json`'s now-deleted `PEGASUS_INSTALL_BASE_URL` protected-token entry (it could never
+      match anything DARQ's own installer produces) and its former `renames` list (both entries
+      were exactly reproducible by mechanical derivation) were cut for the same reason -- an inert
+      allowlist entry teaches whoever reads it to stop trusting the list. The day a real collision
+      is needed, this failure is what stops it in front of whoever introduces it, and that is when
+      the exception mechanism gets designed, against a real case.
     - `OverlayBrandLeakError`: an overlay file's path or body still carries an engine brand
       fragment (via `_overlay_brand_leaks`, reusing `rebrand.transform`'s own fragment detection).
       DARQ's own content must never carry the engine's brand; `protected_tokens` remain a valid

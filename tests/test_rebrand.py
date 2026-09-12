@@ -41,23 +41,32 @@ class RebrandTransformTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.rebrand_map: RebrandMap = parse_map(json.loads(REBRAND_JSON.read_text(encoding="utf-8")))
 
-    def test_rebrand_json_declares_only_the_semantic_renames_that_derivation_cannot_produce(self) -> None:
-        """``renames`` now holds only the two deliberate re-namings (king-pegasus's persona name
-        does not textually derive from the brand substitution map); the purely mechanical
-        pegasus-orchestrator renames were removed once verified byte-identical to what
-        ``rename_relative_path`` derives on its own -- see
-        ``test_derivation_reproduces_the_removed_pegasus_orchestrator_renames_byte_for_byte``."""
+    def test_rebrand_json_declares_no_semantic_renames_today(self) -> None:
+        """``renames`` is empty: every branded content path DARQ has ever shipped -- including the
+        former ``agents/king-pegasus.md`` and ``agents/mcp/cbm@king-pegasus.md`` entries -- turned
+        out to be exactly reproducible by mechanical derivation, and was removed from this list
+        once verified byte-identical -- see
+        ``test_derivation_reproduces_the_removed_king_pegasus_renames_byte_for_byte`` and
+        ``test_derivation_reproduces_the_removed_pegasus_orchestrator_renames_byte_for_byte``. An
+        empty list with this reason recorded in ``renames_notes`` is honest; an inert list with a
+        false reason (the former note claimed these targets were NOT a textual substitution of
+        their source, which the ``substitutions`` table's own first rule contradicts) is not."""
+        rebrand_map = self.rebrand_map
+        self.assertEqual(set(rebrand_map.rename_map), set())
+
+    def test_derivation_reproduces_the_removed_king_pegasus_renames_byte_for_byte(self) -> None:
+        """The two ``king-pegasus`` entries removed from ``renames`` must be exactly reproducible
+        by mechanical derivation -- this is the byte-for-byte proof the brief requires before
+        removing them. ``substitutions``' first rule, ``["king-pegasus", "arquitecto-darq"]``, is
+        exactly what produces these targets -- so they were never a case derivation "cannot
+        produce", contrary to what the former ``renames_notes`` claimed."""
         rebrand_map = self.rebrand_map
         self.assertEqual(
-            set(rebrand_map.rename_map),
-            {
-                "agents/king-pegasus.md",
-                "agents/mcp/cbm@king-pegasus.md",
-            },
+            substitute_body("agents/king-pegasus.md", rebrand_map),
+            "agents/arquitecto-darq.md",
         )
-        self.assertEqual(rebrand_map.rename_map["agents/king-pegasus.md"], "agents/arquitecto-darq.md")
         self.assertEqual(
-            rebrand_map.rename_map["agents/mcp/cbm@king-pegasus.md"],
+            substitute_body("agents/mcp/cbm@king-pegasus.md", rebrand_map),
             "agents/mcp/cbm@arquitecto-darq.md",
         )
 
@@ -106,7 +115,6 @@ class RebrandTransformTests(unittest.TestCase):
             "PEGASUS_SKILL_ROOTS",
             "PEGASUS_SKILL_REGISTRY_BIN",
             "PEGASUS_NO_UPDATE_CHECK",
-            "PEGASUS_INSTALL_BASE_URL",
             "pegasus/capability-manifest/v1",
             "pegasus/model-assignment/v1",
             "pegasus/artifact-catalog/v4",

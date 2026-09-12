@@ -76,18 +76,20 @@ class CheckShArgumentParsingTests(unittest.TestCase):
 
     def test_offline_alone_runs_the_build_step_too(self) -> None:
         # `--offline` alone (no `--no-build`) runs `build_darq.py --offline`, which reaches
-        # `fetch_pinned_assets(..., offline=True)`. Per tests/test_fetch_pinned_assets.py, that
-        # function silently falls back to a REAL network download for any asset not already in
-        # `build/cache/`. This check MUST run, and MUST skip, before `_run_check_sh` is ever
-        # called below -- that is what keeps this test from being able to reach the network on a
-        # machine where the cache is not fully populated.
+        # `fetch_pinned_assets(..., offline=True)`. Since the fix documented in
+        # tests/test_fetch_pinned_assets.py, that function hard-refuses (raising `BuildError`,
+        # never touching the network) for any asset not already in `build/cache/`, instead of the
+        # old silent fall-back to a real download. The guard below is still worth keeping: it turns
+        # what would now be a hard build failure on an unpopulated cache into an honest skip that
+        # names what to populate, rather than making this test itself fail on a machine that simply
+        # hasn't run a build yet.
         missing = _missing_cached_assets()
         if missing:
             self.skipTest(
                 f"build/cache/ is missing {missing}; populate build/cache/ with all of "
                 f"{list(_REQUIRED_CACHED_ASSETS)} first (e.g. run tools/build_darq.py once "
-                "with network access) -- otherwise --offline would silently fall back to a "
-                "real network download for the missing asset(s)"
+                "with network access) -- otherwise --offline would now hard-refuse instead of "
+                "building, for the missing asset(s)"
             )
 
         result = _run_check_sh("--offline")

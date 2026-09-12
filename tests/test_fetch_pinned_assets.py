@@ -13,6 +13,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,31 +123,90 @@ class FetchPinnedAssetsTests(unittest.TestCase):
         # swallowed, not the exact exception class.
         self.assertNotIsInstance(ctx.exception, build_darq.BuildError)
 
-    def test_offline_with_no_cached_file_falls_back_to_downloading_it(self) -> None:
-        """Documents actual behaviour, which is looser than `--offline`'s own docstring/CLI help
-        promise ("reuse whatever is already in the cache dir"): `fetch_pinned_assets` only *skips*
-        the download when `offline` is set AND the file is already cached; if it is not cached, it
-        silently falls back to fetching from `url_template` regardless of `offline`. This is a
-        real discrepancy worth flagging (not a DARQ security boundary -- verification still runs
-        unconditionally either way -- but the flag does not do what its own docs claim), reported
-        rather than fixed here since D8's scope is testing, not changing `--offline`'s semantics."""
+    def test_offline_with_a_missing_cached_asset_is_a_hard_refusal_naming_it(self) -> None:
+        """Fixed behaviour: `--offline` now means what its own docstring/CLI help always promised
+        ("reuse whatever is already in the cache dir"). This test used to document the opposite --
+        `fetch_pinned_assets` silently falling back to fetching from `url_template` regardless of
+        `offline` whenever an asset was not already cached, a real network download hiding behind
+        a flag that claims to avoid one. It has been rewritten to fix, rather than merely document,
+        that defect: a cache miss under `--offline` must now be a hard `BuildError` naming the
+        missing asset and where it was expected, with no attempt to resolve `url_template` at all
+        -- so this must raise even though the pin's `url_template` for `pegasus` resolves perfectly
+        well via `file://`."""
         pin = self._pin_with_correct_hashes()
+
+        with self.assertRaises(build_darq.BuildError) as ctx:
+            build_darq.fetch_pinned_assets(pin, self.cache_dir, offline=True)
+
+        message = str(ctx.exception)
+        self.assertIn("pegasus", message)
+        self.assertIn(str(self.cache_dir / "pegasus"), message)
+        self.assertIn("--offline", message)
+        self.assertFalse((self.cache_dir / "pegasus").exists())
+
+    def test_offline_with_a_fully_populated_cache_never_touches_url_template(self) -> None:
+        """The mirror of the test above: with every asset already cached, `--offline` must reuse
+        them and never attempt to resolve `url_template` -- confirmed by pointing it at a source
+        that does not exist and asserting the call still succeeds."""
+        pin = self._pin_with_correct_hashes()
+        for asset_name, source_path in self.sources.items():
+            destination = self.cache_dir / asset_name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source_path.read_bytes())
+        pin["assets"]["pegasus"]["url_template"] = _file_url(self.work_root / "does-not-exist")
 
         paths = build_darq.fetch_pinned_assets(pin, self.cache_dir, offline=True)
 
         self.assertTrue(paths["pegasus"].is_file())
 
-    def test_offline_with_no_cached_file_and_no_resolvable_source_still_raises(self) -> None:
-        """The one case `--offline` truly cannot paper over: cache empty and the URL does not
-        resolve either. This still raises (see `test_a_source_url_that_does_not_resolve_raises`
-        for the same behaviour with `offline=False`) -- `offline` is never a way to make a
-        genuinely absent asset look like success."""
+    def test_offline_with_a_cached_but_unreadable_asset_is_a_hard_refusal_naming_it(self) -> None:
+        """The third way a pinned asset can be unusable: it is cached, but a permission problem
+        (broken permissions, wrong owner, `umask`, a container quirk) means it cannot actually be
+        read to compute its sha256. Before this test, that case reached `sha256_of`'s bare
+        `path.open("rb")` uncaught and blew up as a raw `PermissionError` -- the only one of the
+        three "asset unusable" cases that was not a named `BuildError`. This exercises the fix
+        entirely inside `self.cache_dir`, itself a subdirectory of the per-test `tempfile.mkdtemp`
+        `work_root` -- never `build/cache/`."""
         pin = self._pin_with_correct_hashes()
-        pin["assets"]["pegasus"]["url_template"] = _file_url(self.work_root / "does-not-exist")
+        for asset_name, source_path in self.sources.items():
+            destination = self.cache_dir / asset_name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source_path.read_bytes())
+        unreadable = self.cache_dir / "pegasus"
+        original_mode = unreadable.stat().st_mode
+        unreadable.chmod(0o000)
+        self.addCleanup(unreadable.chmod, original_mode)
 
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(build_darq.BuildError) as ctx:
             build_darq.fetch_pinned_assets(pin, self.cache_dir, offline=True)
-        self.assertNotIsInstance(ctx.exception, build_darq.BuildError)
+
+        message = str(ctx.exception)
+        self.assertIn("pegasus", message)
+        self.assertIn(str(unreadable), message)
+        self.assertIn("Permission denied", message)
+
+    def test_a_freshly_downloaded_but_unreadable_asset_is_also_a_hard_refusal(self) -> None:
+        """The same permission failure applies in normal (non-offline) mode too: an asset just
+        downloaded can be just as unreadable as one reused from a stale cache, and must be named
+        the same way rather than raising a bare `PermissionError`."""
+        pin = self._pin_with_correct_hashes()
+
+        original_download = build_darq.download
+
+        def download_then_break_permissions(url: str, destination: Path) -> None:
+            original_download(url, destination)
+            if destination.name == "pegasus":
+                original_mode = destination.stat().st_mode
+                destination.chmod(0o000)
+                self.addCleanup(destination.chmod, original_mode)
+
+        with unittest.mock.patch.object(build_darq, "download", download_then_break_permissions):
+            with self.assertRaises(build_darq.BuildError) as ctx:
+                build_darq.fetch_pinned_assets(pin, self.cache_dir, offline=False)
+
+        message = str(ctx.exception)
+        self.assertIn("pegasus", message)
+        self.assertIn("Permission denied", message)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,8 @@
 {
   "schema": "darq/rebrand-map/v1",
   "description": "Declarative rebrand map applied by rebrand/transform.py to an extracted pegasus package tree before it is repackaged as DARQ. No engine source or content is copied into this repo; this file only describes a transform applied at build time to a downloaded, pinned release artifact.",
-  "renames": [
-    {"from": "agents/king-pegasus.md", "to": "agents/arquitecto-darq.md"},
-    {"from": "agents/mcp/cbm@king-pegasus.md", "to": "agents/mcp/cbm@arquitecto-darq.md"}
-  ],
-  "renames_notes": "This list is NOT exhaustive and must not be treated as one: it holds only the deliberate, non-mechanical re-namings -- paths whose target isn't a textual substitution of the source (the 'king-pegasus' persona becomes 'arquitecto-darq', not a string swap of 'pegasus'). Every other branded content path -- including ones the engine adds later, such as agents/pegasus-general.md -- is renamed mechanically by rebrand/transform.py::rename_relative_path, which runs the path through the same substitution map applied to file bodies (masking protected tokens the same way). The former 'agents/pegasus-orchestrator.md' and 'agents/mcp/cbm@pegasus-orchestrator.md' entries were removed from this list after verifying byte-for-byte that mechanical derivation reproduces their exact former targets (see tests/test_rebrand.py). A transform-time mirror check fails loudly, naming the offending path, if any resolved path -- explicit or derived -- still carries the brand.",
+  "renames": [],
+  "renames_notes": "This list holds only the deliberate, non-mechanical re-namings -- a target that mechanical derivation could not produce on its own. It is empty today, on purpose, not from neglect: every branded content path DARQ has ever shipped, including the former 'agents/king-pegasus.md', 'agents/mcp/cbm@king-pegasus.md', 'agents/pegasus-orchestrator.md' and 'agents/mcp/cbm@pegasus-orchestrator.md', turned out to be exactly reproducible by running rebrand/transform.py::rename_relative_path's mechanical derivation (the same substitution map applied to file bodies, masking protected tokens the same way) -- verified byte-for-byte before each entry was removed (see tests/test_rebrand.py). If a future engine path ever needs a target the substitution table cannot derive -- for instance because no rewrite rule connects source and target as a textual substitution -- its explicit entry belongs here. A transform-time mirror check fails loudly, naming the offending path, if any resolved path -- explicit or derived -- still carries the brand.",
   "forbidden_fragments": ["pegasus", "harness"],
   "forbidden_fragments_notes": "Declares WHAT COUNTS AS a brand leak in a resolved output path, as distinct from 'substitutions', which declares HOW a leak already found is repaired. These are deliberately different registers with different purposes and must never be merged into one list: a fragment can belong here without ever being a rewrite rule (e.g. 'harness' is not a substitution key -- no rule turns 'harness' into anything -- but a path still carrying it is still a leak), and a rewrite rule's left-hand side (e.g. 'king-pegasus') is also, by construction, a fragment that must never survive resolution. rebrand/transform.py's mirror check reads the UNION of this list and every substitution key so it can catch a leak regardless of which register names it.",
   "substitutions": [
@@ -22,7 +19,6 @@
   "protected_tokens": [
     "PEGASUS_SKILL_REGISTRY_BIN",
     "PEGASUS_NO_UPDATE_CHECK",
-    "PEGASUS_INSTALL_BASE_URL",
     "PEGASUS_SKILL_ROOTS",
     "PEGASUS_ZELLIJ_STATE_DEBUG",
     "pegasus-harness/journal/v4",
