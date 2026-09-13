@@ -82,10 +82,16 @@ TOOL_NAME: dict[str, str] = {
 # the outer `"*": "deny"` baseline with no `external_directory` key at all.
 # The runtime also gates two tools that are not names Pegasus renders at all
 # -- `apply_patch` and `lsp` -- which is why they are absent here rather than
-# mapped to something: there is no Pegasus tool name for either. `skill` and
-# `ask` stay absent too, but for the opposite reason: neither reads, writes
-# or executes a path at all, so neither runtime counterpart has a target to
-# ask `external_directory` about.
+# mapped to something: there is no Pegasus tool name for either. For
+# `apply_patch` this is not just a naming gap this table happens to leave
+# open: the runtime folds `edit`, `write` and `apply_patch` onto the single
+# `edit` permission before it ever asks `external_directory` (`_tools` and
+# `_permission` below give the full account), so there is no independent
+# permission here to name even if Pegasus minted a tool called `apply_patch`.
+# `lsp` carries no such story -- it is simply a tool this codebase has never
+# had reason to declare. `skill` and `ask` stay absent too, but for the
+# opposite reason: neither reads, writes or executes a path at all, so
+# neither runtime counterpart has a target to ask `external_directory` about.
 EXTERNAL_DIRECTORY_TOOLS = frozenset({"read", "grep", "glob", "edit", "write", "bash"})
 
 PERMISSION_NAME: dict[str, str] = {
@@ -446,6 +452,32 @@ def _tools(item: Agent) -> dict[str, bool]:
     explicit `permission` block on top key by key, so rendering both is never a
     conflict -- only ever the same restriction expressed twice, once for each
     reader.
+
+    `apply_patch` is absent from `TOOL_NAME` on purpose, and the reason is the
+    one thing `"*": False` cannot be read as fixing. The runtime does not carry
+    `apply_patch` as a permission of its own: `packages/opencode/src/permission
+    /index.ts` folds `edit`, `write` and `apply_patch` onto one `"edit"`
+    permission before it ever asks this dict anything, so granting any one of
+    the three grants all three. For every tool this module actually names, the
+    deny baseline closes what the agent did not ask for; for `apply_patch` there
+    is nothing here for it to close, because the collapse happens upstream of
+    this map entirely, on a runtime you cannot instruct from `tools` at all.
+    Reading `"*": False` as though it reached `apply_patch` too is exactly the
+    mistake this docstring exists to head off.
+
+    That also means adding `"apply_patch": False` to `TOOL_NAME` would not
+    plug the gap -- it would produce a `permission.apply_patch` key the
+    runtime never consults, because its own config loader (`packages/core/src
+    /v1/config/agent.ts`, `normalize`) checks the literal string `"patch"`,
+    not `"apply_patch"`, when it decides whether that permission was declared.
+    A key spelled `apply_patch` there is a silent no-op: present in the
+    rendered JSON, read by nothing. The only lever that actually reaches
+    `apply_patch` is denying `edit` itself -- which also takes writing away
+    from the agent entirely, since the two are the same permission. There is
+    no way to keep `edit` and lose `apply_patch` beside it. So every agent
+    this map grants `edit` or `write` to also receives `apply_patch`, and that
+    is not an escalation this table failed to prevent: `apply_patch` can only
+    ever write what `edit` already allows.
     """
     names = (*item.requires_tools, *item.optional_tools)
     unknown = [name for name in names if name not in TOOL_NAME]
@@ -486,6 +518,27 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     into a `permission["write"]` key would govern nothing, since the schema
     folds `write` onto `edit` (`PERMISSION_NAME` above), and this agent would
     silently lose the ability to write.
+
+    `apply_patch` is missing from `PERMISSION_NAME` for the same reason it is
+    missing from `TOOL_NAME`, and it is worth restating here rather than only
+    in `_tools`, because this is the map a reader might reach for first to
+    look for a permission by name. `edit`, `write` and `apply_patch` are not
+    three permissions in this runtime; they are one -- the fold happens in
+    `packages/opencode/src/permission/index.ts`, upstream of everything this
+    function writes -- so granting `edit` (or `write`, which lands on the same
+    key) already hands an agent `apply_patch` too, and there is no name this
+    dict could withhold to stop that. Writing `"apply_patch": "deny"` here
+    would not withhold it either: the runtime's config loader looks for the
+    literal key `"patch"`, not `"apply_patch"` (`packages/core/src/v1/config
+    /agent.ts`, `normalize` -- see `_tools` above for the full citation), so a
+    key spelled `apply_patch` would sit in the rendered JSON governing
+    nothing a real tool call ever checks. The only way to actually take
+    `apply_patch` away is denying `edit`, and that removes the agent's ability
+    to write outright -- `apply_patch` was never a separate grant to revoke.
+    None of this is an escalation this map is failing to close: `apply_patch`
+    can only replay what `edit` already permits, so `"*": "deny"` below is not
+    lying about what it denies -- it is simply silent about a name this
+    runtime never lets it address on its own.
 
     The deny baseline has to come first for the same reason `_tools` puts it
     first: resolution takes the *last* matching rule, so `"*": "deny"` only

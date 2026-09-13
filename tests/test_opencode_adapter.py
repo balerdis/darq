@@ -649,6 +649,52 @@ class AgentRenderTest(unittest.TestCase):
         self.assertEqual(value["variant"], "high")
 
 
+class ApplyPatchPermissionFoldTest(unittest.TestCase):
+    """`apply_patch` must never appear in either translation table.
+
+    The runtime folds `edit`, `write` and `apply_patch` onto one `edit`
+    permission before it ever consults `tools` or `permission`
+    (`packages/opencode/src/permission/index.ts`), and its config loader
+    keys a declared permission off the literal `"patch"`, not
+    `"apply_patch"` (`packages/core/src/v1/config/agent.ts`, `normalize`).
+    So naming `apply_patch` in either table -- as a source key Pegasus
+    declares, or as a target any Pegasus tool name maps to -- would render a
+    key the runtime never reads: a silent no-op that looks like a
+    restriction and is not one. See `render._tools` and `render._permission`
+    for the full account.
+    """
+
+    MESSAGE = (
+        "apply_patch must not appear in {table}: the runtime folds edit, "
+        "write and apply_patch onto a single `edit` permission before it "
+        "ever consults this table, and its config loader keys a declared "
+        "permission off the literal `patch`, not `apply_patch` -- so adding "
+        "it here renders a key nothing reads, a silent no-op, not a "
+        "restriction. See render.py's `_tools` and `_permission` docstrings "
+        "for the full account of the fold."
+    )
+
+    def test_apply_patch_is_not_a_source_key_in_tool_name(self):
+        self.assertNotIn(
+            "apply_patch", render_module.TOOL_NAME, self.MESSAGE.format(table="TOOL_NAME")
+        )
+
+    def test_apply_patch_is_not_a_source_key_in_permission_name(self):
+        self.assertNotIn(
+            "apply_patch", render_module.PERMISSION_NAME, self.MESSAGE.format(table="PERMISSION_NAME")
+        )
+
+    def test_no_pegasus_tool_name_maps_to_apply_patch_in_tool_name(self):
+        offending = [key for key, value in render_module.TOOL_NAME.items() if value == "apply_patch"]
+        self.assertEqual(offending, [], self.MESSAGE.format(table="TOOL_NAME"))
+
+    def test_no_pegasus_tool_name_maps_to_apply_patch_in_permission_name(self):
+        offending = [
+            key for key, value in render_module.PERMISSION_NAME.items() if value == "apply_patch"
+        ]
+        self.assertEqual(offending, [], self.MESSAGE.format(table="PERMISSION_NAME"))
+
+
 class CommandRenderTest(unittest.TestCase):
     def setUp(self):
         self.adapter = Adapter()
