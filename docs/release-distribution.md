@@ -102,6 +102,39 @@ corre este mismo comando con `src/pegasus/identity.json`, igual que cualquier ot
    lo reporta y salta ese chequeo en vez de fallar por una razón que no es un defecto de este release.
    Imprime una línea por asset y termina con código de salida distinto de cero si algo no coincide.
 
+## Antes de empezar: la suite y una revisión que quiera romperlo
+
+Este proyecto no tiene CI, y es una decisión —no un olvido— registrada en
+[Deudas sin unidad asignada](arquitectura/arquitectura.md#deudas-sin-unidad-asignada). Lo que ocupa su
+lugar son dos pasos, y sólo el primero suele recordarse.
+
+**Uno: la suite completa, sobre un árbol quieto.** `PYTHONPATH=src:tests python3 -m unittest discover -s
+tests -q`, redirigida a un archivo y leyendo el código de salida, nunca la cola de un pipeline. Sobre un
+árbol quieto quiere decir sin ninguna mutación de prueba adentro: una suite verde sólo describe el árbol
+que existía cuando corrió, y un agente detenido puede haber escrito después.
+
+**Dos: una revisión adversarial en contexto fresco, cuya única consigna es romper lo que se acaba de
+escribir.** No una lectura del diff buscando errores: alguien que construya el escenario que debería
+hacer fallar cada control nuevo y lo **corra**. Si un área resiste, que diga qué intentó; un «se ve bien»
+sin intento de ruptura no cuenta como revisión.
+
+El segundo paso existe porque el primero no puede hacer ese trabajo, y conviene entender por qué antes de
+saltearlo. La suite prueba que no se rompió lo que ya funcionaba. No puede probar que lo nuevo haga lo que
+dice, porque el test que lo afirma lo escribe quien escribió el código, con la misma idea en la cabeza: si
+el control mira la variable equivocada, el test que lo acompaña mira la misma.
+
+La jornada del 12 de septiembre de 2026 lo midió sin proponérselo. Se cerraron cuatro familias de deuda y
+los cuatro defectos más caros los encontró la revisión, ninguno la suite, que estaba verde en los cuatro
+casos: un guardián de cobertura que aceptaba un `print("x.py")` como prueba de que un script se ejecuta;
+una lista de exenciones que comparaba por nombre de archivo, así que cualquier archivo nuevo llamado igual
+quedaba exento —y estaba en dos guardianes hermanos—; dos tests que sólo corrían si ya existía un build
+previo y que en un clon limpio podían salir a la red; y una bandera `--offline` que descargaba igual
+cuando la caché estaba vacía.
+
+Tres de esos cuatro son la misma forma de defecto: **un control que aprueba mirando un proxy en vez del
+hecho**. Es la forma que más cuesta ver desde adentro, porque el proxy se eligió justamente por ser más
+fácil de medir.
+
 `tools/build_release_manifest.py` sigue existiendo y sigue sin tocarse: reproduce la evidencia de los
 tags `v3.1.x` que ya se publicaron con tarball, leyendo sus fuentes con `git show <tag>:ruta` para
 poder seguir respondiendo por esos releases aunque `install.sh` ya no esté en el árbol de trabajo.
