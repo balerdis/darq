@@ -3,12 +3,9 @@ from __future__ import annotations
 
 import os
 import stat
-import tempfile
 import unittest
-from pathlib import Path
 
 import no_network
-from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.ports.filesystem import FileSystemError
 from platform_conditions import (
     fail_next_removal_once,
@@ -18,15 +15,15 @@ from platform_conditions import (
     make_unreadable,
     make_unwritable,
 )
+from real_home import RealHomeTestCase as _RealHomeTestCase
 
 
 @unittest.skipIf(os.geteuid() == 0, "root is not refused by permission bits")
-class PlatformConditionsTest(unittest.TestCase):
+class PlatformConditionsTest(_RealHomeTestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
-        self.fs = PosixFileSystem(product_id="pegasus-harness")
+        super().setUp()
+        self.root = self.home
+        self.fs = self.filesystem
         self.pristine_replace = os.replace
 
     def test_make_unreadable_blocks_reading_a_file(self):

@@ -7,15 +7,12 @@ writer — and the port already proves the writing.
 from __future__ import annotations
 
 import json
-import os
 import stat
-import tempfile
 import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
 from pegasus.core.snapshot import Entry, Manifest, SnapshotError
-from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.journal_store_file import DATA_DIR_MODE
 from pegasus.infra.snapshot_store_file import (
     MANIFEST_FILENAME,
@@ -23,6 +20,7 @@ from pegasus.infra.snapshot_store_file import (
     capture_paths,
     snapshots_root,
 )
+from real_home import RealHomeTestCase as _RealHomeTestCase
 from pegasus.ports.filesystem import FileSystemError
 from pegasus.ports.snapshot_store import Capture, SnapshotStore, SnapshotStoreError
 
@@ -463,16 +461,11 @@ class FileSnapshotStoreTest(unittest.TestCase):
         self.assertIn(1, subject.readable_generations())
 
 
-class FileSnapshotStoreOnRealDiskTest(unittest.TestCase):
+class FileSnapshotStoreOnRealDiskTest(_RealHomeTestCase):
     """The fake proves the policy; this proves the modes actually land on disk."""
 
     def setUp(self):
-        if os.geteuid() == 0:
-            self.skipTest("the store refuses to write as root, which is the behaviour under test elsewhere")
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.home = Path(self.directory.name)
-        self.filesystem = PosixFileSystem(product_id="pegasus-harness")
+        super().setUp()
         self.store = FileSnapshotStore(self.filesystem, home=self.home)
 
     def test_every_directory_level_is_private_even_when_created_from_scratch(self):

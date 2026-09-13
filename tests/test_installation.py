@@ -10,8 +10,6 @@ a home dirtier than it found it.
 """
 from __future__ import annotations
 
-import os
-import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -24,21 +22,17 @@ from pegasus.core import journal as journal_module
 from pegasus.core import ownership
 from pegasus.core import planner
 from pegasus.core.types import Environment, FileArtifact
-from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.journal_store_file import FileJournalStore
+from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
 VERSION = "4.0.0"
 
 
-class InstallAndRetireTest(unittest.TestCase):
+class InstallAndRetireTest(_RealHomeTestCase):
     def setUp(self):
-        if os.geteuid() == 0:
-            self.skipTest("Pegasus refuses to install as root, which is tested against the fake")
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.home = Path(self.directory.name)
-        self.fs = PosixFileSystem(product_id="pegasus-harness")
+        super().setUp()
+        self.fs = self.filesystem
         self.registry = available()
         self.cli = self.registry.ids()[0]
         self.adapter = self.registry.get(self.cli)

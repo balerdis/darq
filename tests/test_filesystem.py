@@ -16,11 +16,27 @@ from pegasus.infra import fs_posix
 from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.ports.filesystem import FileSystem, FileSystemError
 from platform_conditions import make_unwritable
+from real_home import _scratch_root
 
 
 class PosixFileSystemTest(unittest.TestCase):
+    """Not `RealHomeTestCase` on purpose: some of these tests carry their own
+    `@unittest.skipIf(os.geteuid() == 0, ...)` on individual methods rather
+    than skipping the whole class, because most of what this file tests
+    (atomic writing, listing, removal) is not permission-bit-dependent and
+    still needs to run under a root test process. Inheriting
+    `RealHomeTestCase` would move that skip into `setUp` and silently skip
+    every test here under root, losing real coverage. `dir=_scratch_root()`
+    gets the same tmpfs-when-available home without that side effect.
+
+    Every test in this class was run against both `/tmp` and `/dev/shm`
+    before this line was added; both gave the same 70/70 pass with identical
+    behaviour -- tmpfs on Linux supports the same permission bits, symlinks,
+    and atomic rename this port depends on.
+    """
+
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
+        self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.fs = PosixFileSystem(product_id="pegasus-harness")

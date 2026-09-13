@@ -8,19 +8,17 @@ policy, and the port already proves the writing.
 from __future__ import annotations
 
 import json
-import os
 import stat
-import tempfile
 import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
 from pegasus.core import journal as journal_module
 from pegasus.core.journal import Install, Record
-from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.journal_store_file import FileJournalStore, journal_path
 from pegasus.ports.filesystem import FileSystemError
 from pegasus.ports.journal_store import JournalStore, JournalStoreError
+from real_home import RealHomeTestCase as _RealHomeTestCase
 
 HOME = Path("/home/probe")
 CONFIG = HOME / ".config" / "some-cli"
@@ -259,16 +257,11 @@ class FileJournalStoreTest(unittest.TestCase):
         self.assertEqual(subject.load(), journal_module.empty(VERSION))
 
 
-class FileJournalStoreOnRealDiskTest(unittest.TestCase):
+class FileJournalStoreOnRealDiskTest(_RealHomeTestCase):
     """The fake proves the policy; this proves the two halves actually compose."""
 
     def setUp(self):
-        if os.geteuid() == 0:
-            self.skipTest("the store refuses to write as root, which is the behaviour under test elsewhere")
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.home = Path(self.directory.name)
-        self.filesystem = PosixFileSystem(product_id="pegasus-harness")
+        super().setUp()
         self.store = FileJournalStore(self.filesystem, home=self.home, pegasus_version=VERSION)
 
     def real_install(self) -> Install:

@@ -30,6 +30,7 @@ from pegasus import cli
 from pegasus.core import identity as identity_module
 from pegasus.core import ownership
 from pegasus.core import upgrade as upgrade_module
+from real_home import _scratch_root
 
 AT = "2026-08-14T00:00:00+00:00"
 HOME = Path("/home/person")
@@ -66,7 +67,7 @@ class UpgradeTestCase(unittest.TestCase):
     """
 
     def setUp(self):
-        self._directory = tempfile.TemporaryDirectory()
+        self._directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self._directory.cleanup)
         self.destination = Path(self._directory.name) / "pegasus"
         with zipfile.ZipFile(self.destination, "w") as archive:
@@ -155,7 +156,7 @@ class ZipappPathTest(unittest.TestCase):
     the fact `cli._running_binary_path` leans on."""
 
     def test_a_real_zip_is_recognised_and_an_ordinary_file_is_not(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=_scratch_root()) as directory:
             zip_path = Path(directory) / "probe.pyz"
             with zipfile.ZipFile(zip_path, "w") as archive:
                 archive.writestr("__main__.py", "pass\n")
@@ -173,7 +174,7 @@ class NotRunningFromAZipappTest(UpgradeTestCase):
         self.assertIn("not running from an installed executable", str(caught.exception))
 
     def test_a_sys_path0_that_is_not_a_zip_refuses_honestly(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=_scratch_root()) as directory:
             # A real directory, exactly what `sys.path[0]` is for `python -m
             # pegasus` run from a source checkout with `PYTHONPATH=src` --
             # the very case this whole refusal exists for.

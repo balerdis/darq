@@ -7,17 +7,15 @@ runs against a fake.
 from __future__ import annotations
 
 import json
-import os
 import stat
-import tempfile
 import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
 from pegasus.core import model_assignments as model_assignments_module
 from pegasus.core.types import ModelAssignment
-from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.model_assignment_store_file import FileModelAssignmentStore, model_assignment_path
+from real_home import RealHomeTestCase as _RealHomeTestCase
 from pegasus.ports.filesystem import FileSystemError
 from pegasus.ports.model_assignment_store import ModelAssignmentStore, ModelAssignmentStoreError
 
@@ -133,16 +131,11 @@ class FileModelAssignmentStoreTest(unittest.TestCase):
             store(Unwritable()).save(model_assignments_module.empty())
 
 
-class FileModelAssignmentStoreOnRealDiskTest(unittest.TestCase):
+class FileModelAssignmentStoreOnRealDiskTest(_RealHomeTestCase):
     """The fake proves the policy; this proves the two halves actually compose."""
 
     def setUp(self):
-        if os.geteuid() == 0:
-            self.skipTest("the store refuses to write as root, which is the behaviour under test elsewhere")
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.home = Path(self.directory.name)
-        self.filesystem = PosixFileSystem(product_id="pegasus-harness")
+        super().setUp()
         self.store = FileModelAssignmentStore(self.filesystem, home=self.home)
 
     def test_an_absent_file_reads_as_empty_without_creating_anything(self):

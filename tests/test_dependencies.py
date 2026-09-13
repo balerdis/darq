@@ -15,6 +15,7 @@ from pegasus.core import dependencies
 from pegasus.core import ownership
 from pegasus.core.content import Distribution, Mcp
 from pegasus.infra.fs_posix import PosixFileSystem
+from real_home import _scratch_root
 
 DEPENDENCIES_DIR = Path("/home/probe/.local/share/pegasus-harness/mcp")
 AT = "2026-08-14T00:00:00+00:00"
@@ -467,7 +468,7 @@ class MaterializeOnRealDiskTest(unittest.TestCase):
     """
 
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
+        self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.dependencies_dir = Path(self.directory.name) / "mcp"
         self.filesystem = PosixFileSystem(product_id="pegasus-harness")

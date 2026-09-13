@@ -115,12 +115,6 @@ def _literal_matches(value: str, name: str) -> bool:
     return value.rsplit("/", 1)[-1] == name
 
 
-def _attach_parents(tree: ast.AST) -> None:
-    for node in ast.walk(tree):
-        for child in ast.iter_child_nodes(node):
-            child.parent = node  # type: ignore[attr-defined]
-
-
 def _called_name(call: ast.Call) -> str | None:
     """The attribute or bare name of the function being called, e.g. `"run"`
     for both `subprocess.run(...)` and a bare `run(...)`."""
@@ -151,88 +145,104 @@ def _is_within_recognized_call(node: ast.AST) -> bool:
     return False
 
 
-def _imports_module(tree: ast.AST, stem: str) -> bool:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                parts = alias.name.split(".")
-                if stem in (parts[0], parts[-1]):
-                    return True
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                parts = node.module.split(".")
-                if stem in (parts[0], parts[-1]):
-                    return True
-    return False
+class _TreeIndex:
+    """Everything `_is_covered_by` needs from one test file's AST, computed
+    with a single pass over it instead of one pass per (script, test file)
+    pair. The three helpers this replaces --  `_imports_module`,
+    `_literal_referenced_in_recognized_call`, and
+    `_variable_chain_referenced_in_recognized_call` -- each used to re-walk
+    the whole tree for every script under `tools/`; with N scripts and M test
+    files that is O(N*M) walks of the same M trees. This index walks each
+    tree exactly once (well, four `ast.walk` calls, none of them re-run per
+    script) and reduces the per-script check to a handful of set lookups.
 
-
-def _literal_referenced_in_recognized_call(tree: ast.AST, name: str) -> bool:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if _literal_matches(node.value, name) and _is_within_recognized_call(node):
-                return True
-    return False
-
-
-def _assignment_contains_literal(value: ast.AST, name: str) -> bool:
-    return any(
-        isinstance(sub, ast.Constant) and isinstance(sub.value, str) and _literal_matches(sub.value, name)
-        for sub in ast.walk(value)
-    )
-
-
-def _variable_chain_referenced_in_recognized_call(tree: ast.AST, name: str) -> bool:
-    """Follow `SCRIPT = ROOT / "tools" / "build_catalog.py"` (module-level or
-    not) -- or a name buried deeper in an expression, such as
-    `arguments = [str(ROOT / "tools" / "x"), ...]` -- and check whether the
-    assigned variable is later *read* inside the argument subtree of a
-    recognized call, e.g. `subprocess.run([sys.executable, str(SCRIPT), ...])`.
-    See the module docstring for what this heuristic does not verify.
+    `covered_literals` folds together two of the original three checks,
+    because both ultimately ask the same question -- "does some string literal
+    that reaches a recognized call match this script's name?" -- just by two
+    different routes (a literal directly in the call, or by way of a tracked
+    variable). `imported_stems` stays separate: it answers a different
+    question ("was this stem ever imported?") that has nothing to do with
+    calls at all.
     """
-    tracked_vars: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            targets = node.targets
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target] if node.value is not None else []
-        else:
-            continue
-        value = node.value
-        if value is None or not _assignment_contains_literal(value, name):
-            continue
-        for target in targets:
-            if isinstance(target, ast.Name):
-                tracked_vars.add(target.id)
 
-    if not tracked_vars:
-        return False
+    __slots__ = ("imported_stems", "covered_literals")
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id in tracked_vars and isinstance(node.ctx, ast.Load):
-            if _is_within_recognized_call(node):
-                return True
-    return False
+    def __init__(self, tree: ast.AST) -> None:
+        imported_stems: set[str] = set()
+        literal_call_strings: set[str] = set()
+        vars_read_in_call: set[str] = set()
+        var_literals: dict[str, set[str]] = {}
 
+        # One preorder pass over the whole tree, attaching `.parent` as it
+        # descends (needed by `_is_within_recognized_call`) and doing every
+        # classification inline. The earlier revision walked the tree once to
+        # attach parents and up to four more times -- `_imports_module`,
+        # `_literal_referenced_in_recognized_call`,
+        # `_variable_chain_referenced_in_recognized_call`, each of those
+        # re-run per script under `tools/` on top of that -- to ask questions
+        # this single pass now answers once per test file. The only
+        # unavoidable nested walk left is `ast.walk(value)` below, and that is
+        # bounded by the assignment's own subtree, not the whole file.
+        stack: list[tuple[ast.AST, ast.AST | None]] = [(tree, None)]
+        while stack:
+            node, parent = stack.pop()
+            node.parent = parent  # type: ignore[attr-defined]
+            for child in ast.iter_child_nodes(node):
+                stack.append((child, node))
 
-def _is_covered_by(tree: ast.AST, entry: Path) -> bool:
-    name, stem = entry.name, entry.stem
-    if _imports_module(tree, stem):
-        return True
-    if _literal_referenced_in_recognized_call(tree, name):
-        return True
-    if _variable_chain_referenced_in_recognized_call(tree, name):
-        return True
-    return False
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    parts = alias.name.split(".")
+                    imported_stems.add(parts[0])
+                    imported_stems.add(parts[-1])
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    parts = node.module.split(".")
+                    imported_stems.add(parts[0])
+                    imported_stems.add(parts[-1])
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if _is_within_recognized_call(node):
+                    literal_call_strings.add(node.value)
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                if _is_within_recognized_call(node):
+                    vars_read_in_call.add(node.id)
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else (
+                    [node.target] if node.value is not None else []
+                )
+                value = node.value
+                if value is None:
+                    continue
+                literals = {
+                    sub.value
+                    for sub in ast.walk(value)
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+                }
+                if not literals:
+                    continue
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        var_literals.setdefault(target.id, set()).update(literals)
+
+        self.imported_stems = imported_stems
+        self.covered_literals = literal_call_strings | {
+            literal for variable in vars_read_in_call for literal in var_literals.get(variable, ())
+        }
+
+    def covers(self, entry: Path) -> bool:
+        name, stem = entry.name, entry.stem
+        if stem in self.imported_stems:
+            return True
+        return any(_literal_matches(literal, name) for literal in self.covered_literals)
 
 
 class ToolsHaveTestCoverageTest(unittest.TestCase):
     def test_every_tool_is_named_by_at_least_one_test_file(self):
-        trees = []
+        indexes = []
         for path in sorted(TESTS_DIR.glob("test_*.py")):
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(path))
-            _attach_parents(tree)
-            trees.append(tree)
+            indexes.append(_TreeIndex(tree))
 
         uncovered = []
         for entry in sorted(TOOLS_DIR.iterdir()):
@@ -247,7 +257,7 @@ class ToolsHaveTestCoverageTest(unittest.TestCase):
                     "check for coverage -- add it to NOT_A_COVERED_SCRIPT with a reason, "
                     "or extend this test to look inside it."
                 )
-            if not any(_is_covered_by(tree, entry) for tree in trees):
+            if not any(index.covers(entry) for index in indexes):
                 uncovered.append(entry.name)
 
         self.assertEqual(
