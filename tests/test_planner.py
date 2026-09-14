@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import fakes
@@ -471,6 +472,172 @@ class AppendTest(RealHomeTestCase):
         self.seed(files={self.SETTINGS: document({"instructions": ["./pegasus-AGENTS.md"]})})
         planner.retire(self.filesystem, self.install(self.entry()))
         self.assertEqual(self.settings(), {})
+
+    # --- A renamed append: same item, new `id` ---
+
+    def test_a_renamed_append_is_recognized_as_the_same_item_not_a_collision(self):
+        """The `id` scheme change `_claimed_by_address` already handles for an
+        addressable key has a harder twin here. An append has no address (see
+        `record_address`), so the fallback that recognizes a renamed key by
+        `(kind, target, pointer)` can never fire for one -- and without a
+        replacement, the renamed artifact's `id` misses `owned`, its address
+        lookup returns `None`, and `_plain_step` reads the value already
+        sitting in the list as a stranger's, `SKIP`/`COLLISION`. It must
+        instead be recognized as the same item under its old name, the same
+        way `_index_of` already finds it for a value replacement: by the
+        digest the journal recorded, not by `id` or by address.
+        """
+        self.seed(files={self.SETTINGS: document({"instructions": ["./pegasus-AGENTS.md"]})})
+        installed = self.install(self.entry())
+        renamed = self.append_as("system-prompt-instruction-v2")
+
+        step = self.plan_for(renamed, installed=installed).steps[0]
+
+        self.assertEqual(step.action, planner.UNCHANGED)
+        self.assertIsNone(step.reason)
+
+    def test_a_renamed_append_survives_a_full_install_run(self):
+        """The end-to-end shape of the bug: a plan that reads the renamed item
+        as a collision also retires the old id's record afterwards (nothing
+        else claims that address), and retiring it takes the live item out of
+        the list with it -- the exact disappearance the debt row describes.
+        """
+        self.seed(files={self.SETTINGS: document({"instructions": ["./pegasus-AGENTS.md"]})})
+        installed = self.install(self.entry())
+        renamed = self.append_as("system-prompt-instruction-v2")
+
+        plan = self.plan_for(renamed, installed=installed)
+        applied = planner.apply(self.filesystem, plan, at=AT)
+        planner.retire(self.filesystem, replace(installed, entries=plan.retirements))
+
+        self.assertEqual(self.settings()["instructions"], ["./pegasus-AGENTS.md"])
+        self.assertEqual(plan.retirements, ())
+        self.assertEqual([record.id for record in applied.records + applied.reconciled], [renamed.id])
+
+    def test_a_genuinely_foreign_item_is_still_a_collision_after_the_fix(self):
+        """The property the exclusion in `record_address` exists to protect,
+        checked against the fix directly and made hard to fool: this
+        installation already owns *some* append in this exact list (so the
+        naive "any entry at this (target, pointer) is ours, renamed" reading
+        would wrongly match it), but the value actually sitting in the list
+        is one nobody's journal ever claimed. It must still read as a
+        stranger's item, not as a renamed one of ours."""
+        self.seed(files={self.SETTINGS: document({"instructions": ["./someone-elses-item.md"]})})
+        installed = self.install(self.entry())  # claims "./pegasus-AGENTS.md", a different value
+        foreign = self.append_as("some-other-id", "./someone-elses-item.md")
+
+        step = self.plan_for(foreign, installed=installed).steps[0]
+
+        self.assertEqual(step.action, planner.SKIP)
+        self.assertEqual(step.reason, planner.COLLISION)
+
+    def test_reinstalling_a_renamed_append_with_no_further_rename_stays_unchanged(self):
+        """Once the new id has been recorded, a plain reinstall under that same
+        id must keep reading the item as current -- not append a duplicate."""
+        self.seed(files={self.SETTINGS: document({"instructions": ["./pegasus-AGENTS.md"]})})
+        renamed_entry = Record(
+            id="system-prompt-instruction-v2",
+            kind="config-key",
+            target=self.SETTINGS,
+            pointer="/instructions/-",
+            codec="json",
+            after_digest=ownership.digest_of_value("./pegasus-AGENTS.md"),
+            created_at=AT,
+        )
+        installed = self.install(renamed_entry)
+
+        step = self.plan_for(self.append_as("system-prompt-instruction-v2"), installed=installed).steps[0]
+
+        self.assertEqual(step.action, planner.UNCHANGED)
+        planner.apply(self.filesystem, self.plan_for(self.append_as("system-prompt-instruction-v2"), installed=installed), at=AT)
+        self.assertEqual(self.settings()["instructions"], ["./pegasus-AGENTS.md"])
+
+    def test_the_old_record_does_not_survive_the_rename_as_a_second_claim(self):
+        """After the rename, the journal must end up naming this item under
+        exactly one id -- the new one -- never both, and never neither."""
+        self.seed(files={self.SETTINGS: document({"instructions": ["./pegasus-AGENTS.md"]})})
+        installed = self.install(self.entry())
+        renamed = self.append_as("system-prompt-instruction-v2")
+
+        plan = self.plan_for(renamed, installed=installed)
+        applied = planner.apply(self.filesystem, plan, at=AT)
+        ids = {record.id for record in applied.records + applied.reconciled}
+
+        self.assertEqual(plan.retirements, (), "the old id must not be queued for retirement")
+        self.assertEqual(ids, {"system-prompt-instruction-v2"})
+
+    def test_uninstalling_after_a_rename_removes_the_item_once_and_leaves_the_rest(self):
+        """`uninstall` after a rename must remove the renamed item exactly
+        once and leave the user's own list entries untouched."""
+        payload = {"instructions": ["./theirs.md", "./pegasus-AGENTS.md", "./another.md"]}
+        self.seed(files={self.SETTINGS: document(payload)})
+        installed = self.install(self.entry())
+        renamed = self.append_as("system-prompt-instruction-v2")
+
+        plan = self.plan_for(renamed, installed=installed)
+        planner.apply(self.filesystem, plan, at=AT)
+        planner.retire(self.filesystem, replace(installed, entries=plan.retirements))
+        renamed_entry = Record(
+            id="system-prompt-instruction-v2",
+            kind="config-key",
+            target=self.SETTINGS,
+            pointer="/instructions/-",
+            codec="json",
+            after_digest=ownership.digest_of_value("./pegasus-AGENTS.md"),
+            created_at=AT,
+        )
+        retired = planner.retire(self.filesystem, self.install(renamed_entry))
+
+        self.assertEqual(retired.removed, ("system-prompt-instruction-v2",))
+        self.assertEqual(self.settings()["instructions"], ["./theirs.md", "./another.md"])
+
+    def test_the_id_lookup_is_tried_before_the_digest_fallback(self):
+        """The whole safety argument for the digest fallback rests on one
+        ordering fact: `_claimed_appends` is only ever consulted once `owned`
+        has already failed to recognize the `id`. An `id` the journal
+        recognizes must never be second-guessed by a digest that merely
+        happens to agree with some *other*, unrelated entry.
+
+        The scenario that tells the two orderings apart: this artifact's
+        `id` is claimed by one journal entry (the value it is about to
+        replace), while its new value's digest happens to equal a
+        completely different entry's recorded digest -- an unrelated
+        sibling, appended under a different `id`, whose value happens to
+        coincide with the value this release now wants to write. Tried by
+        `id` first, this is an ordinary in-place replacement: `UPDATE`
+        against the entry `id` actually names. Tried by digest first, the
+        unrelated entry wins the lookup before `owned` is ever consulted,
+        and the artifact is planned as a bare `CREATE` under a stranger's
+        record instead -- silently leaving the id's own old value in the
+        list forever, unreplaced.
+        """
+        self.seed(files={self.SETTINGS: document({"instructions": ["./old-value.md"]})})
+        own = Record(
+            id="system-prompt-instruction",
+            kind="config-key",
+            target=self.SETTINGS,
+            pointer="/instructions/-",
+            codec="json",
+            after_digest=ownership.digest_of_value("./old-value.md"),
+            created_at=AT,
+        )
+        unrelated = Record(
+            id="unrelated-id",
+            kind="config-key",
+            target=self.SETTINGS,
+            pointer="/instructions/-",
+            codec="json",
+            after_digest=ownership.digest_of_value("./new-value.md"),
+            created_at=AT,
+        )
+        installed = self.install(own, unrelated)
+        artifact = self.append("./new-value.md")  # id="system-prompt-instruction", same as `own`
+
+        step = self.plan_for(artifact, installed=installed).steps[0]
+
+        self.assertEqual(step.action, planner.UPDATE)
+        self.assertIsNotNone(step.entry)
+        self.assertEqual(step.entry.id, "system-prompt-instruction")
 
 
 class UpdateTest(RealHomeTestCase):

@@ -225,7 +225,10 @@ def plan(
     documents = _load_documents(filesystem, artifacts)
     owned = {entry.id: entry for entry in (installed.entries if installed else ())}
     claimed = _claimed_by_address(installed)
-    steps = tuple(_step(filesystem, artifact, documents, owned, claimed) for artifact in artifacts)
+    claimed_appends = _claimed_appends(installed)
+    steps = tuple(
+        _step(filesystem, artifact, documents, owned, claimed, claimed_appends) for artifact in artifacts
+    )
     return Plan(cli=cli, steps=steps, retirements=retirements(installed, artifacts))
 
 
@@ -253,6 +256,30 @@ def record_address(entry: Record) -> tuple[str, Path, str | None] | None:
     return entry.kind, entry.target, entry.pointer
 
 
+def record_append_identity(entry: Record) -> tuple[Path, str, str] | None:
+    """The fingerprint identity ``entry`` claims, when it is an append -- the
+    counterpart `record_address` cannot provide for one.
+
+    An append has no exclusive slot (see `record_address`), but it does have
+    an exclusive *value*: `plan` already refuses two artifacts that would
+    append the same one (`_refuse_duplicates`), so `(target, pointer,
+    after_digest)` picks out exactly one record the same way `(kind, target,
+    pointer)` does for an addressable key. ``None`` for anything else, the
+    same convention `record_address` uses, so a caller can pool both checks
+    into one set without a type test.
+
+    Public for the identical reason `record_address` is: `cli.py`'s own
+    merge of a completed run back into the journal (`_merged`) needs this
+    exact exclusion too, on records rather than artifacts, and duplicating it
+    there would let the two drift -- see `_claimed_appends` and
+    `retirements`, below, for the read and write sides this module keeps in
+    sync with it.
+    """
+    if entry.kind == "config-key" and entry.pointer is not None and _appends(entry.pointer):
+        return entry.target, entry.pointer, entry.after_digest
+    return None
+
+
 def _claimed_by_address(installed: Install | None) -> dict[tuple[str, Path, str | None], Record]:
     """Every address this installation's journal already reclaims, keyed by
     the address itself rather than by the ``id`` recorded against it.
@@ -275,6 +302,34 @@ def _claimed_by_address(installed: Install | None) -> dict[tuple[str, Path, str 
         address = record_address(entry)
         if address is not None:
             result[address] = entry
+    return result
+
+
+def _claimed_appends(installed: Install | None) -> dict[tuple[Path, str, str], Record]:
+    """Every append this installation's journal already claims, keyed by the
+    item's fingerprint instead of by an address -- an append has none, see
+    `record_address` -- or by `id`, which a rename changes.
+
+    An append's `(target, pointer)` is shared on purpose by every sibling item
+    in the same list, so it cannot pick out one entry the way it does for an
+    addressable key in `_claimed_by_address`. `record_append_identity` adds
+    the digest as the third coordinate that does: two records legitimately
+    sharing `(target, pointer)` never also share `after_digest`, because
+    `plan` already refuses two artifacts that would append the same value
+    (`_refuse_duplicates`), so the triple it returns is exactly as exclusive
+    for an append as `(kind, target, pointer)` is for an addressable key.
+    This is how `_step` recognizes a renamed append even though neither
+    `owned` nor `_claimed_by_address` can -- see `_key_step`'s append branch
+    -- and `retirements`, below, excludes the same entry from being torn back
+    out once `_step` has claimed it under its new `id`.
+    """
+    if installed is None:
+        return {}
+    result: dict[tuple[Path, str, str], Record] = {}
+    for entry in installed.entries:
+        identity = record_append_identity(entry)
+        if identity is not None:
+            result[identity] = entry
     return result
 
 
@@ -319,6 +374,19 @@ def retirements(installed: Install | None, artifacts: Sequence[Artifact]) -> tup
     not an optimization: without it, `retire` running after `apply` -- which
     it must, for the reason documented at its call site -- would delete what
     `apply` just wrote.
+
+    An append has no address (`record_address` returns ``None`` for it), so
+    the address half of that exclusion can never protect one, and the same
+    rename that a `file` or an addressable `config-key` survives here would
+    otherwise still be torn back out for a list item. `rendered_append_identities`
+    is the same rule computed the way `_claimed_appends` computes it for the
+    read side, via `record_append_identity` -- by `(target, pointer,
+    after_digest)` rather than by address -- so a renamed append's old-id
+    record is excluded here for the identical reason `_step` picks the item
+    back up under its new `id` instead of skipping it. This module's own
+    read side and `cli.py`'s `_merged` both lean on the same helper for the
+    same reason `record_address` is public: so this exclusion cannot drift
+    between the three call sites.
     """
     if installed is None:
         return ()
@@ -326,10 +394,17 @@ def retirements(installed: Install | None, artifacts: Sequence[Artifact]) -> tup
     rendered_addresses = {
         address for address in (_artifact_address(artifact) for artifact in artifacts) if address is not None
     }
+    rendered_append_identities = {
+        (artifact.path, artifact.pointer, ownership.digest(artifact))
+        for artifact in artifacts
+        if isinstance(artifact, ConfigKeyArtifact) and _appends(artifact.pointer)
+    }
     return tuple(
         entry
         for entry in installed.entries
-        if entry.id not in rendered_ids and record_address(entry) not in rendered_addresses
+        if entry.id not in rendered_ids
+        and record_address(entry) not in rendered_addresses
+        and record_append_identity(entry) not in rendered_append_identities
     )
 
 
@@ -339,6 +414,7 @@ def _step(
     documents: dict[Path, Any],
     owned: dict[str, Record],
     claimed: dict[tuple[str, Path, str | None], Record],
+    claimed_appends: dict[tuple[Path, str, str], Record],
 ) -> Step:
     digest = ownership.digest(artifact)
     entry = owned.get(artifact.id)
@@ -352,6 +428,14 @@ def _step(
         address = _artifact_address(artifact)
         if address is not None:
             entry = claimed.get(address)
+        elif isinstance(artifact, ConfigKeyArtifact) and _appends(artifact.pointer):
+            # An append has no address at all (`address` is `None` above), so
+            # the same rename that an addressable key survives by address has
+            # to be recognized by fingerprint instead -- see
+            # `_claimed_appends`. Only reached once the `id` lookup has
+            # already failed, so a journal that still recognizes this `id`
+            # is never second-guessed by a digest that could only ever agree.
+            entry = claimed_appends.get((artifact.path, artifact.pointer, digest))
     if isinstance(artifact, FileArtifact):
         return _file_step(filesystem, artifact, digest, entry)
     return _key_step(artifact, documents.get(artifact.path), digest, entry)

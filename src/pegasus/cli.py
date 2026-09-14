@@ -1496,13 +1496,32 @@ def _merged(
         # an appended list item has no exclusive slot of its own, several can
         # legitimately share one pointer -- cannot drift between the two call
         # sites.
+        #
+        # An appended list item is exactly that carve-out, and it still needs
+        # an exclusion here: `record_address` returning `None` for it means
+        # the address check above can never retire its previous record, so a
+        # rename that changes only the `id` -- the value untouched -- would
+        # otherwise leave both the old and the new record claiming the same
+        # item forever. `planner.record_append_identity` is the read side's
+        # own answer to the identical question (see `planner._claimed_appends`
+        # and `planner.retirements`), reused here for the same reason
+        # `record_address` is: a second, inline version of this exclusion
+        # would only be a second place for it to drift from the one `plan`
+        # itself already trusted to decide this record was the same item.
         claimed = {
             address for address in (planner.record_address(record) for record in records) if address is not None
+        }
+        claimed_appends = {
+            identity
+            for identity in (planner.record_append_identity(record) for record in records)
+            if identity is not None
         }
         entries = tuple(
             entry
             for entry in previous.entries
-            if entry.id not in dropped and planner.record_address(entry) not in claimed
+            if entry.id not in dropped
+            and planner.record_address(entry) not in claimed
+            and planner.record_append_identity(entry) not in claimed_appends
         ) + tuple(records)
     return Install(
         cli=adapter.id,
