@@ -278,3 +278,158 @@ class RepairCommandTest(RealHomeTestCase):
         self.install()
         _, printed = self.run_prose("repair", "--cli", CLI)
         self.assertIn("nothing to repair", printed)
+
+
+class OrphanedDirectoryRepairTest(RealHomeTestCase):
+    """2a: `doctor` already names an empty directory `created_dirs` never
+    recorded, under `unprunable_empty_directories` -- P5. `repair` is what
+    actually removes exactly that set, and nothing else, reusing
+    `planner.empty_directories_never_pruned` for discovery so the two can
+    never name different directories."""
+
+    def plant_untracked_empty_directory(self, name: str = "leftover-from-an-old-install") -> Path:
+        directory = self.layout().config_dir / name
+        directory.mkdir()
+        return directory
+
+    def test_repair_removes_an_orphaned_empty_directory(self):
+        self.install()
+        directory = self.plant_untracked_empty_directory()
+        code, report = self.run_cli("repair", "--cli", CLI)
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "repaired")
+        self.assertIn(str(directory), report["removed_orphaned_directories"])
+        self.assertFalse(directory.exists())
+
+    def test_repair_leaves_a_directory_still_reachable_from_created_dirs_alone(self):
+        self.install()
+        tracked = next(iter(self.installed().created_dirs))
+        self.run_cli("repair", "--cli", CLI)
+        self.assertTrue(tracked.exists())
+
+    def test_repair_leaves_a_nonempty_directory_alone(self):
+        self.install()
+        directory = self.plant_untracked_empty_directory()
+        (directory / "keepme.txt").write_bytes(b"mine")
+        code, report = self.run_cli("repair", "--cli", CLI)
+        self.assertEqual(code, 0)
+        self.assertEqual(report["removed_orphaned_directories"], [])
+        self.assertTrue(directory.exists())
+        self.assertTrue((directory / "keepme.txt").exists())
+
+    def test_a_file_planted_between_discovery_and_removal_saves_the_directory(self):
+        """The whole point of re-checking emptiness at removal time rather
+        than trusting the discovery pass: `remove_empty_dir` is `os.rmdir`,
+        which fails atomically against a directory that is not actually
+        empty. Discover first (the directory is genuinely empty then), plant
+        a file into it -- simulating a write landing in the same window a
+        stale discovery result would have missed -- and only then run the
+        removal `repair` performs; the directory must survive."""
+        self.install()
+        directory = self.plant_untracked_empty_directory()
+        from pegasus.core import planner as planner_module
+
+        scan = planner_module.empty_directories_never_pruned(
+            self.filesystem, self.installed().config_dir, self.installed().created_dirs
+        )
+        self.assertIn(str(directory), scan.found)
+        (directory / "raced-in.txt").write_bytes(b"landed after discovery")
+        removed = planner_module.remove_orphaned_empty_directories(
+            self.filesystem, self.installed().config_dir, scan.found
+        )
+        self.assertNotIn(str(directory), removed)
+        self.assertTrue(directory.exists())
+        self.assertTrue((directory / "raced-in.txt").exists())
+
+    def test_repair_ascends_into_a_parent_that_becomes_empty_in_the_same_run(self):
+        """A parent that was not itself empty at discovery time -- it still
+        held the child directory -- but becomes empty once that child is
+        removed must be taken in the same run, not left standing."""
+        self.install()
+        parent = self.layout().config_dir / "leftover-parent"
+        child = parent / "leftover-child"
+        child.mkdir(parents=True)
+        code, report = self.run_cli("repair", "--cli", CLI)
+        self.assertEqual(code, 0)
+        self.assertFalse(parent.exists())
+        self.assertIn(str(child), report["removed_orphaned_directories"])
+        self.assertIn(str(parent), report["removed_orphaned_directories"])
+
+    def test_repair_never_ascends_past_config_dir(self):
+        self.install()
+        self.plant_untracked_empty_directory()
+        self.run_cli("repair", "--cli", CLI)
+        self.assertTrue(self.layout().config_dir.exists())
+
+    def test_dry_run_names_the_orphaned_directory_without_removing_it(self):
+        self.install()
+        directory = self.plant_untracked_empty_directory()
+        code, report = self.run_cli("repair", "--cli", CLI, "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "planned")
+        self.assertIn(str(directory), report["removed_orphaned_directories"])
+        self.assertTrue(directory.exists())
+
+    def test_repair_prose_names_the_orphaned_directory_distinctly_from_quarantine(self):
+        self.install()
+        directory = self.plant_untracked_empty_directory()
+        self.plant_quarantined_entry("/")
+        _, printed = self.run_prose("repair", "--cli", CLI)
+        self.assertIn("orphaned empty director", printed)
+        self.assertIn(str(directory), printed)
+        self.assertIn("quarantined granted-directory", printed)
+
+
+class SymlinkedConfigDirTest(RealHomeTestCase):
+    """2b: a symlinked config_dir, or a symlinked subdirectory reached mid
+    walk, used to produce a silently empty report -- `visit` returns as soon
+    as it sees a symlink, so nothing under it was ever inspected, and
+    nothing said so. Real symlinks, real disk, per the house rule against
+    faking filesystem semantics."""
+
+    def test_doctor_names_a_symlinked_config_dir_it_could_not_walk(self):
+        self.present()
+        real_config_dir = self.layout().config_dir
+        elsewhere = self.home / "dotfiles-config"
+        real_config_dir.rename(elsewhere) if real_config_dir.exists() else elsewhere.mkdir(parents=True)
+        import os as _os
+
+        _os.symlink(elsewhere, real_config_dir)
+        code, _ = self.run_cli("install", "--cli", CLI)
+        self.assertEqual(code, 0)
+        _, report = self.run_cli("doctor")
+        entry = next(item for item in report["clis"] if item["cli"] == CLI)
+        self.assertIn(str(real_config_dir), entry.get("directories_not_walked", []))
+        self.assertNotIn("unprunable_empty_directories", entry)
+
+    def test_doctor_names_a_symlinked_subdirectory_reached_mid_walk(self):
+        self.install()
+        real_subdir = self.layout().config_dir / "linked-subtree"
+        elsewhere = self.home / "elsewhere-subtree"
+        elsewhere.mkdir(parents=True)
+        (elsewhere / "empty-inside").mkdir()
+        import os as _os
+
+        _os.symlink(elsewhere, real_subdir)
+        _, report = self.run_cli("doctor")
+        entry = next(item for item in report["clis"] if item["cli"] == CLI)
+        self.assertIn(str(real_subdir), entry.get("directories_not_walked", []))
+        # What is behind the symlink was never inspected -- it must not be
+        # named as an orphaned empty directory it never actually walked.
+        self.assertNotIn(
+            str(elsewhere / "empty-inside"), entry.get("unprunable_empty_directories", [])
+        )
+
+    def test_repair_does_not_silently_claim_success_over_an_unwalked_subtree(self):
+        self.install()
+        real_subdir = self.layout().config_dir / "linked-subtree"
+        elsewhere = self.home / "elsewhere-subtree-2"
+        elsewhere.mkdir(parents=True)
+        import os as _os
+
+        _os.symlink(elsewhere, real_subdir)
+        code, report = self.run_cli("repair", "--cli", CLI)
+        self.assertEqual(code, 0)
+        self.assertIn(str(real_subdir), report.get("directories_not_walked", []))
+        _, printed = self.run_prose("repair", "--cli", CLI)
+        self.assertIn(str(real_subdir), printed)

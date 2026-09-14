@@ -2140,18 +2140,36 @@ def _repair(arguments, runtime: Runtime) -> dict[str, Any]:
 def repair(cli_id: str, runtime: Runtime, *, dry_run: bool = False) -> dict[str, Any]:
     """Remove hazards `doctor` can only name, and nothing else.
 
-    Today that means one thing: `granted_directories` entries a hand edit
-    put in the journal that `content.validate_granted_directory` refused --
-    quarantined by `journal._granted_directories_from_dict` rather than
-    blocking the whole journal, named by `doctor` under
-    `directories_quarantined`, and removed here on request.
+    Two hazards today, both discovered read-only and removed only on
+    request:
 
-    Mirrors `uninstall`'s own shape for the write itself: a snapshot of the
-    journal is taken first, so `pegasus restore` can undo this the same way
-    it undoes an uninstall, and the journal is written exactly once. Nothing
-    else is read for writing, and nothing else is written -- a journal whose
-    only problem is a malformed entry is not a reason to touch anything this
-    command was not asked to touch.
+    - `granted_directories` entries a hand edit put in the journal that
+      `content.validate_granted_directory` refused -- quarantined by
+      `journal._granted_directories_from_dict` rather than blocking the
+      whole journal, named by `doctor` under `directories_quarantined`.
+    - Empty directories `planner.empty_directories_never_pruned` names under
+      `found` -- exactly what `doctor` reports as
+      `unprunable_empty_directories`, reused rather than rediscovered here so
+      the two can never name different sets. `planner.remove_orphaned_empty_directories`
+      does the actual removal, re-checking emptiness and the symlink chain at
+      removal time rather than trusting the discovery pass.
+
+    A subtree the scan could not walk at all because it sits behind a
+    symlink (`scan.unwalkable`, `doctor`'s `directories_not_walked`) is never
+    silently treated as clean: it is carried into this report too, so a
+    caller cannot read "repaired" as "there was nothing left to find" over a
+    subtree this never looked at.
+
+    Mirrors `uninstall`'s own shape for the journal write: a snapshot of the
+    journal is taken first, so `pegasus restore` can undo the quarantine
+    removal the same way it undoes an uninstall, and the journal is written
+    at most once, only when there was a quarantined entry to clear. Removing
+    an orphaned empty directory is not itself snapshotted -- the same
+    precedent `uninstall`'s own pruning already sets, where a pruned empty
+    directory is not part of what `restore` brings back either, because an
+    empty directory has nothing worth restoring beyond an `mkdir` a person
+    can do themselves. Nothing else is read for writing, and nothing else is
+    written.
 
     A journal that cannot be read for a reason quarantine does not cover
     (malformed JSON, a `granted_directories` that is not a list at all) is
@@ -2170,13 +2188,24 @@ def repair(cli_id: str, runtime: Runtime, *, dry_run: bool = False) -> dict[str,
             f"there is nothing to repair"
         )
     quarantined = [repr(item) for item in install.quarantined_directories]
-    if not quarantined:
-        return {"cli": adapter.id, "status": "nothing-to-repair", "removed_quarantined_directories": []}
+    scan = planner.empty_directories_never_pruned(runtime.filesystem, install.config_dir, install.created_dirs)
+    orphaned = list(scan.found)
+    extra: dict[str, Any] = {"directories_not_walked": list(scan.unwalkable)} if scan.unwalkable else {}
+    if not quarantined and not orphaned:
+        return {
+            "cli": adapter.id,
+            "status": "nothing-to-repair",
+            "removed_quarantined_directories": [],
+            "removed_orphaned_directories": [],
+            **extra,
+        }
     if dry_run:
         return {
             "cli": adapter.id,
             "status": "planned",
             "removed_quarantined_directories": quarantined,
+            "removed_orphaned_directories": orphaned,
+            **extra,
         }
     store.ensure_writable()
     snapshot = snapshot_store(runtime)
@@ -2187,11 +2216,19 @@ def repair(cli_id: str, runtime: Runtime, *, dry_run: bool = False) -> dict[str,
         raise CommandError(
             f"a snapshot of the journal could not be taken, so nothing was repaired: {error}"
         ) from error
-    store.save(journal_module.with_install(journal, replace(install, quarantined_directories=())))
+    removed_dirs = (
+        planner.remove_orphaned_empty_directories(runtime.filesystem, install.config_dir, tuple(orphaned))
+        if orphaned
+        else ()
+    )
+    if quarantined:
+        store.save(journal_module.with_install(journal, replace(install, quarantined_directories=())))
     return {
         "cli": adapter.id,
         "status": "repaired",
         "removed_quarantined_directories": quarantined,
+        "removed_orphaned_directories": list(removed_dirs),
+        **extra,
         "retention": _retain(snapshot),
     }
 
@@ -2505,11 +2542,20 @@ def _health(
     # already reaches everything empty under it has nothing here to say, and
     # a report that always carried this key regardless would be one more
     # section a reader has to learn to skim past.
-    orphaned = planner.empty_directories_never_pruned(
+    scan = planner.empty_directories_never_pruned(
         runtime.filesystem, install.config_dir, install.created_dirs
     )
-    if orphaned:
-        health["unprunable_empty_directories"] = list(orphaned)
+    if scan.found:
+        health["unprunable_empty_directories"] = list(scan.found)
+    # Its own key, distinct from the one above: "found nothing" and "could
+    # not look" used to be the same silent empty result -- a `config_dir`
+    # reached only through a symlink (dotfiles under stow or chezmoi) walked
+    # nothing and said nothing, which reads as "no orphaned directories" when
+    # the honest answer is "this was never checked". Named only when there
+    # is something unwalkable to name, the same discipline every other
+    # named-only-when-present key in this report already follows.
+    if scan.unwalkable:
+        health["directories_not_walked"] = list(scan.unwalkable)
 
     if start_mcp_servers:
         health["mcp_servers"] = [
@@ -3244,12 +3290,39 @@ def _directory_prose(report: dict[str, Any]) -> str:
 
 def _repair_prose(report: dict[str, Any]) -> str:
     if report["status"] == "nothing-to-repair":
-        return f"{report['cli']}: nothing to repair."
-    removed = report["removed_quarantined_directories"]
+        line = f"{report['cli']}: nothing to repair."
+        return "\n".join(_and_not_walked([line], report))
     verb = "Would remove" if report["status"] == "planned" else "Removed"
-    lines = [f"{report['cli']}: {verb} {len(removed)} quarantined granted-directory entr{'y' if len(removed) == 1 else 'ies'}:"]
-    lines.extend(f"  {item}" for item in removed)
-    return "\n".join(_and_retention(lines, report))
+    lines: list[str] = []
+    quarantined = report["removed_quarantined_directories"]
+    if quarantined:
+        lines.append(
+            f"{report['cli']}: {verb} {len(quarantined)} quarantined granted-directory "
+            f"entr{'y' if len(quarantined) == 1 else 'ies'}:"
+        )
+        lines.extend(f"  {item}" for item in quarantined)
+    orphaned = report["removed_orphaned_directories"]
+    if orphaned:
+        lines.append(
+            f"{report['cli']}: {verb.lower()} {len(orphaned)} orphaned empty "
+            f"director{'y' if len(orphaned) == 1 else 'ies'}:"
+        )
+        lines.extend(f"  {item}" for item in orphaned)
+    return "\n".join(_and_not_walked(_and_retention(lines, report), report))
+
+
+def _and_not_walked(lines: list[str], report: dict[str, Any]) -> list[str]:
+    """The part `repair` could not check, so its report never reads as
+    "clean" over a subtree it never walked -- the same fact `doctor` reports
+    under `directories_not_walked`, carried into this command's own output."""
+    paths = report.get("directories_not_walked") or []
+    if not paths:
+        return lines
+    return [
+        *lines,
+        "Could not check for orphaned directories under (a symlink):",
+        *(f"  {path}" for path in paths),
+    ]
 
 
 def _and_activation(lines: list[str], report: dict[str, Any]) -> list[str]:
@@ -3338,6 +3411,14 @@ def _cli_prose(entry: dict[str, Any], *, identity: Identity | None = None) -> st
         )
         line += "".join(f"\n    {item}" for item in items)
         line += f"\n    `{identity.program_name} repair --cli {entry['cli']}` removes them."
+    if entry.get("directories_not_walked"):
+        paths = entry["directories_not_walked"]
+        n = len(paths)
+        line += (
+            f"\n  {n} path{'' if n == 1 else 's'} this could not walk because {'it is' if n == 1 else 'they are'} "
+            f"a symlink, so whether there are orphaned empty directories underneath cannot be said:"
+        )
+        line += "".join(f"\n    {path}" for path in paths)
     if entry.get("unprunable_empty_directories"):
         paths = entry["unprunable_empty_directories"]
         n = len(paths)

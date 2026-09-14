@@ -1084,31 +1084,57 @@ def _prune_empty_directories(
     return tuple(result)
 
 
+@dataclass(frozen=True)
+class EmptyDirectoryScan:
+    """The two different facts `empty_directories_never_pruned`'s walk can
+    produce, kept apart on purpose: one is "I looked and there is nothing
+    here", the other is "I could not look". Collapsing them into one silent
+    empty result is exactly the bug this type exists to stop -- a
+    `config_dir` that is itself a symlink (dotfiles under stow or chezmoi)
+    used to produce an empty `found` and nothing to say why, which reads as
+    "nothing is wrong" when the honest answer is "this was never checked".
+    """
+
+    found: tuple[str, ...]
+    """Every directory under `config_dir` that is empty right now and that
+    `_prune_empty_directories` would never remove -- see the function's own
+    docstring for the full explanation of why."""
+
+    unwalkable: tuple[str, ...]
+    """Every path the walk refused to descend into because it is a symlink --
+    `config_dir` itself, when it is one, or any directory reached while
+    walking it. Nothing under a path named here was ever inspected: `found`
+    says nothing about what such a subtree might hold, and neither does this
+    scan's absence of a complaint."""
+
+
 def empty_directories_never_pruned(
     filesystem: FileSystem, config_dir: Path, created: tuple[Path, ...]
-) -> tuple[str, ...]:
+) -> EmptyDirectoryScan:
     """Every directory under ``config_dir`` that is empty right now and that
     `_prune_empty_directories` would never remove — because its ascent stops
     the instant it reaches a directory absent from ``created`` (`created_dirs`
     is exactly what that ascent checks membership against; see its own
     docstring for the pre-5.28.0 case that leaves it permanently empty for a
-    whole install).
+    whole install) — alongside every path the walk could not enter.
 
     This is a report, not a preview of a removal: nothing here is deleted, or
     ever will be by this call. Ownership is not claimed either way — a
-    directory named here is not asserted to be one Pegasus made and lost track
-    of, only that pruning, as it exists today, will never reach it. It could
-    just as well be a sentinel some other program left meaningful; what it
-    provably does not hold is someone else's *content*, which is the one thing
-    naming an empty path can say without guessing whose the directory itself
-    is.
+    directory named under `found` is not asserted to be one Pegasus made and
+    lost track of, only that pruning, as it exists today, will never reach
+    it. It could just as well be a sentinel some other program left
+    meaningful; what it provably does not hold is someone else's *content*,
+    which is the one thing naming an empty path can say without guessing
+    whose the directory itself is.
 
-    Walked depth-first from ``config_dir``, which is itself never a candidate
-    — the same exclusion `_prune_empty_directories` applies to its own
-    ``root``. A symlink anywhere in the walk stops descending into it, the
-    same caution `_free_of_symlinks` applies before a real removal: this
-    never removes anything, but reporting a path reached only through a link
-    as if it sat under ``config_dir`` would misname where it actually is.
+    Walked depth-first from ``config_dir``, which is itself never a `found`
+    candidate — the same exclusion `_prune_empty_directories` applies to its
+    own ``root``. A symlink anywhere in the walk, `config_dir` itself
+    included, stops descending into it -- the same caution `_free_of_symlinks`
+    applies before a real removal, kept here too because reporting a path
+    reached only through a link as if it sat under ``config_dir`` would
+    misname where it actually is -- and is named in `unwalkable` instead of
+    being silently skipped.
 
     This is `doctor`'s own walk, and `doctor` degrades rather than dying —
     a path this cannot probe (a permission bit denying it, say) is skipped
@@ -1117,10 +1143,12 @@ def empty_directories_never_pruned(
     """
     created_dirs = set(created)
     found: list[Path] = []
+    unwalkable: list[Path] = []
 
     def visit(path: Path) -> None:
         try:
             if filesystem.is_symlink(path):
+                unwalkable.append(path)
                 return
             names = filesystem.list_dir(path)
         except FileSystemError:
@@ -1133,7 +1161,69 @@ def empty_directories_never_pruned(
             visit(path / name)
 
     visit(config_dir)
-    return tuple(sorted(str(path) for path in found))
+    return EmptyDirectoryScan(
+        found=tuple(sorted(str(path) for path in found)),
+        unwalkable=tuple(sorted(str(path) for path in unwalkable)),
+    )
+
+
+def remove_orphaned_empty_directories(
+    filesystem: FileSystem, config_dir: Path, candidates: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Remove exactly the directories `empty_directories_never_pruned` named
+    under `found`, and nothing else -- the write half of `pegasus repair`'s
+    second hazard, mirroring `_prune_empty_directories`'s own shape without
+    its `created_dirs` gate: these candidates are exactly the ones *absent*
+    from that set, so gating on it here would remove nothing at all.
+
+    Safety is enforced at removal time, not merely trusted from discovery:
+    `filesystem.remove_empty_dir` is a bare `os.rmdir`, which fails
+    atomically against a directory that turns out not to be empty -- there
+    is no separate check-then-remove window of this function's own making.
+    A candidate that was empty when discovered but is not empty by the time
+    this runs is simply left standing, exactly like any other occupied
+    directory. `_free_of_symlinks` is re-checked against every candidate
+    immediately before it is touched, the same discipline
+    `_prune_empty_directories` already follows, for the identical reason: a
+    symlink anywhere in the chain would send a real `rmdir` outside the tree
+    it appears to be under.
+
+    Deepest-first, and ascending: removing a candidate can make its own
+    parent empty too, even though that parent was never itself a discovered
+    candidate (it was not empty *when discovered*, only after this run
+    removed what was inside it) -- so each removal immediately re-attempts
+    its own parent, stopping at the first one that is not empty, is
+    `config_dir` itself, or fails the symlink check. That ascent is bounded
+    by ``config_dir``: nothing above it is ever touched.
+
+    A candidate that is not under ``config_dir`` at all is filtered out
+    before anything else runs, the identical defensive filter
+    `_prune_empty_directories` already applies to its own candidates: the
+    real caller (`empty_directories_never_pruned`'s own `found`) never
+    produces one, but a `relative_to` call below cannot be asked to compare
+    two unrelated paths, and this is where that gets settled rather than
+    raised.
+    """
+    under_config_dir = {
+        path for path in (Path(item) for item in candidates) if config_dir in path.parents
+    }
+    ordered = sorted(
+        under_config_dir,
+        key=lambda path: (-len(path.relative_to(config_dir).parts), path.relative_to(config_dir).as_posix()),
+    )
+    removed: list[Path] = []
+    handled: set[Path] = set()
+    for candidate in ordered:
+        current = candidate
+        while current != config_dir and config_dir in current.parents and current not in handled:
+            handled.add(current)
+            if not _free_of_symlinks(filesystem, current):
+                break
+            if not filesystem.remove_empty_dir(current):
+                break
+            removed.append(current)
+            current = current.parent
+    return tuple(sorted(str(path) for path in removed))
 
 
 def _free_of_symlinks(filesystem: FileSystem, candidate: Path) -> bool:

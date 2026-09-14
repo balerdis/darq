@@ -1929,3 +1929,47 @@ class RecordAddressAppendCarveOutTest(unittest.TestCase):
         self.assertIn(owner_two_new, merged)
         self.assertNotIn(owner_two_old, merged)
         self.assertEqual(len(merged), 2)
+
+
+class RemoveOrphanedEmptyDirectoriesTest(RealHomeTestCase):
+    """`planner.remove_orphaned_empty_directories`, called directly, so the
+    `config_dir` boundary is exercised even when `config_dir` itself is
+    empty except for the candidates under test -- a scenario a full CLI
+    install never produces, since it always leaves other content behind."""
+
+    def install(self) -> Install:
+        return Install(cli=CLI, installed_at=AT, config_dir=self.CONFIG, release={})
+
+    def test_never_removes_config_dir_itself_even_when_it_would_end_up_empty(self):
+        leftover = self.CONFIG / "leftover"
+        leftover.mkdir(parents=True)
+        removed = planner.remove_orphaned_empty_directories(
+            self.filesystem, self.CONFIG, (str(leftover),)
+        )
+        self.assertIn(str(leftover), removed)
+        self.assertFalse(leftover.exists())
+        self.assertTrue(self.CONFIG.exists())
+
+    def test_a_candidate_outside_config_dir_is_left_alone(self):
+        outside = self.home / "elsewhere-empty"
+        outside.mkdir(parents=True)
+        removed = planner.remove_orphaned_empty_directories(
+            self.filesystem, self.CONFIG, (str(outside),)
+        )
+        self.assertEqual(removed, ())
+        self.assertTrue(outside.exists())
+
+    def test_a_symlink_in_the_candidates_own_path_is_left_standing(self):
+        destination = self.home / "external"
+        destination.mkdir(parents=True)
+        link = self.CONFIG / "linked"
+        self.CONFIG.mkdir(parents=True, exist_ok=True)
+        os.symlink(destination, link)
+        candidate = link / "empty-inside"
+        candidate.mkdir()
+        removed = planner.remove_orphaned_empty_directories(
+            self.filesystem, self.CONFIG, (str(candidate),)
+        )
+        self.assertEqual(removed, ())
+        self.assertTrue((destination / "empty-inside").exists())
+        self.assertTrue(link.is_symlink())
