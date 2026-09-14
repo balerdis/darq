@@ -1867,10 +1867,30 @@ class InterruptedDownloadLeavesNoTempDirTest(InstallScriptTestCase):
     """
 
     def test_interrupting_a_download_leaves_nothing_in_tmpdir(self):
+        # node/opencode stubbed present -- same reason _stub_python_node_
+        # opencode_present exists on the class above: without it, FALTA_NODE
+        # is true and `main` runs `instalar_node` (nvm) *before*
+        # `instalar_producto`, which downloads through the very same
+        # `descargar` / EXIT-trap-on-a-mktemp-dir shape this test means to
+        # exercise. Whichever `curl` call happens to be in flight when the
+        # temp directory first appears is the one the signal below lands on
+        # -- with node/opencode present that is unambiguously the product's
+        # own download, not nvm's.
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
-        # A curl that never finishes, so the signal always lands while the temp
-        # directory exists -- no race to lose.
-        self.stub("curl", "sleep 30\n")
+        self.stub("node", 'echo "v20.11.0"\n')
+        self.stub(
+            "opencode",
+            'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n',
+        )
+        # A curl that never finishes on its own -- only the signal below is
+        # allowed to end it. Any finite sleep here is a second deadline in
+        # disguise: on a loaded enough machine, the wait for the temp
+        # directory below can itself take long enough that a merely-long
+        # sleep would already have returned, and curl would exit on its own
+        # path instead of the signal's. That would make the test pass (or
+        # fail) for a reason that has nothing to do with what it claims to
+        # cover.
+        self.stub("curl", "sleep infinity\n")
         tmpdir = Path(self.tmp.name) / "tmpdir"
         tmpdir.mkdir()
 
@@ -1884,14 +1904,29 @@ class InterruptedDownloadLeavesNoTempDirTest(InstallScriptTestCase):
             cwd=str(ROOT),
             text=True,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            # DEVNULL, not PIPE: nothing here ever reads the installer's
+            # output, and an unread PIPE is exactly what turns an
+            # interrupted-but-not-yet-reaped grandchild (the `curl` stub
+            # itself, or anything it forks) into a hang -- `communicate()`
+            # waits for EOF on these pipes, and EOF only arrives once every
+            # process holding the write end, direct child or not, has
+            # exited. DEVNULL has no write end to wait on, so that whole
+            # class of deadlock cannot happen here regardless of which
+            # descendant a signal happens to miss.
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             # Its own session, so the signal below can go to the whole process
             # group -- which is what Ctrl-C actually does. Signalling bash
             # alone proves nothing: a non-interactive bash waits for its
             # foreground child, so the `sleep` would run to completion first.
             start_new_session=True,
         )
+        # Captured once, while the process is certainly still its own
+        # session/group leader -- `start_new_session` guarantees pgid == pid
+        # at this point. Re-deriving it later via `os.getpgid(proceso.pid)`
+        # would raise once the pid has been reaped, right when the cleanup
+        # path needs it most.
+        pgid = os.getpgid(proceso.pid)
         try:
             # Wait for the script to have actually created the directory rather
             # than sleeping a guessed interval: the assertion below is only
@@ -1903,16 +1938,53 @@ class InterruptedDownloadLeavesNoTempDirTest(InstallScriptTestCase):
                 any(tmpdir.iterdir()),
                 "the script never created a temp directory, so this test proves nothing",
             )
-            os.killpg(os.getpgid(proceso.pid), signal.SIGINT)
-            proceso.communicate(timeout=15)
-        finally:
+            os.killpg(pgid, signal.SIGINT)
+
+            # Wait for the process to actually exit -- observed via poll(),
+            # not assumed by a clock -- rather than competing with it on a
+            # guessed deadline. The 15s budget below is only a ceiling that
+            # stops a genuine hang from blocking the suite forever; it is
+            # never the thing being asserted on.
+            #
+            # This ceiling is reachable for a real reason, not just a
+            # theoretical one: bash briefly blocks SIGINT in its own signal
+            # mask while it waits on the child of a command substitution
+            # (`$(curl ...)`), and a blocked signal mask survives both
+            # fork() and exec() -- so a signal that lands in that narrow
+            # window is inherited, still blocked, by the very grandchild
+            # (the `curl` stub) it was meant to stop. That grandchild is
+            # then left with SIGINT permanently pending-but-blocked, and
+            # bash's own wait() for it never returns. Confirmed against this
+            # exact script by reading `/proc/<pid>/status` at the moment of
+            # a hang: `SigBlk` had SIGINT's bit set and stayed set, with the
+            # process in state `S`, never reaching `Z`.
+            plazo = time.monotonic() + 15
+            while proceso.poll() is None and time.monotonic() < plazo:
+                time.sleep(0.05)
             if proceso.poll() is None:
-                proceso.kill()
-                proceso.communicate()
+                self.fail(
+                    "the installer is still running 15s after SIGINT -- it "
+                    "never exited, so this is a hang, not a cleanup bug"
+                )
+        finally:
+            # The whole group, not just the direct child: the process stuck
+            # by the race described above is a grandchild, not `proceso`
+            # itself, and `proceso.kill()` would only orphan it -- leaving a
+            # `sleep`/`curl` stub running forever, invisible to this test
+            # and to whatever reaps `proceso`. SIGKILL cannot be blocked or
+            # ignored by anyone in the group, unlike SIGINT, so this always
+            # ends it regardless of which member the earlier signal missed.
+            if proceso.poll() is None:
+                os.killpg(pgid, signal.SIGKILL)
+            # No pipes to drain (stdout/stderr are DEVNULL), so a plain
+            # wait() reaps the process without risking the EOF-on-a-PIPE
+            # deadlock this test used to be exposed to. A SIGKILL is not
+            # interruptible, so this does not need its own ceiling.
+            proceso.wait()
 
         self.assertEqual(
             [], sorted(p.name for p in tmpdir.iterdir()),
-            "an interrupted download left its temp directory behind",
+            "the installer exited after SIGINT but left its temp directory behind",
         )
 
 
