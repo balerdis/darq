@@ -19,6 +19,7 @@ import json
 from pegasus import cli
 from pegasus.adapters import available
 from pegasus.core import journal as journal_module
+from pegasus.core import planner as planner_module
 from pegasus.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
@@ -327,8 +328,6 @@ class OrphanedDirectoryRepairTest(RealHomeTestCase):
         removal `repair` performs; the directory must survive."""
         self.install()
         directory = self.plant_untracked_empty_directory()
-        from pegasus.core import planner as planner_module
-
         scan = planner_module.empty_directories_never_pruned(
             self.filesystem, self.installed().config_dir, self.installed().created_dirs
         )
@@ -444,3 +443,103 @@ class SymlinkedConfigDirTest(RealHomeTestCase):
         self.assertIn(str(real_subdir), report.get("directories_not_walked", []))
         _, printed = self.run_prose("repair", "--cli", CLI)
         self.assertIn(str(real_subdir), printed)
+
+
+class UnwalkableOnlyMeansASymlinkedDirectoryTest(RealHomeTestCase):
+    """A skipped symlink belongs in `unwalkable` only when there could be
+    something underneath it to miss -- when it resolves to a directory.
+    `visit` used to record every symlink it stepped over regardless of what
+    it pointed to, which on a real installation surfaced a dozen lines of
+    noise for `node_modules/.bin` shims: a symlink to `cli.js` has no
+    subtree, so "cannot be said whether there are orphaned empty
+    directories underneath" was simply false about it. These call
+    `planner.empty_directories_never_pruned` directly, the same way
+    `OrphanedDirectoryRepairTest` does, since the fact under test belongs to
+    the scan itself and not to any one caller of it."""
+
+    def test_a_symlink_to_a_file_is_skipped_but_not_reported_unwalkable(self):
+        destination = self.home / "actual-file.js"
+        destination.write_bytes(b"#!/usr/bin/env node\n")
+        link = self.layout().config_dir / "shim"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        import os as _os
+
+        _os.symlink(destination, link)
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, self.layout().config_dir, ())
+        self.assertNotIn(str(link), scan.unwalkable)
+        self.assertNotIn(str(link), scan.found)
+
+    def test_a_symlink_whose_target_cannot_be_stat_ed_is_not_reported_either(self):
+        """`resolves_to_directory` raises rather than guess when a real
+        `EACCES` denies the traversal needed to resolve a target -- see its
+        own docstring on the port. That is a "cannot tell", not a "plainly
+        nothing to resolve," so it is the scan's own job, not the port's, to
+        turn it into "not reported" -- the same conservative default this
+        scan already applies to a dangling link or a loop. Must not raise
+        and must not appear in either `found` or `unwalkable`."""
+        import os as _os
+
+        restricted = self.home / "restricted"
+        restricted.mkdir()
+        self.addCleanup(_os.chmod, restricted, 0o755)
+        link = self.layout().config_dir / "unreachable-shim"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        _os.symlink(restricted / "inside", link)
+        _os.chmod(restricted, 0o000)
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, self.layout().config_dir, ())
+        self.assertNotIn(str(link), scan.unwalkable)
+        self.assertNotIn(str(link), scan.found)
+
+    def test_a_symlink_to_a_directory_is_still_reported_unwalkable(self):
+        """The caution this feature exists for stays exactly where it was:
+        only the reporting of a non-directory link changes."""
+        destination = self.home / "actual-directory"
+        destination.mkdir()
+        link = self.layout().config_dir / "linked-dir"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        import os as _os
+
+        _os.symlink(destination, link)
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, self.layout().config_dir, ())
+        self.assertIn(str(link), scan.unwalkable)
+
+    def test_a_dangling_symlink_is_skipped_but_not_reported_unwalkable(self):
+        link = self.layout().config_dir / "dangling-shim"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        import os as _os
+
+        _os.symlink(self.home / "never-existed", link)
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, self.layout().config_dir, ())
+        self.assertNotIn(str(link), scan.unwalkable)
+        self.assertNotIn(str(link), scan.found)
+
+    def test_a_symlink_loop_is_skipped_but_not_reported_unwalkable(self):
+        """`ln -s a a`, reached mid-walk. Resolving it never terminates on
+        its own -- `ELOOP` is the kernel giving up, not a directory found
+        underneath -- so it must not be reported any more than a dangling
+        link is."""
+        link = self.layout().config_dir / "selfloop"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to("selfloop")
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, self.layout().config_dir, ())
+        self.assertNotIn(str(link), scan.unwalkable)
+        self.assertNotIn(str(link), scan.found)
+
+    def test_a_config_dir_that_is_a_symlink_to_a_file_is_not_reported_unwalkable(self):
+        """`config_dir` itself being a symlink is the case
+        `EmptyDirectoryScan` exists for -- normally it resolves to a
+        directory (dotfiles under stow or chezmoi), and that case keeps its
+        own coverage in `SymlinkedConfigDirTest`. This is the state that
+        class cannot express: a `config_dir` repointed, after an install
+        already recorded it, at a plain file rather than a directory --
+        reachable because `doctor`/`repair` re-derive it fresh from disk on
+        every run rather than trusting whatever it was at install time."""
+        destination = self.home / "not-a-directory-at-all"
+        destination.write_bytes(b"content")
+        config_dir = self.home / "dotfiles-config-file"
+        import os as _os
+
+        _os.symlink(destination, config_dir)
+        scan = planner_module.empty_directories_never_pruned(self.filesystem, config_dir, ())
+        self.assertEqual(scan.unwalkable, ())
+        self.assertEqual(scan.found, ())

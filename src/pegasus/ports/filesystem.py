@@ -62,6 +62,41 @@ class FileSystem(Protocol):
         meant to follow.
         """
 
+    def resolves_to_directory(self, path: Path) -> bool:
+        """Whether ``path`` names a directory once every symlink in it is
+        followed -- the one question :meth:`is_symlink` refuses to answer by
+        design, and the one a caller deciding whether to *report* a skipped
+        symlink actually needs.
+
+        A caller that already knows ``path`` is a symlink (`is_symlink` is
+        how it would know) is not asking whether to follow it -- that
+        decision is separate, and stays refused; see `is_symlink`'s own
+        docstring and `_free_of_symlinks` in `pegasus.core.planner`, which
+        this method does not change. It is asking a narrower question:
+        *if I stopped here instead of walking further, would I be leaving a
+        subtree behind, or is there nothing under this path at all?* A
+        symlink to a regular file has no subtree; a directory reached only
+        through a symlink does, even though nothing here ever walks into it
+        to prove that.
+
+        ``True`` only for a path that, once resolved, is a directory --
+        whether ``path`` itself is a plain directory or a symlink (however
+        many links deep) that ends at one. ``False`` for a plain file, an
+        absent path, a dangling symlink, and a symlink loop (`ELOOP`): every
+        one of those means there is nothing underneath ``path`` for a caller
+        to have missed.
+
+        Never raises for a fact that plainly cannot be told any other way --
+        a broken link or a loop are not failures, they are the answer. Raises
+        :class:`FileSystemError` only when the underlying probe fails for a
+        reason that says nothing about ``path`` itself, such as a permission
+        bit denying the traversal needed to resolve it -- the same posture
+        :meth:`exists` and :meth:`is_symlink` already take, and for the same
+        reason: a caller that cannot tell must not guess in either direction,
+        and it is the caller, not this method, who gets to decide what
+        "cannot tell" means for its own report.
+        """
+
     def read_bytes(self, path: Path) -> bytes:
         """Read a file whole. Raises :class:`FileSystemError` if it cannot be read."""
 

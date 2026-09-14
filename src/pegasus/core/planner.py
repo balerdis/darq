@@ -1101,11 +1101,19 @@ class EmptyDirectoryScan:
     docstring for the full explanation of why."""
 
     unwalkable: tuple[str, ...]
-    """Every path the walk refused to descend into because it is a symlink --
-    `config_dir` itself, when it is one, or any directory reached while
-    walking it. Nothing under a path named here was ever inspected: `found`
-    says nothing about what such a subtree might hold, and neither does this
-    scan's absence of a complaint."""
+    """Every symlink the walk refused to descend into that could actually
+    have hidden something -- one that resolves to a directory, `config_dir`
+    itself included when it is one. Nothing under a path named here was ever
+    inspected: `found` says nothing about what such a subtree might hold, and
+    neither does this scan's absence of a complaint.
+
+    A symlink that resolves to anything else -- a regular file, a dangling
+    target, a loop, or a link this process could not even stat -- is skipped
+    the same way but never lands here: there is nothing underneath a file for
+    the walk to have missed, and "not reported" is `resolves_to_directory`'s
+    contract for a target that could not be told apart from one. Naming it
+    anyway is what used to bury the one case this field exists for under a
+    line of noise per shim in a `node_modules/.bin` directory."""
 
 
 def empty_directories_never_pruned(
@@ -1133,8 +1141,23 @@ def empty_directories_never_pruned(
     included, stops descending into it -- the same caution `_free_of_symlinks`
     applies before a real removal, kept here too because reporting a path
     reached only through a link as if it sat under ``config_dir`` would
-    misname where it actually is -- and is named in `unwalkable` instead of
-    being silently skipped.
+    misname where it actually is. That much never changed. What is reported
+    for it did: only a symlink that resolves to a directory is named in
+    `unwalkable`, because only that one could have a subtree underneath it
+    that this walk missed. A symlink to a regular file, a dangling symlink,
+    a symlink loop, or a link `resolves_to_directory` could not even stat are
+    all skipped the identical way -- nothing under any of them is ever
+    inspected either -- but none of them is reported, because none of them
+    could be hiding an empty directory in the first place; saying otherwise
+    about a link to `cli.js` is simply false. `resolves_to_directory` raises
+    when it cannot tell -- a dangling target and a loop are not among those
+    cases, it already answers `False` for both without raising, see its own
+    docstring -- and that failure is caught by this same function's blanket
+    `except` below, the identical one `is_symlink` already relies on: a
+    permission bit denying the traversal needed to resolve a target says
+    nothing about whether one exists, so it reads as "not a directory" here
+    for the same reason `list_dir` raising elsewhere in this walk reads as
+    "not an empty directory" rather than as a crash.
 
     This is `doctor`'s own walk, and `doctor` degrades rather than dying —
     a path this cannot probe (a permission bit denying it, say) is skipped
@@ -1148,7 +1171,8 @@ def empty_directories_never_pruned(
     def visit(path: Path) -> None:
         try:
             if filesystem.is_symlink(path):
-                unwalkable.append(path)
+                if filesystem.resolves_to_directory(path):
+                    unwalkable.append(path)
                 return
             names = filesystem.list_dir(path)
         except FileSystemError:

@@ -497,6 +497,67 @@ class PosixFileSystemTest(unittest.TestCase):
         link.symlink_to(self.root / "never-existed")
         self.assertTrue(self.fs.is_symlink(link))
 
+    def test_resolves_to_directory_is_true_for_a_plain_directory(self):
+        target = self.root / "plain"
+        target.mkdir()
+        self.assertTrue(self.fs.resolves_to_directory(target))
+
+    def test_resolves_to_directory_is_false_for_a_plain_file(self):
+        target = self.root / "note.txt"
+        target.write_bytes(b"hello")
+        self.assertFalse(self.fs.resolves_to_directory(target))
+
+    def test_resolves_to_directory_is_false_for_an_absent_path(self):
+        self.assertFalse(self.fs.resolves_to_directory(self.root / "absent"))
+
+    def test_resolves_to_directory_is_true_for_a_symlink_to_a_directory(self):
+        destination = self.root / "destination"
+        destination.mkdir()
+        link = self.root / "link-to-dir"
+        link.symlink_to(destination)
+        self.assertTrue(self.fs.resolves_to_directory(link))
+
+    def test_resolves_to_directory_is_false_for_a_symlink_to_a_file(self):
+        destination = self.root / "destination.txt"
+        destination.write_bytes(b"hello")
+        link = self.root / "link-to-file"
+        link.symlink_to(destination)
+        self.assertFalse(self.fs.resolves_to_directory(link))
+
+    def test_resolves_to_directory_is_false_for_a_dangling_symlink(self):
+        link = self.root / "dangling-target"
+        link.symlink_to(self.root / "never-existed")
+        self.assertFalse(self.fs.resolves_to_directory(link))
+
+    def test_resolves_to_directory_is_false_for_a_symlink_loop(self):
+        """`ln -s a a`: a symlink that points at its own name, so resolving
+        it never terminates on its own -- the kernel gives up with `ELOOP`
+        rather than spinning forever. That failure to tell must read as "not
+        a directory," the same posture every other undecidable case here
+        takes, never as a crash or a hang."""
+        loop = self.root / "selfloop"
+        loop.symlink_to("selfloop")
+        self.assertFalse(self.fs.resolves_to_directory(loop))
+
+    def test_resolves_to_directory_raises_when_the_target_cannot_be_reached(self):
+        """A symlink whose own directory entry is perfectly readable can
+        still point through a directory this process may not enter -- an
+        `EACCES` on the `stat` of the target, not on the link itself. This
+        is not "plainly nothing to resolve" the way a dangling link or a
+        loop is -- it is "cannot tell" -- so it takes the same posture
+        `is_symlink` already takes for that: raise, rather than guess.
+        `empty_directories_never_pruned` is where "cannot tell" is turned
+        into "not reported"; that decision belongs to the caller, not to
+        this probe."""
+        restricted = self.root / "restricted"
+        restricted.mkdir()
+        os.chmod(restricted, 0o000)
+        self.addCleanup(os.chmod, restricted, 0o755)
+        link = self.root / "link-through-restricted"
+        link.symlink_to(restricted / "inside")
+        with self.assertRaises(FileSystemError):
+            self.fs.resolves_to_directory(link)
+
     # --- Pruning empty directories ---
 
     def test_remove_empty_dir_deletes_an_empty_directory(self):

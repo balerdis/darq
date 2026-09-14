@@ -77,6 +77,22 @@ class PosixFileSystem:
         except OSError as error:
             raise FileSystemError(f"cannot tell whether {path} is a symlink: {error}") from error
 
+    def resolves_to_directory(self, path: Path) -> bool:
+        try:
+            return path.is_dir()
+        except OSError as error:
+            # `Path.is_dir()` already swallows the errors that mean "there is
+            # plainly nothing to resolve" -- absence, a dangling target, a
+            # symlink loop -- and answers `False` for every one of them
+            # without raising; that is `resolves_to_directory`'s contract
+            # too, so there is nothing to translate for those. What reaches
+            # here is the other kind: a probe that failed for a reason that
+            # says nothing about `path` itself, an unreadable directory
+            # somewhere in the chain, chief among them -- and that has to
+            # raise for the same reason `is_symlink` raises on it, not answer
+            # `False` and let a caller read "cannot tell" as "no".
+            raise FileSystemError(f"cannot tell whether {path} resolves to a directory: {error}") from error
+
     def read_bytes(self, path: Path) -> bytes:
         try:
             return path.read_bytes()

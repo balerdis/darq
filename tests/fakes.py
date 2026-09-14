@@ -144,6 +144,7 @@ class FakeFileSystem:
         unwritable: set[Path] | None = None,
         unowned: set[Path] | None = None,
         symlinks: set[Path] | None = None,
+        symlinked_directories: set[Path] | None = None,
     ):
         self.files: dict[Path, bytes] = dict(files or {})
         self.modes: dict[Path, int] = dict(modes or {})
@@ -168,6 +169,12 @@ class FakeFileSystem:
         # entry, and a fake that required one of the other two first could
         # not model a dangling symlink at all.
         self.symlinks: set[Path] = set(symlinks or ())
+        # The subset of `symlinks` that `resolves_to_directory` answers
+        # `True` for -- a symlink not named here answers `False`, the same
+        # default a dangling target or a symlink to a plain file gets on a
+        # real filesystem. A path outside `symlinks` entirely falls through
+        # to the plain "is it in `directories`" check instead.
+        self.symlinked_directories: set[Path] = set(symlinked_directories or ())
         # Paths `is_writable` answers `False` for, regardless of whether they
         # exist -- a test's way of putting a destination or a directory into
         # the same "cannot be written to" condition `make_unwritable` puts a
@@ -196,6 +203,11 @@ class FakeFileSystem:
         if path in self.fail_is_symlink:
             raise FileSystemError(f"refusing to tell whether {path} is a symlink: injected failure")
         return path in self.symlinks
+
+    def resolves_to_directory(self, path: Path) -> bool:
+        if path in self.symlinks:
+            return path in self.symlinked_directories
+        return path in self.directories
 
     def read_bytes(self, path: Path) -> bytes:
         if path in self.fail_read:

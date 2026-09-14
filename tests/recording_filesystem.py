@@ -32,6 +32,9 @@ class RecordingFileSystem:
     def is_symlink(self, path: Path) -> bool:
         return self._filesystem.is_symlink(path)
 
+    def resolves_to_directory(self, path: Path) -> bool:
+        return self._filesystem.resolves_to_directory(path)
+
     def read_bytes(self, path: Path) -> bytes:
         return self._filesystem.read_bytes(path)
 
