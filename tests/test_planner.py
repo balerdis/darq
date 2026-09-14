@@ -1941,6 +1941,18 @@ class RemoveOrphanedEmptyDirectoriesTest(RealHomeTestCase):
         return Install(cli=CLI, installed_at=AT, config_dir=self.CONFIG, release={})
 
     def test_never_removes_config_dir_itself_even_when_it_would_end_up_empty(self):
+        """`config_dir` survives here because `config_dir in current.parents`
+        is already `False` once the ascent's `current` reaches `config_dir`
+        itself -- `Path.parents` never contains the path itself, so there is
+        no separate "is this config_dir" check doing the work; the loop's
+        own containment test already excludes it. An earlier version of the
+        loop spelled out `current != config_dir and config_dir in
+        current.parents`, and the first half was dead: `Path.parents`
+        already guaranteed it could never be reached. What actually holds
+        `config_dir` up is proven by mutating away the containment clause
+        itself -- see the module docstring note by
+        `remove_orphaned_empty_directories`, and the mutation recorded in
+        the commit that added this docstring."""
         leftover = self.CONFIG / "leftover"
         leftover.mkdir(parents=True)
         removed = planner.remove_orphaned_empty_directories(
@@ -1973,3 +1985,25 @@ class RemoveOrphanedEmptyDirectoriesTest(RealHomeTestCase):
         self.assertEqual(removed, ())
         self.assertTrue((destination / "empty-inside").exists())
         self.assertTrue(link.is_symlink())
+
+    def test_a_candidate_that_climbs_out_with_dot_dot_is_left_standing(self):
+        """`config_dir in path.parents` is a lexical membership test, not a
+        containment proof: `Path("<config_dir>/../outside").parents`
+        literally includes `config_dir` as one of its lexical prefixes, so a
+        candidate shaped this way used to pass the filter and reach a real
+        `os.rmdir` that the kernel resolves normally -- deleting a directory
+        that sits beside `config_dir`, not under it. No real caller builds a
+        candidate this way today (`empty_directories_never_pruned`'s `found`
+        is only ever built by literal `path / name` joins off real listings,
+        which can never contain `..`), but the function's own docstring
+        promises containment regardless of how the caller built the path,
+        and this is the shape that promise did not hold against."""
+        self.CONFIG.mkdir(parents=True, exist_ok=True)
+        outside = self.CONFIG.parent / "outside"
+        outside.mkdir()
+        candidate = self.CONFIG / ".." / "outside"
+        removed = planner.remove_orphaned_empty_directories(
+            self.filesystem, self.CONFIG, (str(candidate),)
+        )
+        self.assertEqual(removed, ())
+        self.assertTrue(outside.exists())

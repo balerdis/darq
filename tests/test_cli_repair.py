@@ -356,6 +356,17 @@ class OrphanedDirectoryRepairTest(RealHomeTestCase):
         self.assertIn(str(parent), report["removed_orphaned_directories"])
 
     def test_repair_never_ascends_past_config_dir(self):
+        """A real install always leaves other content under `config_dir`,
+        so `remove_empty_dir` would refuse to remove it on emptiness grounds
+        alone even without the ascent's own containment check -- this test
+        cannot, by itself, tell the two apart, and does not claim to. It
+        only confirms the ordinary case: an everyday `repair` never takes
+        `config_dir` with it. The actual boundary -- `config_dir` surviving
+        even when it *would* end up empty -- is proven at the planner level
+        by `RemoveOrphanedEmptyDirectoriesTest.
+        test_never_removes_config_dir_itself_even_when_it_would_end_up_empty`
+        in `test_planner.py`, which is built precisely so `config_dir` has
+        nothing else in it."""
         self.install()
         self.plant_untracked_empty_directory()
         self.run_cli("repair", "--cli", CLI)

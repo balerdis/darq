@@ -1192,9 +1192,16 @@ def remove_orphaned_empty_directories(
     parent empty too, even though that parent was never itself a discovered
     candidate (it was not empty *when discovered*, only after this run
     removed what was inside it) -- so each removal immediately re-attempts
-    its own parent, stopping at the first one that is not empty, is
-    `config_dir` itself, or fails the symlink check. That ascent is bounded
-    by ``config_dir``: nothing above it is ever touched.
+    its own parent, stopping at the first one that is not empty, is not
+    under `config_dir`, or fails the symlink check. That ascent is bounded
+    by ``config_dir``: nothing above it is ever touched. There is no
+    separate "stop at `config_dir` itself" check, because none is needed --
+    `Path.parents` never contains the path itself, so `config_dir in
+    current.parents` is already `False` the instant `current == config_dir`,
+    and a version of this loop that spelled that comparison out
+    (`current != config_dir and config_dir in current.parents`) carried a
+    clause a fact `Path.parents` already guarantees had made dead: no
+    candidate this loop ever reaches can make it fire.
 
     A candidate that is not under ``config_dir`` at all is filtered out
     before anything else runs, the identical defensive filter
@@ -1203,9 +1210,31 @@ def remove_orphaned_empty_directories(
     produces one, but a `relative_to` call below cannot be asked to compare
     two unrelated paths, and this is where that gets settled rather than
     raised.
+
+    That filter is lexical, not a proof of containment, and a `..`
+    component defeats it exactly the way `journal._contained` already warns
+    about for every other path this codebase persists: `config_dir in
+    path.parents` is a plain membership test over `Path.parents`, which
+    never resolves anything, so `Path(f"{config_dir}/../outside").parents`
+    *literally contains* ``config_dir`` as one of its lexical prefixes --
+    the candidate reads as "under config_dir" to this check while a real
+    `os.rmdir` resolves it to config_dir's own sibling. `_free_of_symlinks`
+    does not catch this either: a literal `..` component is not a symlink,
+    so the walk below sails through it. The fix is the same one
+    `journal._contained` already uses and for the same reason: refuse `..`
+    outright rather than resolve it away, so containment is judged by shape
+    and never by a resolution this function has no reason to perform. No
+    real caller builds a candidate this way today
+    (`empty_directories_never_pruned`'s own `found` only ever comes from
+    literal `path / name` joins off real directory listings, which can
+    never contain `..`), but this function deletes, and a containment
+    promise it does not keep is the wrong promise to make regardless of
+    what today's one caller happens to pass.
     """
     under_config_dir = {
-        path for path in (Path(item) for item in candidates) if config_dir in path.parents
+        path
+        for path in (Path(item) for item in candidates)
+        if config_dir in path.parents and ".." not in path.parts
     }
     ordered = sorted(
         under_config_dir,
@@ -1215,7 +1244,7 @@ def remove_orphaned_empty_directories(
     handled: set[Path] = set()
     for candidate in ordered:
         current = candidate
-        while current != config_dir and config_dir in current.parents and current not in handled:
+        while config_dir in current.parents and current not in handled:
             handled.add(current)
             if not _free_of_symlinks(filesystem, current):
                 break
