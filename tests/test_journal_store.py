@@ -97,16 +97,33 @@ class FileJournalStoreTest(unittest.TestCase):
         with self.assertRaises(JournalStoreError):
             store(filesystem).load()
 
-    def test_a_malformed_granted_directories_entry_names_the_file_and_the_field(self):
-        """A hand-edited or corrupted `granted_directories` entry leaves every
-        command that reads the journal refusing with "the journal is
-        malformed" -- `doctor`, `install`, `update`, `uninstall`, and
-        `directory revoke` included. The message has to name the file and
-        the field, or fixing it by hand means guessing."""
+    def test_a_malformed_granted_directories_entry_is_quarantined_not_fatal(self):
+        """A hand-edited or corrupted `granted_directories` entry used to
+        leave every command that reads the journal refusing with "the
+        journal is malformed" -- `doctor`, `install`, `update`, `uninstall`,
+        and `directory revoke` included, `directory revoke` (the one command
+        that could remove the bad entry) among them. It is now quarantined
+        instead: the load succeeds, and the entry lands in
+        `Install.quarantined_directories` rather than `granted_directories`."""
         payload = json.loads(json.dumps(journal_module.to_dict(
             journal_module.with_install(journal_module.empty(VERSION), install())
         )))
         payload["installs"][0]["granted_directories"] = ["/"]
+        path = journal_path(FakeFileSystem(), HOME)
+        filesystem = FakeFileSystem(files={path: json.dumps(payload).encode("utf-8")})
+        loaded = store(filesystem).load()
+        parsed_install = journal_module.install_for(loaded, "some-cli")
+        self.assertEqual(parsed_install.granted_directories, ())
+        self.assertEqual(parsed_install.quarantined_directories, ("/",))
+
+    def test_a_granted_directories_value_that_is_not_a_list_names_the_file_and_the_field(self):
+        """The one shape quarantine cannot cover -- `granted_directories`
+        itself not being a list, with no per-element structure to preserve
+        -- still refuses the whole journal, naming the file and the field."""
+        payload = json.loads(json.dumps(journal_module.to_dict(
+            journal_module.with_install(journal_module.empty(VERSION), install())
+        )))
+        payload["installs"][0]["granted_directories"] = "not-a-list"
         path = journal_path(FakeFileSystem(), HOME)
         filesystem = FakeFileSystem(files={path: json.dumps(payload).encode("utf-8")})
         with self.assertRaises(JournalStoreError) as raised:

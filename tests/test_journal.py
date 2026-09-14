@@ -209,6 +209,30 @@ class RoundTripTest(unittest.TestCase):
         payload = journal_module.to_dict(journal)
         self.assertEqual(journal_module.from_dict(payload, HOME), journal)
 
+    def test_quarantined_directories_survive_a_load_save_load_round_trip_byte_equivalent(self):
+        """The whole point of quarantine: an entry that fails validation is
+        set aside, not lost, and a save-then-reload must hand back the exact
+        same value -- not merely the same count, not promoted into
+        `granted_directories` -- for a mix of a valid entry and several
+        quarantined ones of different JSON shapes."""
+        payload = self.payload_with_granted_directories(
+            ["/home/probe/worktrees/extra", "relative/one", "/", 123, None, {"bad": True}]
+        )
+        first = journal_module.from_dict(payload, HOME)
+        self.assertEqual(first.installs[0].granted_directories, ("/home/probe/worktrees/extra",))
+        self.assertEqual(
+            first.installs[0].quarantined_directories, ("relative/one", "/", 123, None, {"bad": True})
+        )
+        saved = journal_module.to_dict(first)
+        second = journal_module.from_dict(saved, HOME)
+        self.assertEqual(second, first)
+        self.assertEqual(second.installs[0].quarantined_directories, first.installs[0].quarantined_directories)
+
+    def payload_with_granted_directories(self, entries):
+        payload = journal_module.to_dict(self.journal)
+        payload["installs"][0]["granted_directories"] = entries
+        return payload
+
     def test_an_install_with_no_granted_directories_omits_the_key(self):
         payload = journal_module.to_dict(self.journal)
         self.assertNotIn("granted_directories", payload["installs"][0])
@@ -418,46 +442,66 @@ class ValidationTest(unittest.TestCase):
                 self.assertEqual(parsed.installs[0].granted_mcp, (spelling,))
 
     def test_granted_directories_must_be_a_list(self):
+        """Not-a-list is a different corruption from a bad element: there is
+        no per-element structure to quarantine, so this still refuses the
+        whole journal exactly as before."""
         payload = self.payload()
         payload["installs"][0]["granted_directories"] = {"a": True}
         with self.assertRaises(JournalError) as raised:
             journal_module.from_dict(payload, HOME)
         self.assertIn("opencode", str(raised.exception))
 
-    def test_granted_directories_relative_entries_are_refused(self):
+    def test_granted_directories_relative_entries_are_quarantined(self):
         payload = self.payload()
         payload["installs"][0]["granted_directories"] = ["worktrees/extra"]
-        with self.assertRaises(JournalError) as raised:
-            journal_module.from_dict(payload, HOME)
-        self.assertIn("worktrees/extra", str(raised.exception))
+        parsed = journal_module.from_dict(payload, HOME)
+        self.assertEqual(parsed.installs[0].granted_directories, ())
+        self.assertEqual(parsed.installs[0].quarantined_directories, ("worktrees/extra",))
 
-    def test_granted_directories_entries_that_climb_with_dot_dot_are_refused(self):
+    def test_granted_directories_entries_that_climb_with_dot_dot_are_quarantined(self):
         payload = self.payload()
         payload["installs"][0]["granted_directories"] = ["/home/probe/worktrees/../../etc"]
-        with self.assertRaises(JournalError) as raised:
-            journal_module.from_dict(payload, HOME)
-        self.assertIn("..", str(raised.exception))
+        parsed = journal_module.from_dict(payload, HOME)
+        self.assertEqual(parsed.installs[0].granted_directories, ())
+        self.assertEqual(
+            parsed.installs[0].quarantined_directories, ("/home/probe/worktrees/../../etc",)
+        )
 
-    def test_granted_directories_root_is_refused(self):
+    def test_granted_directories_root_is_quarantined(self):
         payload = self.payload()
         payload["installs"][0]["granted_directories"] = ["/"]
-        with self.assertRaises(JournalError) as raised:
-            journal_module.from_dict(payload, HOME)
-        self.assertIn("filesystem root", str(raised.exception))
+        parsed = journal_module.from_dict(payload, HOME)
+        self.assertEqual(parsed.installs[0].granted_directories, ())
+        self.assertEqual(parsed.installs[0].quarantined_directories, ("/",))
 
-    def test_granted_directories_the_configuration_directory_and_its_ancestors_are_refused(self):
+    def test_granted_directories_the_configuration_directory_and_its_ancestors_are_quarantined(self):
         """The same escalation `content.grant_directories` refuses at grant
-        time must also be refused on replay -- a hand-edited or corrupted
+        time must still be refused on replay -- a hand-edited or corrupted
         journal must not be able to smuggle the settings directory past a
         check that only ever runs once, at the moment a person types
-        `directory grant`."""
+        `directory grant`. It no longer blocks the whole journal, though:
+        the entry is set aside instead, granting nothing."""
         for candidate in (str(CONFIG), str(CONFIG.parent), "/home/probe"):
             with self.subTest(candidate=candidate):
                 payload = self.payload()
                 payload["installs"][0]["granted_directories"] = [candidate]
-                with self.assertRaises(JournalError) as raised:
-                    journal_module.from_dict(payload, HOME)
-                self.assertIn("configuration directory", str(raised.exception))
+                parsed = journal_module.from_dict(payload, HOME)
+                self.assertEqual(parsed.installs[0].granted_directories, ())
+                self.assertEqual(parsed.installs[0].quarantined_directories, (candidate,))
+
+    def test_granted_directories_of_any_json_type_are_quarantined_not_fatal(self):
+        """Quarantine has to hold for an entry of any JSON shape, not only a
+        malformed string -- `validate_granted_directory`'s own first check
+        already refuses anything that is not a non-empty string, and that
+        refusal must land the same way every other one does: set aside,
+        never fatal to the load."""
+        for candidate in (123, None, {"a": 1}, [], True, 4.5):
+            with self.subTest(candidate=candidate):
+                payload = self.payload()
+                payload["installs"][0]["granted_directories"] = [candidate]
+                parsed = journal_module.from_dict(payload, HOME)
+                self.assertEqual(parsed.installs[0].granted_directories, ())
+                self.assertEqual(parsed.installs[0].quarantined_directories, (candidate,))
 
     def test_granted_directories_outside_the_home_still_load(self):
         """Deliberately not checked against `home` the way every other path
@@ -468,21 +512,22 @@ class ValidationTest(unittest.TestCase):
         parsed = journal_module.from_dict(payload, HOME)
         self.assertEqual(parsed.installs[0].granted_directories, ("/srv/worktrees/extra",))
 
-    def test_granted_directories_the_pegasus_data_directory_and_its_ancestors_are_refused_when_data_dir_is_given(
+    def test_granted_directories_the_pegasus_data_directory_and_its_ancestors_are_quarantined_when_data_dir_is_given(
         self,
     ):
         """The same replay-escalation guard `config_dir` already gets must
         also cover Pegasus's own data directory -- a hand-edited journal
         must not be able to smuggle write access to the journal's own home
         past a check that only ever runs once, at the moment a person types
-        `directory grant`."""
+        `directory grant`. As with `config_dir`, the refusal to *grant* is
+        unchanged; only the fatal-load behaviour is gone."""
         for candidate in (str(DATA_DIR), str(DATA_DIR.parent)):
             with self.subTest(candidate=candidate):
                 payload = self.payload()
                 payload["installs"][0]["granted_directories"] = [candidate]
-                with self.assertRaises(JournalError) as raised:
-                    journal_module.from_dict(payload, HOME, data_dir=DATA_DIR)
-                self.assertIn("data directory", str(raised.exception))
+                parsed = journal_module.from_dict(payload, HOME, data_dir=DATA_DIR)
+                self.assertEqual(parsed.installs[0].granted_directories, ())
+                self.assertEqual(parsed.installs[0].quarantined_directories, (candidate,))
 
     def test_granted_directories_the_pegasus_data_directory_still_loads_without_data_dir(self):
         """`data_dir` is optional: a caller with no `FileSystem` port to ask
@@ -500,9 +545,11 @@ class ValidationTest(unittest.TestCase):
         parsed = journal_module.from_dict(payload, HOME, data_dir=DATA_DIR)
         self.assertEqual(parsed.installs[0].granted_directories, (sibling,))
 
-    def test_granted_directories_error_names_the_field(self):
+    def test_granted_directories_not_a_list_error_names_the_field(self):
+        """The one remaining fatal shape -- `granted_directories` itself not
+        being a list -- still names the field in its complaint."""
         payload = self.payload()
-        payload["installs"][0]["granted_directories"] = ["/"]
+        payload["installs"][0]["granted_directories"] = "not-a-list"
         with self.assertRaises(JournalError) as raised:
             journal_module.from_dict(payload, HOME)
         self.assertIn("granted_directories", str(raised.exception))

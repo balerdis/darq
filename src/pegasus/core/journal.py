@@ -203,6 +203,32 @@ class Install:
     a crash, and never confused with a tuple that legitimately holds nothing
     because this install grants no directory of its own."""
 
+    quarantined_directories: tuple[Any, ...] = ()
+    """`granted_directories` entries that `content.validate_granted_directory`
+    refused, preserved exactly as they were read rather than dropped.
+
+    A single hand-edited entry used to make the whole journal unreadable --
+    `_granted_directories_from_dict` raised `JournalError`, which blocked
+    every one of the nine commands that load this journal, `directory
+    revoke` (the one command that could have removed the bad entry) among
+    them. Quarantine breaks that deadlock: an entry the validation refuses
+    is set aside here, untouched, while every entry it accepts still reaches
+    `granted_directories` exactly as before. It grants nothing -- see
+    `Install.granted_directories`'s own docstring and every consumer of that
+    field, none of which ever reads this one -- and only `pegasus repair`
+    (or a hand edit of the journal itself) ever removes an entry from it.
+
+    Held as `Any`, not `str`: an entry that fails validation can be of any
+    JSON type at all (`123`, `null`, `{"a": 1}`, as well as a malformed
+    string), and every one of those is exactly as re-serializable as it was
+    when `json.loads` produced it -- there is no reason to narrow it to a
+    type most of these values were never going to satisfy.
+
+    Additive, the same discipline every other field on this dataclass
+    follows: a journal written before this field existed carries no
+    quarantine at all, and that loads as an empty tuple here, never an
+    invented one."""
+
 
 @dataclass(frozen=True)
 class Journal:
@@ -260,8 +286,14 @@ def _install_to_dict(install: Install) -> dict[str, Any]:
         payload["mcp_bindings"] = dict(install.mcp_bindings)
     if install.granted_mcp:
         payload["granted_mcp"] = list(install.granted_mcp)
-    if install.granted_directories:
-        payload["granted_directories"] = list(install.granted_directories)
+    if install.granted_directories or install.quarantined_directories:
+        # Valid entries first, then quarantined -- deterministic, and it
+        # keeps the common case (no quarantine) byte-identical to before
+        # this field existed.
+        payload["granted_directories"] = [
+            *install.granted_directories,
+            *install.quarantined_directories,
+        ]
     if install.created_dirs:
         payload["created_dirs"] = [str(path) for path in install.created_dirs]
     return payload
@@ -324,6 +356,9 @@ def _install_from_dict(payload: Any, home: Path, data_dir: Path | None) -> Insta
     if not isinstance(cli, str) or not cli:
         raise JournalError("an install needs a cli")
     config_dir = _contained(payload.get("config_dir"), home, f"{cli} config_dir")
+    granted_directories, quarantined_directories = _granted_directories_from_dict(
+        payload.get("granted_directories"), config_dir, cli, data_dir=data_dir
+    )
     return Install(
         cli=cli,
         installed_at=_text(payload, "installed_at", cli),
@@ -333,9 +368,8 @@ def _install_from_dict(payload: Any, home: Path, data_dir: Path | None) -> Insta
         links=tuple(_link_from_dict(item, cli) for item in payload.get("links", [])),
         mcp_bindings=_mcp_bindings_from_dict(payload.get("mcp_bindings"), cli),
         granted_mcp=_granted_mcp_from_dict(payload.get("granted_mcp"), cli),
-        granted_directories=_granted_directories_from_dict(
-            payload.get("granted_directories"), config_dir, cli, data_dir=data_dir
-        ),
+        granted_directories=granted_directories,
+        quarantined_directories=quarantined_directories,
         created_dirs=_created_dirs_from_dict(payload.get("created_dirs"), home, cli),
     )
 
@@ -391,19 +425,31 @@ def _granted_mcp_from_dict(value: Any, cli: str) -> tuple[str, ...]:
 
 def _granted_directories_from_dict(
     value: Any, config_dir: Path, cli: str, *, data_dir: Path | None = None
-) -> tuple[str, ...]:
-    """Absent means a journal from before this field existed -- an empty
-    tuple, not an error and not a fabricated grant. Present, it must be a
-    list of paths that pass `content.validate_granted_directory` exactly as
-    written -- imported rather than restated, the same discipline
+) -> tuple[tuple[str, ...], tuple[Any, ...]]:
+    """Absent means a journal from before this field existed -- two empty
+    tuples, not an error and not a fabricated grant. Present, it must be a
+    list; each entry is checked against `content.validate_granted_directory`
+    -- imported rather than restated, the same discipline
     `_granted_mcp_from_dict` already follows for `_SERVER_KEY`, so the two can
-    never drift apart about what a safe directory grant looks like. A path
-    that could never have come from `directory grant` -- because that
-    validation would have refused it -- can only be a hand edit or a
-    corrupted write, and letting it back in here would replay the exact
-    escalation the validation exists to stop, straight through `update` or
-    `directory revoke`, neither of which ever asks the CLI-level checks
-    again.
+    never drift apart about what a safe directory grant looks like -- and
+    partitioned rather than refused as a whole: an entry it accepts joins the
+    first tuple (`granted_directories`), and one it refuses joins the second
+    (`quarantined_directories`) untouched, exactly as it was read.
+
+    This used to raise `JournalError` the moment any single entry failed
+    validation, which made one hand-edited entry block every command that
+    loads this journal -- including `directory revoke`, the one command that
+    could have removed it. A path that could never have come from `directory
+    grant` -- because that validation would have refused it -- can only be a
+    hand edit or a corrupted write; quarantining it, rather than refusing to
+    load the journal at all, is what lets the rest of the install stay usable
+    while `pegasus repair` (or a hand edit) clears it. The refusal to *grant*
+    such an entry is unchanged -- it never reaches `granted_directories`,
+    still.
+
+    A `granted_directories` value that is not a list at all is a different
+    corruption, with no per-element structure to preserve, and still raises
+    `JournalError` exactly as before.
 
     `data_dir` is threaded through from `from_dict`, which gets it from
     whatever caller can actually answer "where does Pegasus keep its own
@@ -412,15 +458,17 @@ def _granted_directories_from_dict(
     see `validate_granted_directory`'s own docstring for what that skips.
     """
     if value is None:
-        return ()
+        return (), ()
     if not isinstance(value, list):
         raise JournalError(f"{cli}: granted_directories must be a list")
-    try:
-        return tuple(
-            validate_granted_directory(item, config_dir=config_dir, data_dir=data_dir) for item in value
-        )
-    except ContentError as error:
-        raise JournalError(f"{cli}: granted_directories entry is invalid: {error}") from error
+    granted: list[str] = []
+    quarantined: list[Any] = []
+    for item in value:
+        try:
+            granted.append(validate_granted_directory(item, config_dir=config_dir, data_dir=data_dir))
+        except ContentError:
+            quarantined.append(item)
+    return tuple(granted), tuple(quarantined)
 
 
 def _created_dirs_from_dict(value: Any, home: Path, cli: str) -> tuple[Path, ...]:

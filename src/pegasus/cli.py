@@ -292,6 +292,13 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
     uninstall.add_argument("--cli", required=True)
     uninstall.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
+    repair = commands.add_parser(
+        "repair", help="remove journal hazards doctor can only name (quarantined directory entries)"
+    )
+    repair.add_argument("--cli", required=True)
+    repair.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    repair.add_argument("--dry-run", action="store_true", help="report what would be removed without writing anything")
+
     doctor = commands.add_parser("doctor", help="what is supported, what is present, what has drifted")
     doctor.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     doctor.add_argument(
@@ -1534,6 +1541,16 @@ def _merged(
         mcp_bindings={server.name: server.bound_to for server in content.mcp if server.is_bound},
         granted_mcp=tuple(granted_mcp),
         granted_directories=tuple(granted_directories),
+        # Never recomputed here: nothing in the install/update path produces
+        # a quarantined entry -- only a hand edit of the journal does, and
+        # only `directory grant`/`directory revoke`'s own validation (still
+        # a hard refusal, unchanged) stands between a person's input and
+        # `granted_directories` above. Carrying the previous install's
+        # quarantine forward unchanged is what keeps a plain `install` or
+        # `update` from silently discarding it -- the same silent-loss this
+        # change's own journal registry entry says was rejected for
+        # `granted_directories` itself. Only `pegasus repair` ever clears it.
+        quarantined_directories=previous.quarantined_directories if previous is not None else (),
         created_dirs=_recorded_dirs(previous, created_dirs, pruned_dirs),
     )
 
@@ -2116,6 +2133,69 @@ def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]
     }
 
 
+def _repair(arguments, runtime: Runtime) -> dict[str, Any]:
+    return repair(arguments.cli, runtime, dry_run=arguments.dry_run)
+
+
+def repair(cli_id: str, runtime: Runtime, *, dry_run: bool = False) -> dict[str, Any]:
+    """Remove hazards `doctor` can only name, and nothing else.
+
+    Today that means one thing: `granted_directories` entries a hand edit
+    put in the journal that `content.validate_granted_directory` refused --
+    quarantined by `journal._granted_directories_from_dict` rather than
+    blocking the whole journal, named by `doctor` under
+    `directories_quarantined`, and removed here on request.
+
+    Mirrors `uninstall`'s own shape for the write itself: a snapshot of the
+    journal is taken first, so `pegasus restore` can undo this the same way
+    it undoes an uninstall, and the journal is written exactly once. Nothing
+    else is read for writing, and nothing else is written -- a journal whose
+    only problem is a malformed entry is not a reason to touch anything this
+    command was not asked to touch.
+
+    A journal that cannot be read for a reason quarantine does not cover
+    (malformed JSON, a `granted_directories` that is not a list at all) is
+    not caught here: `store.load()` raises `JournalStoreError` straight
+    through, exactly as it does for the other nine call sites, and `main`
+    turns that into the same failure report and the same mention of
+    `restore` every other command gives.
+    """
+    adapter = _adapter(cli_id)
+    store = journal_store(runtime)
+    journal = store.load()
+    install = journal_module.install_for(journal, adapter.id)
+    if install is None:
+        raise CommandError(
+            f"{runtime.identity.display_name} is not recorded as installed in {adapter.id!r}; "
+            f"there is nothing to repair"
+        )
+    quarantined = [repr(item) for item in install.quarantined_directories]
+    if not quarantined:
+        return {"cli": adapter.id, "status": "nothing-to-repair", "removed_quarantined_directories": []}
+    if dry_run:
+        return {
+            "cli": adapter.id,
+            "status": "planned",
+            "removed_quarantined_directories": quarantined,
+        }
+    store.ensure_writable()
+    snapshot = snapshot_store(runtime)
+    snapshot.ensure_writable()
+    try:
+        snapshot.save(capture_paths(runtime.filesystem, [store.path]), taken_at=runtime.now)
+    except SnapshotStoreError as error:
+        raise CommandError(
+            f"a snapshot of the journal could not be taken, so nothing was repaired: {error}"
+        ) from error
+    store.save(journal_module.with_install(journal, replace(install, quarantined_directories=())))
+    return {
+        "cli": adapter.id,
+        "status": "repaired",
+        "removed_quarantined_directories": quarantined,
+        "retention": _retain(snapshot),
+    }
+
+
 def _per_agent_mcp_keys_for(installed, *, display_name: str) -> tuple[frozenset[str], list[str]]:
     """`content_module.per_agent_mcp_keys`, computed against the content this
     installation's own recorded `--mcp` selection would produce, alongside
@@ -2410,6 +2490,17 @@ def _health(
     # already reports, since it names no artifact, no server, and no binding.
     health["directories_granted"] = sorted(install.granted_directories)
 
+    # Its own key, named only when there is something to name: a
+    # `granted_directories` entry a hand edit put there that
+    # `content.validate_granted_directory` refused. It grants nothing --
+    # `quarantined_directories` never reaches `directories_granted` above,
+    # any render, or any other consumer of `Install.granted_directories` --
+    # so this reports the fact of its presence without claiming it does
+    # anything. `repr` because an entry can be of any JSON type at all
+    # (a number, `null`, an object), not only a malformed string.
+    if install.quarantined_directories:
+        health["directories_quarantined"] = [repr(item) for item in install.quarantined_directories]
+
     # Named only when there is something to name: an install whose pruning
     # already reaches everything empty under it has nothing here to say, and
     # a report that always carried this key regardless would be one more
@@ -2640,6 +2731,7 @@ COMMANDS = {
     "update": _update,
     "upgrade": _upgrade,
     "uninstall": _uninstall,
+    "repair": _repair,
     "doctor": _doctor,
     "restore": _restore,
     "models": _models,
@@ -3073,6 +3165,8 @@ def _prose(report: dict[str, Any], *, identity: Identity | None = None) -> str:
         return _mcp_prose(report)
     if command == "directory":
         return _directory_prose(report)
+    if command == "repair":
+        return _repair_prose(report)
 
     pruned = report.get("pruned") or []
     lines = [
@@ -3146,6 +3240,16 @@ def _directory_prose(report: dict[str, Any]) -> str:
         line = f"{report['cli']}: revoked {report['path']}."
         return "\n".join(_and_activation([line], report))
     return "directory: nothing to report."
+
+
+def _repair_prose(report: dict[str, Any]) -> str:
+    if report["status"] == "nothing-to-repair":
+        return f"{report['cli']}: nothing to repair."
+    removed = report["removed_quarantined_directories"]
+    verb = "Would remove" if report["status"] == "planned" else "Removed"
+    lines = [f"{report['cli']}: {verb} {len(removed)} quarantined granted-directory entr{'y' if len(removed) == 1 else 'ies'}:"]
+    lines.extend(f"  {item}" for item in removed)
+    return "\n".join(_and_retention(lines, report))
 
 
 def _and_activation(lines: list[str], report: dict[str, Any]) -> list[str]:
@@ -3225,6 +3329,15 @@ def _cli_prose(entry: dict[str, Any], *, identity: Identity | None = None) -> st
             )
         else:
             line += "\n  No MCP servers configured."
+    if entry.get("directories_quarantined"):
+        items = entry["directories_quarantined"]
+        n = len(items)
+        line += (
+            f"\n  {n} granted-directory entr{'y' if n == 1 else 'ies'} in the journal that could not "
+            f"be validated and grant nothing to any agent:"
+        )
+        line += "".join(f"\n    {item}" for item in items)
+        line += f"\n    `{identity.program_name} repair --cli {entry['cli']}` removes them."
     if entry.get("unprunable_empty_directories"):
         paths = entry["unprunable_empty_directories"]
         n = len(paths)

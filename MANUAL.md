@@ -108,6 +108,8 @@ pegasus doctor --start-mcp-servers
 
 Tiene sentido correrlo después de instalar servidores MCP, o cuando un cliente reporta que uno no conecta. A diferencia de `doctor` a secas, este flag ejecuta los comandos que la configuración tiene guardados — por eso no es el comportamiento por defecto. Por servidor informa `ok` (contestó el handshake), `timeout` (arrancó pero nunca contestó), `exited` (terminó antes de contestar), `invalid` (contestó algo que no es una respuesta MCP válida) o `not-found` (no se pudo arrancar); un servidor configurado como remoto se reporta como tal y no se arranca.
 
+Si `doctor` reporta entradas en `directories_quarantined` -- una entrada de `granted_directories` editada a mano en el journal que no pasó la validación y por eso no le concede nada a ningún agente --, `pegasus repair --cli opencode` las saca en una sola escritura, con `--dry-run` disponible para ver antes qué se va a remover. Toma un snapshot del journal antes de escribir, así que `pegasus restore` deshace un `repair` igual que deshace cualquier otro comando.
+
 ## Deshacer
 
 - `pegasus restore [generación]` vuelve al estado exacto anterior a un comando (o a una generación puntual del historial de snapshots).
