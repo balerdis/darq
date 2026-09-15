@@ -35,8 +35,8 @@ Three gates, checked in order; fail any one and do not delegate. Then two tests 
 - **Gate 2 — do I have at least two genuinely independent parts?** A fan-out of width 1 is a
   hand-off: handing your task to one other agent and signing a result you did not produce. Fan-out
   distributes work and keeps accountability; a hand-off transfers the work without transferring the
-  signature. The phase boundary already forbids handing off the whole phase; this gate is the same
-  reasoning applied to any one part of it.
+  signature. Whatever governs you already forbids handing off your whole assignment; this gate is the
+  same reasoning applied to any one part of it.
 - **Test 3 — does my report to my parent name what I had to read, or only the conclusion I drew?**
   Do not estimate a ratio; classify the deliverable. An **answer mission** (find, verify, explore,
   review, decide) has an output that is a conclusion, so everything read is noise by construction —
@@ -56,10 +56,10 @@ Three gates, checked in order; fail any one and do not delegate. Then two tests 
 
 ## Fan-out is help, never offloading
 
-Made explicit here because Gate 2 already implies it and it must never be lost: fan-out is help, never
-offloading. The agent that fans out keeps the central work and signs the result; it may distribute
-parts, never the whole. Name the failure it prevents: an agent that delegates everything and does none
-of the work has become an orchestrator it was not asked to be.
+Gate 2 already implies this, and it is the first thing lost under pressure: fan-out is help, never
+offloading. The agent that fans out keeps the central work and signs the result; it distributes parts,
+never the whole. The failure this prevents is an agent that delegates everything and does none of the
+work — it has become an orchestrator it was not asked to be.
 
 ## How many parts
 
@@ -78,11 +78,10 @@ code, and nothing is committed without permission.
 
 ## Fail-closed behavior (deliberate departure)
 
-This file governs whether a fan-out happens, not whether the phase's own work happens. Unlike a
-required loading gate elsewhere in this engine, an unreadable or missing copy of this file does not
-block the phase: it blocks delegation. Fall back to doing the work yourself, sequentially, and say so
-in your report, rather than returning `blocked` for a decision the phase can make without this file at
-all.
+This file governs whether a fan-out happens, not whether your own work happens. Unlike a required
+loading gate elsewhere in this engine, an unreadable or missing copy of this file does not block your
+assignment: it blocks delegation. Fall back to doing the work yourself, sequentially, and say so in
+your report, rather than returning `blocked` for a decision you can make without this file at all.
 
 ## Runtime note: a refused `task` call
 
