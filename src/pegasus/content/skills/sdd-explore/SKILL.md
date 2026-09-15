@@ -61,39 +61,13 @@ The orchestrator will give you:
 ### Step 1: Load Skills
 Follow **Section A** from `_shared/sdd-phase-common.md`.
 
-### Step 2: Understand the Request
+### Step 2: Explore
 
-Parse what the user wants to explore:
-- Is this a new feature? A bug fix? A refactor?
-- What domain does it touch?
+Follow `_shared/exploration-craft.md` for how to understand the request, investigate the codebase,
+and compare approaches. If that reference is missing or unreadable, do the exploration with your
+own judgement and say so in your report — an unreadable craft reference never blocks the phase.
 
-### Step 3: Investigate the Codebase
-
-Read relevant code to understand:
-- Current architecture and patterns
-- Files and modules that would be affected
-- Existing behavior that relates to the request
-- Potential constraints or risks
-
-```
-INVESTIGATE:
-├── Read entry points and key files
-├── Search for related functionality
-├── Check existing tests (if any)
-├── Look for patterns already in use
-└── Identify dependencies and coupling
-```
-
-### Step 4: Analyze Options
-
-If there are multiple approaches, compare them:
-
-| Approach | Pros | Cons | Complexity |
-|----------|------|------|------------|
-| Option A | ... | ... | Low/Med/High |
-| Option B | ... | ... | Low/Med/High |
-
-### Step 5: Persist Artifact
+### Step 3: Persist Artifact
 
 **This step is MANDATORY when tied to a named change — do NOT skip it.**
 
@@ -102,38 +76,12 @@ Follow **Section C** from `_shared/sdd-phase-common.md`.
 - topic_key: `sdd/{change-name}/explore` (or `sdd/explore/{topic-slug}` if standalone)
 - type: `architecture`
 
-### Step 6: Return Structured Analysis
+### Step 4: Return Structured Analysis
 
-Return EXACTLY this format to the orchestrator (and write the same content to `exploration.md` if saving):
+Return the report shape from `_shared/exploration-craft.md` to the orchestrator (and write the same
+content to `exploration.md` if saving), with one field appended at the end:
 
 ```markdown
-## Exploration: {topic}
-
-### Current State
-{How the system works today relevant to this topic}
-
-### Affected Areas
-- `path/to/file.ext` — {why it's affected}
-- `path/to/other.ext` — {why it's affected}
-
-### Approaches
-1. **{Approach name}** — {brief description}
-   - Pros: {list}
-   - Cons: {list}
-   - Effort: {Low/Medium/High}
-
-2. **{Approach name}** — {brief description}
-   - Pros: {list}
-   - Cons: {list}
-   - Effort: {Low/Medium/High}
-
-### Recommendation
-{Your recommended approach and why}
-
-### Risks
-- {Risk 1}
-- {Risk 2}
-
 ### Ready for Proposal
 {Yes/No — and what the orchestrator should tell the user}
 ```
@@ -141,11 +89,7 @@ Return EXACTLY this format to the orchestrator (and write the same content to `e
 ## Rules
 
 - The ONLY file you MAY create is `exploration.md` inside the change folder (if a change name is provided)
-- DO NOT modify any existing code or files
-- ALWAYS read real code, never guess about the codebase
-- Keep your analysis CONCISE - the orchestrator needs a summary, not a novel
-- If you can't find enough information, say so clearly
-- If the request is too vague to explore, say what clarification is needed
+- Follow the exploration rules in `_shared/exploration-craft.md`
 - Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
 
 <!-- pegasus-local:cbm-protocol -->

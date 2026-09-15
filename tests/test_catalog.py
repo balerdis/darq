@@ -465,7 +465,12 @@ class ShippedCatalogTest(unittest.TestCase):
         # so a sub-agent's own `task` call is not refused by OpenCode's
         # default depth of 1. No file of its own -- it is a bare value, not
         # an asset -- so the file count does not move with it.
-        self.assertEqual((len(files), len(keys)), (90, 24))
+        # 93, not 90: `_shared/exploration-craft.md`, `_shared/verification-
+        # craft.md` and `_shared/implementation-craft.md` are the three craft
+        # references `sdd-explore`, `sdd-verify` and `sdd-apply` now point at
+        # instead of restating. No settings key of their own -- a lazy-loaded
+        # reference is a file, never a config entry.
+        self.assertEqual((len(files), len(keys)), (93, 24))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:

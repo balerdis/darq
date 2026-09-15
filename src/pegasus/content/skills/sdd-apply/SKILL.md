@@ -72,30 +72,26 @@ Follow **Section A** from `_shared/sdd-phase-common.md`.
 Before writing ANY code:
 1. Read the structured status and confirm `applyState: ready`
 2. Read every applicable artifact path/topic in `contextFiles`
-3. Read the specs — understand WHAT the code must do
-4. Read the design — understand HOW to structure the code
-5. Read existing code in affected files — understand current patterns
-6. Check the project's coding conventions from `config.yaml`
+3. Follow the "Read Before You Write" order in `_shared/implementation-craft.md` (specs, design,
+   existing code, conventions). If that reference is missing or unreadable, read in your own
+   judgement's order and say so in your report — an unreadable craft reference never blocks the phase.
 
 #### Step 2a: Enforce Review Workload Decision
 
-Before implementing, inspect the tasks artifact for `Review Workload Forecast`.
+Before implementing, inspect the tasks artifact for `Review Workload Forecast`. The budget, the
+chain strategies, and how to keep a slice reviewable are owned by "Keeping a Diff Reviewable" in
+`_shared/implementation-craft.md`.
 
-If the forecast says any of the following:
+If the forecast says any of `400-line budget risk: High`, `Chained PRs recommended: Yes`, or
+`Decision needed before apply: Yes`, confirm the orchestrator/user provided a resolved delivery path
+before implementing:
 
-- `400-line budget risk: High`
-- `Chained PRs recommended: Yes`
-- `Decision needed before apply: Yes`
-
-Then you MUST confirm the orchestrator/user provided a resolved delivery path:
-
-1. **`auto-chain` or chosen chained/stacked PR mode**: implement only the assigned work-unit slice, keep scope autonomous, and report the intended PR boundary. Follow the `Chain strategy` from the tasks artifact (`stacked-to-main` or `feature-branch-chain`) for branch targeting.
+1. **`auto-chain` or chosen chained/stacked PR mode**: follow the `Chain strategy` from the tasks artifact.
 2. **`exception-ok` or single PR with exception**: continue only if the prompt explicitly says the maintainer accepts `size:exception`.
 3. **`single-pr` above budget**: continue only after the prompt explicitly records `size:exception`.
 
-Also check for `Chain strategy` in the tasks artifact. If it is `pending` the question was reached and left open, which is not an answer: STOP and return `blocked`. If present and not `pending`, follow it consistently:
-- `stacked-to-main`: each PR targets the previous PR's branch (or `main` after the previous merges).
-- `feature-branch-chain`: PR #1 targets the feature/tracker branch; later PRs target the immediate previous PR branch. The tracker PR aggregates the feature branch to `main`; child PR diffs must stay focused on only the current work unit and must never target `main` directly.
+Also check for `Chain strategy` in the tasks artifact. If it is `pending` the question was reached and
+left open, which is not an answer: STOP and return `blocked`.
 
 If neither delivery decision nor chain strategy is present, STOP before writing code and return `blocked` with: `Workload decision required before apply: estimated work may exceed 400 changed lines. Ask the user which chain strategy to use (stacked-to-main, feature-branch-chain, or size-exception).`
 
@@ -134,44 +130,18 @@ Resolve mode:
 
 **Key principle**: If Strict TDD Mode is not active, ZERO TDD instructions are loaded. The `sdd-apply/strict-tdd.md` module is never read, never processed, never consumes tokens.
 
-#### Hard Gate (Strict TDD Only)
-
-If Strict TDD Mode is active (either from orchestrator injection or self-discovery):
-- You MUST produce a **TDD Cycle Evidence** table in your apply-progress artifact
-- Each task row MUST have: RED (test written first) → GREEN (implementation passes) → REFACTOR columns
-- If you complete a task WITHOUT writing tests first, mark it as FAILED in the evidence table
-- The verify phase WILL reject your work if the TDD Evidence table is missing or incomplete
-
-**There is no silent fallback.** If you resolved Strict TDD as active, you follow it or you report failure. You do NOT quietly switch to Standard Mode.
-
-#### Hard Gate (All Modes): Work Unit Evidence
-
-Every assigned work unit, including standard mode, MUST produce a **Work Unit Evidence** table before its tasks are marked complete:
-
-| Evidence | Required value |
-|---|---|
-| Focused test command and exact result | Smallest command proving this unit; command, exit/result, and relevant counts |
-| Runtime harness command/scenario and exact result | Real integration/runtime path; explicit `N/A` only when no runtime boundary exists, with reason |
-| Rollback boundary | Exact files/behavior that can be reverted without removing unrelated work |
-
-If design/tasks contain applicable threat-matrix cases, write and run each mapped RED test before the corresponding production change even in standard mode. Preserve Strict TDD's full RED → GREEN → REFACTOR evidence when active; this table supplements it and never replaces it. Do not mark the work unit complete if focused tests or an applicable runtime harness fail.
+The Strict TDD hard gate, its evidence table, and the all-modes Work Unit Evidence table are owned
+by "Test-Driven Discipline" in `_shared/implementation-craft.md`. If that reference is missing or
+unreadable, apply your own judgement for evidence discipline and say so in your report — an
+unreadable craft reference never blocks the phase.
 
 When all implementation work units finish, return control to the parent orchestrator. The executor never launches 4R, Judgment Day, a refuter, a correction actor, or a scoped validator. The parent may delegate fresh-context `sdd-verify` when requirements, tests, or change impact need verification.
 
 ### Step 4: Implement Tasks (Standard Workflow)
 
-This step is used when Strict TDD Mode is NOT active:
-
-```
-FOR EACH TASK:
-├── Read the task description
-├── Read relevant spec scenarios (these are your acceptance criteria)
-├── Read the design decisions (these constrain your approach)
-├── Read existing code patterns (match the project's style)
-├── Write the code
-├── Mark task as complete [x] in the persisted tasks artifact immediately
-└── Note any issues or deviations
-```
+This step is used when Strict TDD Mode is NOT active. Follow the "Standard Task Loop" in
+`_shared/implementation-craft.md`, marking each task complete `[x]` in the persisted tasks artifact
+immediately as you go.
 
 ### Step 5: Mark Tasks Complete
 
@@ -250,19 +220,17 @@ If none, say "None."}
 
 ## Rules
 
-- ALWAYS read specs before implementing — specs are your acceptance criteria
-- ALWAYS follow the design decisions — don't freelance a different approach
-- ALWAYS match existing code patterns and conventions in the project
+The implementation rules — reading specs and design, matching conventions, not freelancing, noting
+deviations instead of hiding them, stopping when blocked, PR-slice discipline — are owned by
+`_shared/implementation-craft.md`. If that reference is missing or unreadable, apply your own
+judgement and say so in your report.
+
+This phase adds, on top of that:
+
 - ALWAYS consume or produce structured status before implementation; do not infer readiness from conversation alone
 - STOP on `applyState: blocked` and do not edit; STOP on unsafe `actionContext` or edit roots
 - In `openspec` mode, mark tasks complete in `tasks.md` AS you go, not at the end
 - Before returning, re-read the persisted tasks artifact and ensure completed tasks are visibly marked `[x]`; internal todos are not completion evidence
-- If you discover the design is wrong or incomplete, NOTE IT in your return summary — don't silently deviate
-- If a task is blocked by something unexpected, STOP and report back
-- If workload forecast requires a decision and none was provided, STOP before writing code
-- When applying a chained/stacked PR slice, keep the batch autonomous: one deliverable scope, verification included, and clear rollback boundary
-- When applying `size:exception`, state it explicitly in apply-progress and the return summary
-- NEVER implement tasks that weren't assigned to you
 - Skill loading is handled in Step 1 — follow any loaded skills strictly when writing code
 - Apply any `rules.apply` from `openspec/config.yaml`
 - If Strict TDD Mode is active (Step 3), load `sdd-apply/strict-tdd.md` and follow its cycle INSTEAD of Step 4
