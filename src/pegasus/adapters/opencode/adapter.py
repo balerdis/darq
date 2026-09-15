@@ -289,6 +289,16 @@ class Adapter:
                 pointer="/share",
                 value="disabled",
             ),
+            # A sub-agent's `task` call is refused unless this is raised above
+            # OpenCode's own default of 1. 10 is not a policy value -- it is a
+            # circuit breaker: high enough that no real delegation depth ever
+            # hits it, finite so a pathological delegation loop still ends.
+            ConfigKeyArtifact(
+                id="own:subagent-depth",
+                path=layout.settings_file,
+                pointer="/subagent_depth",
+                value=10,
+            ),
         ]
         return artifacts
 

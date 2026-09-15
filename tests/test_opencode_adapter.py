@@ -1117,7 +1117,15 @@ class OwnArtifactsTest(unittest.TestCase):
 
     def test_settings_are_appended_not_replaced(self):
         pointers = {item.pointer for item in only(self.artifacts, ConfigKeyArtifact)}
-        self.assertEqual(pointers, {"/skills/paths/-", "/plugin/-", "/share"})
+        self.assertEqual(
+            pointers, {"/skills/paths/-", "/plugin/-", "/share", "/subagent_depth"}
+        )
+
+    def test_subagent_depth_is_rendered_as_ten(self):
+        """10 is a circuit breaker, not a policy: high enough never to bind in
+        real work, finite so a pathological delegation loop still terminates."""
+        keys = {item.pointer: item.value for item in only(self.artifacts, ConfigKeyArtifact)}
+        self.assertEqual(keys["/subagent_depth"], 10)
 
     def test_everything_stays_inside_the_configuration_root(self):
         for item in self.artifacts:

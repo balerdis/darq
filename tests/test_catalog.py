@@ -461,7 +461,11 @@ class ShippedCatalogTest(unittest.TestCase):
         # installed under this distribution's own derived name. It carries no
         # settings key of its own -- the plugin directory is appended once, for
         # every plugin at a time -- so the key count does not move with it.
-        self.assertEqual((len(files), len(keys)), (90, 23))
+        # 24, not 23: `/subagent_depth` is the top-level key Pegasus now owns
+        # so a sub-agent's own `task` call is not refused by OpenCode's
+        # default depth of 1. No file of its own -- it is a bare value, not
+        # an asset -- so the file count does not move with it.
+        self.assertEqual((len(files), len(keys)), (90, 24))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:

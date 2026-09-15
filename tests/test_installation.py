@@ -118,6 +118,22 @@ class InstallAndRetireTest(_RealHomeTestCase):
         self.assertTrue(plugin.path.is_file(), plugin.path)
         self.assertIn(plugin.id, {record.id for record in applied.records})
 
+    def test_subagent_depth_is_ten_and_claimed(self):
+        """OpenCode refuses `task` from a sub-agent unless `subagent_depth` is
+        raised above its default of 1. Pegasus owns this top-level key at 10,
+        a circuit breaker rather than a policy value, and the key must be
+        claimed in the journal the same as any other owned key or `uninstall`
+        would leave it behind forever.
+        """
+        import json
+
+        applied = self.install()
+        settings = self.layout.settings_file
+        self.assertIsNotNone(settings)
+        document = json.loads(settings.read_text(encoding="utf-8"))
+        self.assertEqual(document["subagent_depth"], 10)
+        self.assertIn("own:subagent-depth", {record.id for record in applied.records})
+
     def test_installing_twice_changes_nothing_the_second_time(self):
         """Every artifact is a collision the second time, including the appends."""
         self.install()
