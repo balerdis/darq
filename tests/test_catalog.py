@@ -477,7 +477,11 @@ class ShippedCatalogTest(unittest.TestCase):
         # 27, not 24: `agent:pegasus-explorer`, `agent:pegasus-verifier` and
         # `agent:pegasus-implementer` are their config-key entries, alongside
         # their files.
-        self.assertEqual((len(files), len(keys)), (96, 27))
+        # 97, not 96: `_shared/sdd-applicability.md` owns the question nothing
+        # in the product owned -- whether a request is SDD work at all -- which
+        # the orchestrator body now carries the compact IF for and points here
+        # for the rest. A lazy-loaded reference is a file, never a config entry.
+        self.assertEqual((len(files), len(keys)), (97, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:
