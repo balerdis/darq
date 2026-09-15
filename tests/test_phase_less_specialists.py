@@ -79,12 +79,56 @@ AUTHORITY_CLAIM = re.compile(r"\bsole\b.{0,60}\bauthority\b", re.IGNORECASE | re
 
 #: A body that carries identity and a compact IF fits in this; a body that
 #: inlined the craft it was told to point at does not. Measured against the
-#: bodies as written, with room to breathe.
-BODY_LINE_CEILING = 46
+#: prose as written (31-32 lines), with room to breathe. Front matter is not
+#: counted: it is a fixed declaration block, not the lazy-load contract this
+#: budget exists to hold.
+BODY_LINE_CEILING = 38
+
+
+def whole(name: str) -> str:
+    """The shipped file, front matter included.
+
+    For ABSENCE checks. A phase envelope or a fail-closed word is just as wrong
+    in a `description:` as in the prose, so forbidding it everywhere is strictly
+    stronger than forbidding it in one half.
+    """
+    return (AGENTS / f"{name}.md").read_text(encoding="utf-8")
+
+
+def prose_of(text: str) -> str:
+    """Everything after the front matter block."""
+    parts = text.split("---\n", 2)
+    return parts[2] if len(parts) == 3 else parts[0]
+
+
+def description_of(text: str) -> str:
+    """The one front-matter line a contract may legitimately also live on."""
+    parts = text.split("---\n", 2)
+    front = parts[1] if len(parts) == 3 else ""
+    return next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in front.splitlines()
+            if line.startswith("description:")
+        ),
+        "",
+    )
 
 
 def body(name: str) -> str:
-    return (AGENTS / f"{name}.md").read_text(encoding="utf-8")
+    """The prose only, for PRESENCE checks.
+
+    This helper used to return the whole file, which made every presence check
+    satisfiable by the `description:` line. An adversarial review removed every
+    occurrence of "what changed" from `pegasus-implementer.md`'s prose, left its
+    description untouched, and `WhatEachOneReturnsTest` stayed fully green. A
+    guard about what the agent is told now reads what the agent is told.
+    """
+    return prose_of(whole(name))
+
+
+def description(name: str) -> str:
+    return description_of(whole(name))
 
 
 def content_documents() -> dict[Path, str]:
@@ -188,12 +232,12 @@ class NoPhaseEnvelopeTest(unittest.TestCase):
         for name in SPECIALISTS:
             for marker in PHASE_MARKERS:
                 with self.subTest(agent=name, marker=marker):
-                    self.assertNotIn(marker, body(name))
+                    self.assertNotIn(marker, whole(name))
 
     def test_no_specialist_assumes_the_artifact_chain(self):
         for name in SPECIALISTS:
             with self.subTest(agent=name):
-                text = body(name)
+                text = whole(name)
                 self.assertNotIn("persistence-contract.md", text)
                 self.assertNotIn("artifact store", text.lower())
 
@@ -219,34 +263,92 @@ class CraftIsPointedAtNotRestatedTest(unittest.TestCase):
 
     def test_the_craft_pointer_fails_open(self):
         """A craft reference is a lazy-loaded reference, not a required gate:
-        an unreadable one costs judgement, never the assignment."""
+        an unreadable one costs judgement, never the assignment.
+
+        Presence is asserted on the prose -- that is where the agent is told
+        what to do -- and absence on the whole file, because a fail-closed word
+        would be just as wrong on a `description:` line."""
         for name in SPECIALISTS:
             with self.subTest(agent=name):
-                text = body(name)
-                self.assertIn("missing or unreadable", text)
-                self.assertNotIn("blocked", text)
-                self.assertNotIn("STOP", text)
+                self.assertIn("missing or unreadable", body(name))
+                self.assertNotIn("blocked", whole(name))
+                self.assertNotIn("STOP", whole(name))
 
 
 class WhatEachOneReturnsTest(unittest.TestCase):
     """The single contract that separates a specialist from its SDD namesake."""
 
     def test_the_verifier_returns_evidence_and_says_it_declares_nothing_ready(self):
-        text = body("pegasus-verifier")
-        self.assertIn("I do not declare anything ready", text)
-        self.assertIn("evidence", text.lower())
+        self.assertIn("I do not declare anything ready", body("pegasus-verifier"))
+        self.assertIn("evidence", body("pegasus-verifier").lower())
 
     def test_the_verifier_makes_no_readiness_authority_claim(self):
-        self.assertIsNone(AUTHORITY_CLAIM.search(body("pegasus-verifier")))
+        self.assertIsNone(AUTHORITY_CLAIM.search(whole("pegasus-verifier")))
 
     def test_sdd_verify_still_makes_the_claim_the_specialist_refuses(self):
         """The contrast is the point: if the claim vanished from `sdd-verify`,
         the assertion above would be measuring an empty distinction."""
-        self.assertIsNotNone(AUTHORITY_CLAIM.search(body("sdd-verify")))
+        self.assertIsNotNone(AUTHORITY_CLAIM.search(whole("sdd-verify")))
 
     def test_the_explorer_returns_a_finding_and_the_implementer_what_changed(self):
         self.assertIn("finding", body("pegasus-explorer").lower())
         self.assertIn("what changed", body("pegasus-implementer").lower())
+
+    def test_each_contract_is_advertised_where_a_caller_reads_it_too(self):
+        """The one place a contract legitimately lives twice.
+
+        A caller picking an agent sees the `description:`, never the prose, so
+        what each one returns has to be stated there as well. Asserted on
+        purpose rather than inherited from a helper that happened to read the
+        whole file -- that accident is what let the prose lose the contract
+        while every guard stayed green."""
+        for name, promise in (
+            ("pegasus-explorer", "finding"),
+            ("pegasus-verifier", "evidence"),
+            ("pegasus-implementer", "what changed"),
+        ):
+            with self.subTest(agent=name):
+                self.assertIn(promise, description(name).lower())
+
+
+class HelperReadsTheBodyTest(unittest.TestCase):
+    """The split itself, held against the leak it once had.
+
+    `body()` returned the whole file, so every PRESENCE check in this module was
+    satisfiable by a word on the `description:` line. These pin the contract so
+    the split cannot quietly collapse back. Asserted against a literal fixture
+    rather than a file written into the shipped content tree -- the functions
+    under test take text, so there is nothing to stage on disk.
+    """
+
+    FIXTURE = (
+        "---\n"
+        "name: probe\n"
+        "description: returns a finding about the thing\n"
+        "mode: subagent\n"
+        "---\n"
+        "\n"
+        "# Probe\n"
+        "\n"
+        "Prose that says something else entirely.\n"
+    )
+
+    def test_the_body_excludes_the_front_matter(self):
+        text = prose_of(self.FIXTURE)
+        self.assertIn("Prose that says something else entirely.", text)
+        self.assertNotIn("description:", text)
+        self.assertNotIn("returns a finding", text)
+
+    def test_the_description_is_read_on_its_own(self):
+        self.assertEqual(description_of(self.FIXTURE), "returns a finding about the thing")
+
+    def test_every_shipped_specialist_actually_has_both_halves(self):
+        """Guards against a parse that silently returns "" for everything."""
+        for name in SPECIALISTS:
+            with self.subTest(agent=name):
+                self.assertTrue(body(name).strip())
+                self.assertTrue(description(name).strip())
+                self.assertNotIn("description:", body(name))
 
 
 if __name__ == "__main__":
