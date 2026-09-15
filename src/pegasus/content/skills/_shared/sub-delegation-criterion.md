@@ -2,23 +2,24 @@
 
 ## Scope
 
-Owns whether and how an SDD phase agent fans work out to `pegasus-general` once its own boundary
-(`_shared/sdd-phase-common.md`) has decided that delegation is even on the table for this task. This
-file is read only when that gate is open — never eagerly, and never by an agent merely loading its
-phase skill.
+Owns whether and how ANY agent, at ANY level, fans part of its own work out — to whatever target(s)
+its own descriptor permits — once delegation is already on the table for this task. This file is read
+only when that question is live — never eagerly, and never merely because an agent loaded some other
+skill.
 
 ## Authority
 
 This file is the canonical owner of the delegation criterion: the gates, the tests, how many parts to
-cut work into, and the rule for writers working in parallel. The phase boundary owns only the
-compact IF — fan out to `pegasus-general` or not — and points here for the HOW.
+cut work into, and the rule for writers working in parallel, for any agent applying it. Whatever
+governs a given caller (a phase boundary, an agent's own body) owns only the compact IF — fan out or
+not, and to which targets its own descriptor permits — and points here for the HOW.
 
 ## The criterion
 
 The test behind every delegation decision in this engine, at any level: does doing this yourself
 inflate your own context without need? Reading forty files has the same answer whether the reader is
-the orchestrator or a phase agent — the test is scale-free, and this file exists so a phase agent
-gets to use it too, not a permission-free-for-all in its place.
+the orchestrator or any other agent — the test is scale-free, and this file exists so any agent that
+may fan out gets to use it too, not a permission-free-for-all in its place.
 
 Three gates, checked in order; fail any one and do not delegate. Then two tests decide.
 
@@ -53,6 +54,13 @@ Three gates, checked in order; fail any one and do not delegate. Then two tests 
   counter: every level must compress, a child that fans out makes its parent's merge a merge of
   merges, and a level that does not compress is the wrong level to delegate at.
 
+## Fan-out is help, never offloading
+
+Made explicit here because Gate 2 already implies it and it must never be lost: fan-out is help, never
+offloading. The agent that fans out keeps the central work and signs the result; it may distribute
+parts, never the whole. Name the failure it prevents: an agent that delegates everything and does none
+of the work has become an orchestrator it was not asked to be.
+
 ## How many parts
 
 As many as the work's natural seams, not a fixed number; the ceiling comes from test 4, not a
@@ -75,3 +83,8 @@ required loading gate elsewhere in this engine, an unreadable or missing copy of
 block the phase: it blocks delegation. Fall back to doing the work yourself, sequentially, and say so
 in your report, rather than returning `blocked` for a decision the phase can make without this file at
 all.
+
+## Runtime note: a refused `task` call
+
+If a `task` call comes back with `Subagent depth limit reached`, that is a recoverable tool error, not
+a reason to stop. Do the work yourself, sequentially, and say so in your report.
