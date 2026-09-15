@@ -51,37 +51,17 @@ If there are multiple approaches, compare them:
 
 A concise exploration report carries these sections, in order:
 
-```markdown
-## Exploration: {topic}
+- **Current State** — how the system works today, as it relates to this topic.
+- **Affected Areas** — one line per file or module, each naming why it is affected.
+- **Approaches** — each with a name, a one-line description, its pros, its cons, and an effort of
+  Low, Medium or High.
+- **Recommendation** — the approach you would take, and why.
+- **Risks** — what could go wrong, one line each.
 
-### Current State
-{How the system works today relevant to this topic}
-
-### Affected Areas
-- `path/to/file.ext` — {why it's affected}
-- `path/to/other.ext` — {why it's affected}
-
-### Approaches
-1. **{Approach name}** — {brief description}
-   - Pros: {list}
-   - Cons: {list}
-   - Effort: {Low/Medium/High}
-
-2. **{Approach name}** — {brief description}
-   - Pros: {list}
-   - Cons: {list}
-   - Effort: {Low/Medium/High}
-
-### Recommendation
-{Your recommended approach and why}
-
-### Risks
-- {Risk 1}
-- {Risk 2}
-```
-
-A caller that wraps this report in a larger contract (a phase envelope, a next-step field, a
-persistence rule) appends to this shape; it does not need to replace it.
+The heading these sections are returned under is not this file's to choose. A phase skill names the
+envelope its phase must emit; an agent with no phase returns the same sections under whatever its own
+result identity defines. A caller that wraps this report in a larger contract (a phase envelope, a
+next-step field, a persistence rule) appends to this shape; it does not need to replace it.
 
 ## Rules
 

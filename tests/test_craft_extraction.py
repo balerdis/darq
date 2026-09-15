@@ -16,7 +16,16 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+from test_phase_less_specialists import PHASE_MARKERS
+
 SKILLS = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills"
+
+#: The phase-result headings, derived from the set the specialist guard already
+#: forbids in a phase-less agent body rather than retyped here -- a future phase
+#: marker that is a heading is covered without anyone remembering this file.
+#: Filtered to the heading-shaped members: `PHASE_MARKERS` also carries
+#: "Required loading gate" and "return `blocked`", which are not envelopes.
+ENVELOPE_HEADINGS = tuple(marker for marker in PHASE_MARKERS if marker.startswith("## "))
 
 
 def all_text() -> dict[Path, str]:
@@ -74,6 +83,63 @@ class CraftIsNotRestatedTest(unittest.TestCase):
     def test_the_work_unit_evidence_gate_lives_only_in_implementation_craft(self):
         found = occurrences("MUST produce a **Work Unit Evidence** table")
         self.assertEqual(found, [SKILLS / "_shared" / "implementation-craft.md"])
+
+
+class CraftOwnsNoPhaseEnvelopeTest(unittest.TestCase):
+    """A craft file owns the shape of a good report; a phase skill owns the
+    envelope its phase must emit.
+
+    `exploration-craft.md` used to reproduce the literal heading
+    `## Exploration: {topic}` inside its `## Report Shape` fence -- the exact
+    string a phase-less specialist is forbidden to emit -- so `pegasus-explorer`
+    was pointed at a ready-made template of the one thing it may not produce.
+    The agent body's prose mitigation ("borrow the sections that fit") is
+    advisory and untestable; this is the fact instead.
+
+    What is forbidden is REPRODUCING the envelope as a heading -- a line that
+    starts with `## ` and carries the marker -- not mentioning it. The
+    distinction is load-bearing and it is why `verification-craft.md` passes:
+    its `## Output Contract` says "Return `## Verification Report` with
+    change/subject, mode, ..." inline in prose. Naming the output contract is
+    exactly what a craft file should do; handing over a heading to copy is not.
+    """
+
+    def craft_files(self) -> list[Path]:
+        return sorted(SKILLS.glob("_shared/*-craft.md"))
+
+    def test_the_craft_files_are_found(self):
+        """Without this the scan below would pass by finding nothing."""
+        self.assertEqual(
+            [path.name for path in self.craft_files()],
+            ["exploration-craft.md", "implementation-craft.md", "verification-craft.md"],
+        )
+
+    def test_the_forbidden_set_is_derived_and_non_empty(self):
+        self.assertTrue(ENVELOPE_HEADINGS, "no heading-shaped marker was derived")
+        self.assertIn("## Exploration: {topic}", ENVELOPE_HEADINGS)
+        self.assertIn("## Verification Report", ENVELOPE_HEADINGS)
+
+    def test_no_craft_file_reproduces_a_phase_envelope_heading(self):
+        for path in self.craft_files():
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if not line.strip().startswith("## "):
+                    continue
+                for heading in ENVELOPE_HEADINGS:
+                    if heading in line:
+                        self.fail(f"{path.name}:{number} reproduces the phase envelope {heading!r}")
+
+    def test_the_phase_skill_still_owns_the_envelope_it_must_emit(self):
+        """Moved, not deleted: `sdd-explore` emits exactly the envelope it
+        emitted before this change."""
+        text = (SKILLS / "sdd-explore" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Exploration: {topic}", text)
+
+    def test_the_craft_still_owns_the_sections_that_report_carries(self):
+        """The requirement moved house; it did not evaporate."""
+        text = (SKILLS / "_shared" / "exploration-craft.md").read_text(encoding="utf-8")
+        for section in ("Current State", "Affected Areas", "Approaches", "Recommendation", "Risks"):
+            with self.subTest(section=section):
+                self.assertIn(section, text)
 
 
 if __name__ == "__main__":

@@ -79,12 +79,33 @@ Follow **Section C** from `_shared/sdd-phase-common.md`.
 ### Step 4: Return Structured Analysis
 
 Return the report shape from `_shared/exploration-craft.md` to the orchestrator (and write the same
-content to `exploration.md` if saving), with one field appended at the end:
+content to `exploration.md` if saving), under this phase's envelope heading and with one field
+appended at the end. The envelope belongs to this phase, not to the craft reference:
 
 ```markdown
+## Exploration: {topic}
+
+### Current State
+{...}
+
+### Affected Areas
+{...}
+
+### Approaches
+{...}
+
+### Recommendation
+{...}
+
+### Risks
+{...}
+
 ### Ready for Proposal
 {Yes/No — and what the orchestrator should tell the user}
 ```
+
+The section bodies are defined by `_shared/exploration-craft.md`; this block fixes the envelope
+heading and the order, and adds `Ready for Proposal`.
 
 ## Rules
 
