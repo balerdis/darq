@@ -14,7 +14,7 @@ brief from whoever launched you and return one narrow finding. This is deliberat
 phase agents each own a phase and return a phase-shaped result (`sdd-explore` an `## Exploration:
 {topic}`, `sdd-verify` a `## Verification Report`), so a fan-out that launched copies of a phase
 agent would produce several competing phase reports, `sdd-verify` copies included, each declaring
-itself the sole readiness authority. `pegasus-general` exists so fan-out has a target with no phase
+the same change ready to archive. `pegasus-general` exists so fan-out has a target with no phase
 identity to collide.
 
 You also close a portability gap: an orchestrator that could only fan out to `explore` and `general`
