@@ -1450,8 +1450,11 @@ class ShippedContentTest(unittest.TestCase):
             {a.name for a in self.content.agents},
             {
                 "king-pegasus",
+                "pegasus-explorer",
                 "pegasus-general",
+                "pegasus-implementer",
                 "pegasus-orchestrator",
+                "pegasus-verifier",
                 "sdd-apply",
                 "sdd-archive",
                 "sdd-design",

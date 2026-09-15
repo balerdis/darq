@@ -470,7 +470,14 @@ class ShippedCatalogTest(unittest.TestCase):
         # references `sdd-explore`, `sdd-verify` and `sdd-apply` now point at
         # instead of restating. No settings key of their own -- a lazy-loaded
         # reference is a file, never a config entry.
-        self.assertEqual((len(files), len(keys)), (93, 24))
+        # 96, not 93: `pegasus-explorer`, `pegasus-verifier` and
+        # `pegasus-implementer` are the fourteenth, fifteenth and sixteenth
+        # shipped agents -- the phase-less specialists -- and each one's own
+        # rendered prompt is a file like every other agent's.
+        # 27, not 24: `agent:pegasus-explorer`, `agent:pegasus-verifier` and
+        # `agent:pegasus-implementer` are their config-key entries, alongside
+        # their files.
+        self.assertEqual((len(files), len(keys)), (96, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:
