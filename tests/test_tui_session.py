@@ -1249,8 +1249,8 @@ class RestoreThroughTheTuiTest(SessionTestCase):
         self.assertIsInstance(navigator.current, Menu)
         labels = [entry.label for entry in navigator.current.entries]
         self.assertEqual(len(labels), 2)
-        self.assertTrue(labels[0].startswith("Generation 2 — 14 Aug 2026, 00:00 (most recent)"), labels[0])
-        self.assertTrue(labels[1].startswith("Generation 1 — 14 Aug 2026, 00:00"))
+        self.assertTrue(labels[0].startswith("Generation 2 — install — 14 Aug 2026, 00:00 (most recent)"), labels[0])
+        self.assertTrue(labels[1].startswith("Generation 1 — install — 14 Aug 2026, 00:00"))
         self.assertNotIn("(most recent)", labels[1])
 
     def test_a_label_reads_the_clock_the_person_was_looking_at(self):
