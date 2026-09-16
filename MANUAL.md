@@ -1,16 +1,16 @@
 # Manual de uso: Pegasus Harness + OpenCode
 
-Este manual describe cómo usar Pegasus 4 una vez instalado: qué decide, qué preserva de tu cuenta y cómo se trabaja el día a día con OpenCode. Para instalarlo no hay procedimiento acá — está en [INSTALL.md](INSTALL.md) (manual) y en [INSTALL_BY_AGENT.md](INSTALL_BY_AGENT.md) (asistido por un agente).
+Este manual describe cómo usar Pegasus 5 una vez instalado: qué decide, qué preserva de tu cuenta y cómo se trabaja el día a día con OpenCode. Para instalarlo no hay procedimiento acá — está en [INSTALL.md](INSTALL.md) (manual) y en [INSTALL_BY_AGENT.md](INSTALL_BY_AGENT.md) (asistido por un agente).
 
 ## Qué es Pegasus en esta versión
 
-Pegasus 4 no trae un instalador propio ni un tarball: es un paquete de Python que vive en un venv privado (`$XDG_DATA_HOME/pegasus-harness/venv`, o `~/.local/share/pegasus-harness/venv` si esa variable no está definida), con un lanzador `pegasus` en tu PATH. `pegasus` sin argumentos abre una TUI cuando corre en una terminal; sin terminal, o con un subcomando explícito, se comporta como CLI. Ambas superficies llaman al mismo motor: nada que la TUI pueda hacer le está vedado a los flags.
+Pegasus 5 es un solo archivo ejecutable: un `zipapp` de Python con shebang y bit ejecutable, que se instala en `~/.local/bin/pegasus` y no depende de nada instalado antes que él — el paquete no declara ninguna dependencia de terceros, así que no hay entorno privado que armar ni que mantener. `pegasus` sin argumentos abre una TUI cuando corre en una terminal; sin terminal, o con un subcomando explícito, se comporta como CLI. Ambas superficies llaman al mismo motor: nada que la TUI pueda hacer le está vedado a los flags. La versión mayor que nombra este párrafo no se retipea acá: la deriva del árbol `ManualNamesTheEntryPointThisReleaseShipsTest` (`tests/test_manual_figures.py`), que además comprueba contra el árbol el destino del binario y que no haya quedado ninguna dependencia que aislar.
 
 Antes de usarlo necesitás OpenCode instalado por fuera de Pegasus — Pegasus no lo instala, actualiza ni desinstala — y una cuenta Linux no-root, porque escribe únicamente en tu propio `~/.config` y `~/.local`.
 
 ## Instalar el payload en OpenCode
 
-Con el venv ya armado y `pegasus` en el PATH, el comando que aplica el payload es:
+Con `pegasus` en el PATH, el comando que aplica el payload es:
 
 ```sh
 pegasus install --cli opencode --dry-run --mcp <id>
@@ -129,4 +129,4 @@ Una edición tuya sobre un archivo que Pegasus instaló no sobrevive: `install` 
 
 - Para el recorrido completo de instalación: [INSTALL.md](INSTALL.md).
 - Para instalación asistida por un agente: [INSTALL_BY_AGENT.md](INSTALL_BY_AGENT.md).
-- Para la arquitectura y las decisiones de diseño de v4: [docs/arquitectura/arquitectura.md](docs/arquitectura/arquitectura.md).
+- Para la arquitectura y las decisiones de diseño: [docs/arquitectura/arquitectura.md](docs/arquitectura/arquitectura.md).

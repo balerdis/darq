@@ -34,10 +34,14 @@ number word, which is the exact form the stale claim took.
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
+import pegasus
+from pegasus import cli
 from pegasus.core import content as content_module
+from pegasus.infra.fs_posix import PosixFileSystem
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANUAL = REPOSITORY / "MANUAL.md"
@@ -170,6 +174,144 @@ class GrantMcpReachesEveryAgentTest(unittest.TestCase):
         notice. A spelled-out count is that defect coming back."""
         found = COUNTED_IN_PROSE.findall(self.paragraph)
         self.assertEqual(found, [], f"the paragraph counts in prose again: {found}")
+
+
+#: The entry-point paragraph, found by the tree's own name for the artifact it
+#: builds. `zipapp` is what `tools/build_zipapp.py` produces and what the
+#: architecture registry calls it -- machine-shaped, and not a word a rewording
+#: of the Spanish moves.
+ENTRY_POINT_ANCHOR = "zipapp"
+
+#: A product major, as the manual spells one.
+PRODUCT_MAJOR = re.compile(r"\bPegasus (\d+)\b")
+
+#: The mechanisms the 4.x entry point was made of. Every one of them was
+#: retired whole when the package lost its last dependency (see the dissolved
+#: debt in `docs/arquitectura/arquitectura.md`), so a user manual that still
+#: names one is describing a product that is not there -- which is exactly the
+#: state this paragraph was found in, promising a venv at
+#: `$XDG_DATA_HOME/pegasus-harness/venv` and a launcher on the PATH. Retyped
+#: here because a thing that no longer exists leaves nothing in the tree to
+#: derive its name from; that is the whole reason the claim could go stale
+#: unnoticed.
+RETIRED_ENTRY_POINT = re.compile(r"\bvenv\b|\bshim\b|\blanzador\b|pegasus setup", re.IGNORECASE)
+
+
+def the_entry_point_paragraph() -> str:
+    """The one paragraph of the manual that says what gets installed."""
+    lines = [
+        line
+        for line in MANUAL.read_text(encoding="utf-8").splitlines()
+        if ENTRY_POINT_ANCHOR in line
+    ]
+    return lines[0] if len(lines) == 1 else ""
+
+
+def installed_destination() -> str:
+    """Where this distribution's own binary lands, spelled the way a person
+    reads it.
+
+    Both halves come from the tree: the directory from the filesystem port
+    that answers it (`bin_dir`, the same function `install.sh` and the manual
+    installation both target), the file name from this binary's own identity.
+    Neither is a literal typed twice.
+    """
+    identity = cli.default_identity()
+    filesystem = PosixFileSystem(product_id=identity.product_id)
+    return (filesystem.bin_dir(Path("~")) / identity.program_name).as_posix()
+
+
+def declared_dependencies() -> list[str]:
+    """What the package declares it needs, read off the project metadata."""
+    document = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    return list(document["project"]["dependencies"])
+
+
+class ManualNamesTheEntryPointThisReleaseShipsTest(unittest.TestCase):
+    """`MANUAL.md` opened by describing an entry point that was removed.
+
+    It said Pegasus "es un paquete de Python que vive en un venv privado
+    (`$XDG_DATA_HOME/pegasus-harness/venv` ...), con un lanzador `pegasus` en
+    tu PATH", and three paragraphs later told the reader to work "con el venv
+    ya armado". None of that exists: the package lost its last third-party
+    dependency, a venv stopped isolating anything, and `pegasus setup`, the
+    venv, the shim and `setup-sources/` were retired whole -- the entry point
+    has been one executable `zipapp` since. Three other user documents were
+    brought to that truth and this one was not, which is the same silent way
+    a hand-typed figure goes stale: nothing anywhere compared the sentence to
+    the tree.
+
+    So the paragraph's CLAIM is now what the tree actually builds, and its
+    figure -- the product major -- is derived here from `pegasus.__version__`
+    rather than typed into the prose, the same treatment
+    `GrantMcpReachesEveryAgentTest` gives its agent counts.
+
+    What is NOT re-asserted here is that the built artifact really is one
+    executable file with a shebang: `test_build_zipapp.BuildTest` already
+    proves that against a real build, and repeating it would be a guard held
+    up by another mechanism. What is missing until this file exists is the
+    link -- that the document a person reads describes that artifact and not
+    the one before it.
+
+    The negative check is the same shape as `test_no_count_lives_in_the_prose`
+    below: the stale claim took one specific form, naming mechanisms that are
+    gone, and this fails the day one of those names comes back anywhere in the
+    manual.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manual = MANUAL.read_text(encoding="utf-8")
+        cls.paragraph = the_entry_point_paragraph()
+
+    def test_the_paragraph_is_found_exactly_once(self):
+        """Everything below reads this paragraph; two of them, or none, proves
+        nothing."""
+        self.assertTrue(
+            self.paragraph, f"no single line of {MANUAL.name} names the {ENTRY_POINT_ANCHOR} it ships"
+        )
+
+    def test_the_major_the_manual_documents_is_the_major_the_tree_is(self):
+        """The figure. It said four where the tree said five, in the sentence
+        that told a reader which product this manual is even about."""
+        major = pegasus.__version__.split(".")[0]
+        stated = PRODUCT_MAJOR.findall(self.manual)
+        self.assertTrue(stated, f"{MANUAL.name} never says which major of the product it documents")
+        self.assertEqual(
+            sorted(set(stated)),
+            [major],
+            f"{MANUAL.name} documents a major the tree is not: tree is {pegasus.__version__}",
+        )
+
+    def test_the_paragraph_names_where_the_binary_actually_lands(self):
+        """A destination is the one fact a reader checks against their own
+        machine, so it is derived from the port that answers it rather than
+        quoted from a guide."""
+        self.assertIn(installed_destination(), self.paragraph)
+
+    def test_nothing_is_left_for_a_venv_to_isolate(self):
+        """The paragraph's reason, not just its conclusion. It says there is no
+        venv *because* there is nothing to isolate; the day the package
+        declares a dependency that reason is gone, whatever the entry point
+        still looks like."""
+        self.assertEqual(
+            declared_dependencies(),
+            [],
+            "the package now declares a dependency, so the manual's reason for having no venv is false",
+        )
+
+    def test_the_retired_entry_point_is_described_nowhere(self):
+        """The exact form the stale claim took."""
+        found = RETIRED_ENTRY_POINT.findall(self.manual)
+        self.assertEqual(found, [], f"{MANUAL.name} still describes a retired entry point: {found}")
+
+    def test_the_paragraph_says_where_its_figure_is_measured(self):
+        """A figure without its measurement is the state this paragraph was
+        already in. Both names come from this module, never from a literal
+        typed twice."""
+        self.assertIn(f"`{type(self).__name__}`", self.paragraph)
+        self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
+
 
 
 if __name__ == "__main__":  # pragma: no cover
