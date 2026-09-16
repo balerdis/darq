@@ -522,7 +522,29 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
     """The doc's `Modelos · CLI` step, or the explanation for why there is
     nothing to show yet -- read fresh every time this is called, the same
     reasoning `_uninstall_preview` and `_restore_preview` already follow for
-    their own read-only screens."""
+    their own read-only screens.
+
+    Two states have an explanation instead of a wizard, and the installation
+    is asked about first because it is the more fundamental of the two: a
+    model assignment is written straight into the rendered configuration
+    (`cli.models_set` reapplies it the way `cli.mcp_grant` always has), so a
+    CLI with nothing installed has nothing for any choice on this screen to
+    reach. Refused here, when the screen opens, rather than at the write:
+    `_models_write` is four choices further along, and a person who learns
+    it there learns it after making every one of them. `grant_mcp_menu`
+    narrows its own menu for exactly this reason; this answers the same
+    refusal one step later because the models menu offers every *detected*
+    CLI -- its model catalog is a per-CLI read this screen is the first to
+    make -- so the CLI is still reachable and has to be told why.
+    """
+    if journal_module.install_for(cli.journal_store(runtime).load(), cli_option.id) is None:
+        return Placeholder(
+            f"Configure models · {cli_option.display_name}",
+            f"{cli_option.display_name} has no {runtime.identity.display_name} installation yet, and a "
+            f"model assignment is written straight into the rendered configuration -- so there is "
+            f"nothing here for one to reach. Install into {cli_option.display_name} first, from the "
+            f"main menu's Install entry, then come back.",
+        )
     catalog = available().get(cli_option.id).model_catalog(runtime.environment)
     if not catalog.providers:
         return Placeholder(

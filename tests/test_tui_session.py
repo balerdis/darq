@@ -28,6 +28,7 @@ from pegasus.core.types import Codec, Environment
 from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.journal_store_file import journal_path
 from pegasus.infra.snapshot_store_file import MANIFEST_FILENAME, snapshots_root
+from pegasus.tui import navigator as navigator_module
 from pegasus.tui import session
 from pegasus.tui.navigator import (
     Action,
@@ -1313,6 +1314,24 @@ def _write_credentials(home: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _cli_option(runtime: cli.Runtime):
+    """The CLI this walk ends up on, off the same detection the screen uses."""
+    return next(option for option in session.detect_clis(runtime) if option.id == CLI)
+
+
+def _install_entry_label(runtime: cli.Runtime) -> str:
+    """The main menu's own install entry, found by where it leads rather than
+    by what it says -- a refusal that sends a person to something the menu no
+    longer calls that is a refusal that names nothing."""
+    root = Navigator.starting(session.detect_clis(runtime), session.detect_installed(runtime)).current
+    return next(
+        entry.label
+        for entry in root.entries
+        if isinstance(entry.target, Menu)
+        and any(isinstance(row.target, navigator_module.InstallTarget) for row in entry.target.entries)
+    )
+
+
 ONE_PLAIN_MODEL = {"anthropic": {"builtin": True, "models": {"fast-model": {"tool_call": True}}}}
 ONE_REASONING_MODEL = {"anthropic": {"builtin": True, "models": {"deep-thinker": {"tool_call": True, "reasoning": True}}}}
 
@@ -1332,8 +1351,15 @@ class ModelsScreenTestCase(SessionTestCase):
         if journal_module.install_for(cli.journal_store(runtime).load(), CLI) is None:
             cli.install(CLI, runtime)
 
-    def to_models_screen(self, runtime: cli.Runtime) -> Navigator:
-        self.install(runtime)
+    def to_models_screen(self, runtime: cli.Runtime, *, installed: bool = True) -> Navigator:
+        """The whole walk from the main menu to whatever this CLI's models
+        step turns out to be. `installed=False` leaves the CLI detected but
+        with nothing installed into it, which is the one case the screen
+        itself has an answer for rather than a wizard."""
+        if installed:
+            self.install(runtime)
+        else:
+            _present(self.home)
         navigator = Navigator.starting(session.detect_clis(runtime), session.detect_installed(runtime))
         models_index = [entry.label for entry in navigator.current.entries].index("Configure models")
         for _ in range(models_index):
@@ -1347,6 +1373,46 @@ class EmptyCatalogTest(ModelsScreenTestCase):
         navigator = self.to_models_screen(self.runtime())
         self.assertIsInstance(navigator.current, Placeholder)
         self.assertNotIn("Traceback", navigator.current.note)
+
+
+class NothingInstalledTest(ModelsScreenTestCase):
+    """A CLI with nothing installed is refused when the screen opens.
+
+    A model assignment is written straight into the rendered configuration
+    now, so `cli.models_set`/`cli.models_unset` refuse a CLI with nothing
+    installed. Learning that at the confirmation is learning it after
+    choosing an agent, a provider, a model and an effort -- four choices that
+    could never have applied. The same reasoning `grant_mcp_menu` already
+    follows for its own menu, answered here with the `Placeholder` shape this
+    very function already uses for the other state it has nothing to offer
+    for (a CLI with no model catalog yet).
+
+    What is asserted is that the screen is not a wizard: no agent rows, so
+    there is nothing to walk. Asserting only that some string came back would
+    pass over a `ModelsScreen` that happened to carry the sentence.
+    """
+
+    def test_a_cli_with_nothing_installed_gets_no_menu_of_agents(self):
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        navigator = self.to_models_screen(self.runtime(), installed=False)
+        self.assertNotIsInstance(navigator.current, ModelsScreen)
+        self.assertIsInstance(navigator.current, Placeholder)
+
+    def test_the_refusal_names_the_cli_and_what_to_do_about_it(self):
+        runtime = self.runtime()
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        navigator = self.to_models_screen(runtime, installed=False)
+        note = navigator.current.note
+        self.assertIn(_cli_option(runtime).display_name, note)
+        self.assertIn(_install_entry_label(runtime), note)
+
+    def test_installing_turns_the_same_walk_into_the_wizard(self):
+        """Or the refusal above would prove only that this screen is broken
+        for everyone."""
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        navigator = self.to_models_screen(self.runtime())
+        self.assertIsInstance(navigator.current, ModelsScreen)
+        self.assertTrue(navigator.current.rows)
 
 
 class AssignmentListTest(ModelsScreenTestCase):
