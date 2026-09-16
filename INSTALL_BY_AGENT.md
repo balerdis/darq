@@ -278,10 +278,15 @@ Hay dos comandos que actualizan cosas distintas. No los confundas ni los uses un
 
 Usalo cuando la persona pide "actualizar" una instalación que ya existe (por ejemplo, después de que
 vos mismo la actualizaste con `pegasus upgrade`, o simplemente porque pasó tiempo). **No corras
-`pegasus install --cli <id>` a secas para esto:** un `install` sin `--mcp` no nombra ningún servidor, y
-un servidor no nombrado se retira -- eso te comería en silencio cualquier atadura de MCP que la
-instalación ya tuviera. `update` existe exactamente para evitar ese error: reaplica la selección
-propia registrada, MCPs atados incluidos, sin que vos tengas que reconstruirla.
+`pegasus install --cli <id>` a secas para esto:** sobre una instalación que ya tiene una selección
+registrada, un `install` sin `--mcp` se rechaza antes de escribir nada -- el JSON trae
+`"status": "failed"` y no se toca un solo archivo -- así que no te va a comer ninguna atadura de MCP,
+pero tampoco te va a actualizar nada. Si la persona quiere retirar esa selección, la grafía deliberada
+es `--mcp none`, y sólo correla si lo pidió. `update` existe exactamente para lo otro: reaplica la
+selección propia registrada, MCPs atados incluidos, sin que vos tengas que reconstruirla. El rechazo,
+que `update` no toque la selección y que `--mcp none` la vacíe están corridos contra una instalación
+real en `InstallGuidesSayABareInstallIsRefusedTest`
+(`tests/test_install_guides_command_surface.py`).
 
 ```sh
 pegasus update --cli opencode --dry-run --json

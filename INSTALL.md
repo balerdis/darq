@@ -150,8 +150,13 @@ ejemplo `--mcp cbm=codebase-memory-mcp`).
 
 **Actualizar una instalación ya hecha.** `pegasus update --cli <id>` reaplica la selección que esa
 instalación ya tiene registrada — MCPs atados incluidos — sin que haga falta repetir ningún flag. Esto
-existe porque un `install` a secas, sin `--mcp`, no nombra ningún servidor y por lo tanto **retira**
-los que ya estaban atados; `update` es la forma de traer la instalación al día sin ese riesgo:
+existe porque un `install` a secas, sin `--mcp`, no nombra ningún servidor: sobre una instalación que
+ya tiene una selección registrada se **rechaza** antes de escribir nada, en vez de retirarla en
+silencio porque nadie repitió el flag. `update` es la forma de traer la instalación al día dejando esa
+selección como está, y `--mcp none` la de revocarla a propósito. Las tres cosas —el rechazo, que
+`update` no toque la selección, y que la revocación deliberada la vacíe de verdad— las corre contra
+una instalación real `InstallGuidesSayABareInstallIsRefusedTest`
+(`tests/test_install_guides_command_surface.py`):
 
 ```sh
 pegasus update --cli opencode --dry-run
