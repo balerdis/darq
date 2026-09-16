@@ -6,6 +6,7 @@ OpenCode name. This is the only place those names are allowed to appear.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -143,6 +144,59 @@ EXTERNAL_DIRECTORY_DENY_FLOOR: dict[str, str] = {
     "*/secrets/*": "deny",
     "*/.config/gh/*": "deny",
 }
+
+#: Regex metacharacters the runtime's own `Wildcard.match`
+#: (`packages/core/src/util/wildcard.ts`) escapes before turning a pattern
+#: into a regex, in the exact order that function applies: escape first, then
+#: `*` -> `.*`, then `?` -> `.`. Matches on Python's `re` module's own
+#: metacharacter set, which is a superset of the TS source's -- fine, since
+#: none of the extra characters (`)`, `(`, `|`, ...) can appear in a directory
+#: pattern this codebase ever builds.
+_WILDCARD_METACHARACTERS = re.compile(r"[.+^${}()|\[\]\\]")
+
+
+def _wildcard_match(candidate: str, pattern: str) -> bool:
+    """Python port of OpenCode's own `Wildcard.match`, faithfully, not
+    approximated: escape `pattern`'s regex metacharacters, turn `*` into
+    `.*` and `?` into `.`, anchor both ends, and let `.` cross `/` the same
+    way the runtime's own `s` (dotAll) flag does -- Python's `.` already
+    matches `/` without it, so `re.fullmatch` alone reproduces the anchoring
+    and `re.DOTALL` reproduces the dotAll flag for the one character class
+    (`.`) it actually changes.
+
+    Deliberately not a path-component check (`".ssh" in Path(p).parts`): that
+    is a proxy for this match, not the match itself, and a proxy is exactly
+    what has bitten this codebase before -- it would flag a directory merely
+    named `sshfoo`, or miss a pattern this project never anticipated, while
+    this function only ever answers what the runtime's own regex would.
+    """
+    escaped = _WILDCARD_METACHARACTERS.sub(lambda match: "\\" + match.group(0), pattern.replace("\\", "/"))
+    escaped = escaped.replace("*", ".*").replace("?", ".")
+    return re.fullmatch(escaped, candidate.replace("\\", "/"), flags=re.DOTALL) is not None
+
+
+def deny_floor_shadows(path: str) -> bool:
+    """Whether granting `path` through `pegasus directory grant` would render
+    an `external_directory` entry (`f"{path}/*": "allow"`, `_permission`
+    below) that `EXTERNAL_DIRECTORY_DENY_FLOOR` -- written last into that same
+    map, so the runtime's last-match resolution always lands on it -- would
+    still resolve to `deny` for.
+
+    A grant this shadows is never dormant the way an ordinary grant is while
+    the baseline is `"allow"` (see `_permission`'s own docstring): an
+    ordinary grant regains its meaning the day the baseline goes back to
+    `"ask"`, because the floor is the only thing written after it today. A
+    floor-shadowed grant never regains anything -- the floor is written last
+    regardless of what the baseline is, so this grant can never win the
+    match, in this release or after any revert.
+
+    `path` is expected already normalized by `content.validate_granted_directory`
+    (absolute, free of glob metacharacters and of `..`) -- the same value
+    every caller of this function already holds before it ever reaches a
+    rendered permission.
+    """
+    key = f"{path}/*"
+    return any(_wildcard_match(key, pattern) for pattern in EXTERNAL_DIRECTORY_DENY_FLOOR)
 
 PERMISSION_NAME: dict[str, str] = {
     "read": "read",

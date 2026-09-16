@@ -34,6 +34,8 @@ from typing import Any, Callable, TextIO
 
 import pegasus
 from pegasus.adapters import available
+from pegasus.adapters.opencode import render as opencode_render_module
+from pegasus.adapters.opencode.manifest import CLI_ID as OPENCODE_CLI_ID
 from pegasus.core import catalog as catalog_module
 from pegasus.core import content as content_module
 from pegasus.core import dependencies as dependencies_module
@@ -2142,6 +2144,22 @@ def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
     person later types to `directory revoke` all have to agree on one
     spelling of the same directory, or a trailing slash or a repeated `/`
     silently produces two directories where the person meant one.
+
+    A path this validation accepts can still be one `render.py`'s own
+    `EXTERNAL_DIRECTORY_DENY_FLOOR` shadows -- `.ssh`, `.aws`, `.credentials`,
+    `.config/gh`, `secrets`, written last into every rendered
+    `external_directory` map so the runtime's last-match resolution always
+    lands on the floor's `deny` regardless of a grant naming that exact
+    directory. Refusing the grant outright would change this command's
+    contract for a case the person did not ask to be blocked on, so it is not
+    refused: it is still recorded and still reported as granted, with a
+    warning that it can never take effect, checked through
+    `opencode_render_module.deny_floor_shadows` -- the OpenCode-specific fact
+    of which directories the floor covers has no business in `content.py`
+    (`core` may not import an adapter), so the predicate lives in the adapter
+    and this CLI layer, which already depends on everything, is what calls
+    it. Only for `opencode` -- another CLI adapter this product ships may have
+    no such floor, and must not inherit a warning describing OpenCode's own.
     """
     adapter = _adapter(cli_id)
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
@@ -2163,9 +2181,18 @@ def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
     report = install(
         cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
     )
-    return {
+    result = {
         **report, "action": "grant", "path": normalized, "granted_directories": list(granted), "status": "granted"
     }
+    if adapter.id == OPENCODE_CLI_ID and opencode_render_module.deny_floor_shadows(normalized):
+        result["warning"] = (
+            f"{normalized!r} is granted and recorded, but it will never take effect: it falls under "
+            f"OpenCode's own always-denied floor (.ssh, .aws, .credentials, .config/gh, secrets), which "
+            f"is written after every grant so it always wins the match. This is not the ordinary dormant "
+            f"case -- an ordinary grant regains meaning if the baseline ever goes back to \"ask\"; this "
+            f"one never will, because the floor is written last regardless of the baseline."
+        )
+    return result
 
 
 def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
@@ -3352,7 +3379,8 @@ def _directory_prose(report: dict[str, Any]) -> str:
     action = report.get("action")
     if action == "grant":
         line = f"{report['cli']}: granted {report['path']} to every agent."
-        return "\n".join(_and_activation([line], report))
+        lines = [line, report["warning"]] if report.get("warning") else [line]
+        return "\n".join(_and_activation(lines, report))
     if action == "revoke":
         if report.get("status") == "already-revoked":
             return f"{report['cli']}: {report['path']} was not granted; nothing to do."

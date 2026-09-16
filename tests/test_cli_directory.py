@@ -134,6 +134,43 @@ class GrantTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
 
+    def test_granting_an_ordinary_directory_carries_no_floor_warning(self):
+        self.install()
+        code, report = self.run_cli("directory", "grant", "--cli", CLI, self.own_directory())
+        self.assertEqual(code, 0)
+        self.assertNotIn("warning", report)
+
+    def test_granting_a_directory_the_deny_floor_shadows_still_succeeds_and_is_recorded(self):
+        """The floor (`render.EXTERNAL_DIRECTORY_DENY_FLOOR`) is written last
+        into every rendered `external_directory` map, so a grant naming one of
+        its five directories can never take effect. Refusing would change this
+        command's contract, which nobody asked for -- the grant still
+        succeeds and is still recorded, exactly like any other grant."""
+        self.install()
+        path = str(self.home / "shadowed" / ".ssh")
+        code, report = self.run_cli("directory", "grant", "--cli", CLI, path)
+        self.assertEqual(code, 0)
+        self.assertEqual(report["action"], "grant")
+        self.assertEqual(report["status"], "granted")
+        self.assertIn(path, report["granted_directories"])
+        self.assertIn(path, self.installed().granted_directories)
+
+    def test_granting_a_directory_the_deny_floor_shadows_warns_why_it_will_never_take_effect(self):
+        self.install()
+        path = str(self.home / "shadowed" / ".ssh")
+        code, report = self.run_cli("directory", "grant", "--cli", CLI, path)
+        self.assertEqual(code, 0)
+        self.assertIn("warning", report)
+        self.assertIn("never take effect", report["warning"])
+
+    def test_the_floor_shadowed_warning_also_appears_in_the_human_readable_report(self):
+        self.install()
+        path = str(self.home / "shadowed" / ".ssh")
+        context = self.runtime()
+        code = cli.main(["directory", "grant", "--cli", CLI, path], runtime=context)
+        self.assertEqual(code, 0)
+        self.assertIn("never take effect", context.out.getvalue())
+
     def test_a_relative_path_is_refused(self):
         self.install()
         code, report = self.run_cli("directory", "grant", "--cli", CLI, "relative/path")
