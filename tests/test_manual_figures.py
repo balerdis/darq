@@ -33,6 +33,8 @@ number word, which is the exact form the stale claim took.
 """
 from __future__ import annotations
 
+import io
+import json
 import re
 import tomllib
 import unittest
@@ -40,8 +42,10 @@ from pathlib import Path
 
 import pegasus
 from pegasus import cli
+from pegasus.adapters import available
 from pegasus.core import content as content_module
 from pegasus.infra.fs_posix import PosixFileSystem
+from real_home import RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANUAL = REPOSITORY / "MANUAL.md"
@@ -312,6 +316,129 @@ class ManualNamesTheEntryPointThisReleaseShipsTest(unittest.TestCase):
         self.assertIn(f"`{type(self).__name__}`", self.paragraph)
         self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
 
+
+
+AT = "2026-08-14T00:00:00+00:00"
+CLI = available().ids()[0]
+
+#: A model a person could type. Nothing here renders it, so it only has to be
+#: a shape `ModelAssignment.parse` accepts.
+A_MODEL = "anthropic/claude-sonnet-5"
+
+#: A name no release ships, to prove the acceptance measured below is the
+#: product's own gate answering and not an absence of one.
+NOT_AN_AGENT = "an-agent-nobody-ships"
+
+
+def paragraph_naming(guard: str) -> str:
+    """The one line of the manual that names ``guard``.
+
+    Empty when there is not exactly one, so every assertion built on it fails
+    loudly instead of proving something about nothing -- the same finder, and
+    the same reason, as `tests/test_manual_command_surface.py`'s.
+    """
+    lines = [line for line in MANUAL.read_text(encoding="utf-8").splitlines() if f"`{guard}`" in line]
+    return lines[0] if len(lines) == 1 else ""
+
+
+class EveryShippedAgentAcceptsAModelAssignmentTest(RealHomeTestCase):
+    """"Un agente configurable de la línea SDD" was a narrowing of a rule.
+
+    Every agent this release ships is `model_configurable` -- the
+    orchestrator, `king-pegasus` and the phase-less specialists included --
+    so the sentence named a subset where there is none, the exact defect
+    `GrantMcpReachesEveryAgentTest` was written for, in a second paragraph of
+    the same document. A reader with a model to assign to their orchestrator
+    read that they could not.
+
+    So the paragraph's CLAIM is now the rule -- every agent, whatever the
+    number -- and the figure survives beside it because scale is what a
+    reader is actually asking for. It is derived here from the content tree,
+    never typed into the prose.
+
+    The rule is proven by RUNNING `models set` against every shipped agent
+    and looking at what came back, never by reading `model_configurable` off
+    the descriptors: the flag is not the claim, `_require_configurable_agent`
+    is, and a guard that summed the flags would keep passing the day the two
+    stop agreeing. A name no release ships is put through the same command so
+    the acceptance is the gate answering and not the gate being gone.
+
+    What is deliberately NOT here is a check that the sentence stops saying
+    "SDD". Naming the SDD line is not false -- those agents are configurable
+    too -- and a regex over that phrase would fail for the wrong reason the
+    first time somebody legitimately mentions it. The count check below is
+    the negative this paragraph can honestly carry, and it is the exact form
+    the stale claim in its sibling took.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.content = content_module.load()
+        self.agents = sorted(agent.name for agent in self.content.agents)
+        self.paragraph = paragraph_naming(type(self).__name__)
+
+    def run_cli(self, *argv) -> tuple[int, dict]:
+        out = io.StringIO()
+        context = cli.Runtime(filesystem=self.filesystem, home=self.home, now=AT, out=out)
+        code = cli.main([*argv, "--json"], runtime=context)
+        return code, json.loads(out.getvalue())
+
+    def assign_to(self, agent: str) -> tuple[int, dict]:
+        return self.run_cli("models", "set", "--cli", CLI, "--agent", agent, "--model", A_MODEL)
+
+    def test_the_release_ships_agents_to_measure(self):
+        """Or every assertion below would pass over an empty list."""
+        self.assertTrue(self.agents, "this release ships no agent at all")
+
+    def test_every_shipped_agent_accepts_an_assignment(self):
+        """The rule the paragraph now states, run rather than read."""
+        refused = {}
+        for agent in self.agents:
+            code, report = self.assign_to(agent)
+            if code != 0:
+                refused[agent] = report.get("error")
+        self.assertEqual(refused, {}, f"these agents refused a model assignment: {refused}")
+
+    def test_a_name_this_release_does_not_ship_is_refused(self):
+        """Or the acceptance above would prove only that nothing is checked."""
+        code, report = self.assign_to(NOT_AN_AGENT)
+        self.assertNotEqual(code, 0)
+        self.assertIn(NOT_AN_AGENT, report["error"])
+
+    def test_the_paragraph_is_found_exactly_once(self):
+        """Everything below reads this paragraph; two of them, or none, proves
+        nothing."""
+        self.assertTrue(
+            self.paragraph, f"no single line of {MANUAL.name} names {type(self).__name__}"
+        )
+
+    def test_the_paragraph_states_its_figure_exactly_once(self):
+        self.assertEqual(
+            len(FIGURE.findall(self.paragraph)),
+            1,
+            "the paragraph must state its agent count once, as a bolded figure",
+        )
+
+    def test_the_figure_is_the_count_the_tree_yields(self):
+        stated = [int(value) for value in FIGURE.findall(self.paragraph)]
+        self.assertEqual(
+            stated,
+            [len(self.agents)],
+            f"the paragraph's figure disagrees with the tree: {len(self.agents)} agents",
+        )
+
+    def test_no_count_lives_in_the_prose(self):
+        """A spelled-out count is a figure nothing can compare to anything --
+        the shape the stale claim in this file's other paragraph took."""
+        found = COUNTED_IN_PROSE.findall(self.paragraph)
+        self.assertEqual(found, [], f"the paragraph counts in prose: {found}")
+
+    def test_the_paragraph_says_where_its_figure_is_measured(self):
+        """A figure without its measurement is the state this paragraph was
+        already in. Both names come from this module, never from a literal
+        typed twice."""
+        self.assertIn(f"`{type(self).__name__}`", self.paragraph)
+        self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
 
 
 if __name__ == "__main__":  # pragma: no cover

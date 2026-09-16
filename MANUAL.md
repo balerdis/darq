@@ -90,7 +90,7 @@ Los comandos distribuidos son `sdd-init`, `sdd-new`, `sdd-ff`, `sdd-continue`, `
 
 Pegasus distribuye roles, no credenciales ni modelos: ningún agente trae uno asignado por defecto. En el primer arranque, ejecutá `/connect` dentro de OpenCode para configurar las credenciales del proveedor, y `/models` para elegir el modelo que querés usar de forma general. Esas dos decisiones son tuyas y OpenCode las guarda en su propia configuración; Pegasus no las lee ni las reproduce.
 
-Para asignar un modelo puntual a un agente configurable de la línea SDD, Pegasus tiene su propio comando, separado del `/models` de OpenCode:
+Para asignar un modelo puntual a un agente, Pegasus tiene su propio comando, separado del `/models` de OpenCode. Lo acepta **todo** agente que esta release embarca —el orquestador, `king-pegasus` y los especialistas sin fase incluidos—, sin excepción y sin que el número cambie la regla: hoy son **16 agentes**. Ni la regla ni la cifra se retipean acá: las deriva del árbol `EveryShippedAgentAcceptsAModelAssignmentTest` (`tests/test_manual_figures.py`), que además le pide una asignación a cada agente embarcado para comprobar que ninguno la rechaza. Se usa así:
 
 ```sh
 pegasus models set --cli opencode --agent sdd-apply --model anthropic/claude-sonnet-5 --effort high
