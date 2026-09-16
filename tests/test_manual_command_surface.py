@@ -28,6 +28,14 @@ The three claims, and how each was wrong:
   precisely so that silence cannot retire it -- and `--mcp none` is the
   spelling that revokes it on purpose.
 
+A fourth arrived later and is the same defect in a list rather than a
+sentence: the statuses `doctor --start-mcp-servers` reports. The paragraph
+named five of them and described a sixth in words, while the code emits
+nine. The list was typed by hand, so it could only ever be as current as the
+last person who remembered it -- and `bound`, the ordinary state of a server
+you administer yourself, was one of the missing ones, which left the normal
+report of such an installation looking like a gap.
+
 And one gap, the same surface read the other way round: `pegasus upgrade`
 shipped and the manual never learned it existed. The last class here derives
 the whole top-level surface from the parser, so the next command cannot go
@@ -44,12 +52,14 @@ a sentence could point at.
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import io
 import json
 import re
 from pathlib import Path
 
+from fakes import FakeMCPProcess
 from pegasus import cli
 from pegasus.adapters import available
 from pegasus.core import journal as journal_module
@@ -109,6 +119,67 @@ def subcommands_under(dest: str) -> frozenset[str]:
 
     walk(cli._parser(cli.default_identity()))
     return frozenset(found)
+
+
+#: Where every status a `doctor` report can print is built: the one type the
+#: report's status field comes from, wherever in the package it is constructed.
+STATUS_TYPE = "ServerCheck"
+
+#: A status as the manual spells one -- alone, in backticks, lower case. The
+#: paragraph is held to this in both directions, so the shape is deliberately
+#: narrow enough that nothing else in that sentence can match it by accident.
+SPELLED_STATUS = re.compile(r"`([a-z][a-z-]*)`")
+
+
+def server_check_statuses() -> tuple[frozenset[str], tuple[str, ...]]:
+    """Every value a server's verdict can carry as its status.
+
+    Derived from the package rather than listed here, which is the whole
+    point: the hand-typed list in the manual named five of nine, and nothing
+    anywhere could notice. Every `ServerCheck(...)` construction under
+    `src/pegasus/` is read out of the source, and its status argument
+    resolved -- a literal as itself, a name against the module-level string
+    constants of the file it was written in, which is how `mcp_handshake`
+    spells its five.
+
+    The source is read and not run because these are constructions spread
+    across two functions and a classifier, several of which need a process
+    that failed in a particular way to reach; running for the set would mean
+    producing every failure mode the product can have, and would still leave
+    the ones nobody managed to produce silently missing. Reading finds them
+    all. What running is for is where each one lands in the report, and the
+    class below runs for exactly that.
+
+    Anything that could not be resolved comes back separately rather than
+    being dropped: a status built some way this cannot read is a hole in the
+    derivation, and a hole that fails loudly is the only kind worth having.
+    """
+    found: set[str] = set()
+    unresolved: list[str] = []
+    for path in sorted((REPOSITORY / "src" / "pegasus").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        constants = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)
+            if called != STATUS_TYPE:
+                continue
+            status = node.args[1] if len(node.args) > 1 else None
+            if isinstance(status, ast.Constant) and isinstance(status.value, str):
+                found.add(status.value)
+            elif isinstance(status, ast.Name) and status.id in constants:
+                found.add(constants[status.id])
+            else:
+                unresolved.append(f"{path.relative_to(REPOSITORY).as_posix()}:{node.lineno}")
+    return frozenset(found), tuple(unresolved)
 
 
 class RealHomeTestCase(_RealHomeTestCase):
@@ -378,6 +449,119 @@ class ManualSaysHowAnMcpSelectionIsRevokedOnPurposeTest(RealHomeTestCase):
 
     def test_the_paragraph_says_where_this_was_measured(self):
         self.assertIn(f"`{GUARD_MODULE}`", paragraph_naming(type(self).__name__))
+
+
+class ManualSaysEveryStatusDoctorCanReportTest(RealHomeTestCase):
+    """The statuses a `doctor` report can put beside a server's name.
+
+    The manual listed five and described a sixth in prose. The package emits
+    nine, so four states a person could be looking at right now had no entry
+    anywhere: `unreadable` and `missing`, which `doctor --start-mcp-servers`
+    puts in the launched-server list, and `bound`, which is neither a fault
+    nor even the result of launching anything -- it is what a server you
+    administer yourself gets, under its own heading, in a plain `doctor` too.
+    A reader who saw `bound` on a perfectly healthy installation had nothing
+    in the document to tell them it was the normal state.
+
+    The set is derived (see `server_check_statuses`) so a status added later
+    lands here rather than in a list nobody edits. Where each one is reported
+    is RUN, because that is the half a derivation cannot answer and the half
+    the old paragraph got wrong: a bound server is installed here for real
+    and the report is asked about it, and a remote one likewise -- and both
+    runs hold a launcher that raises if anything is ever started, so "no se
+    arranca" is proven rather than repeated.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.present()
+        self.launcher = FakeMCPProcess()
+        self.statuses, self.unresolved = server_check_statuses()
+        self.paragraph = paragraph_naming(type(self).__name__)
+
+    def runtime(self) -> cli.Runtime:
+        """The same throwaway runtime the rest of this file uses, holding a
+        launcher with no exchange registered for anything: any attempt to
+        start a server raises instead of spawning one."""
+        return cli.Runtime(
+            filesystem=self.filesystem,
+            home=self.home,
+            now=AT,
+            out=io.StringIO(),
+            variables=NO_BINARY,
+            mcp_process=self.launcher,
+        )
+
+    def health(self, *flags: str) -> dict:
+        code, report = self.run_cli("doctor", *flags)
+        self.assertEqual(code, 0)
+        found = [entry for entry in report["clis"] if entry["cli"] == CLI]
+        self.assertEqual(len(found), 1, f"the report no longer holds exactly one entry for {CLI}")
+        return found[0]
+
+    def test_every_status_the_package_builds_was_resolved(self):
+        """A construction this could not read would be a status quietly
+        missing from everything below."""
+        self.assertEqual(self.unresolved, ())
+        self.assertTrue(self.statuses, "no server status found at all, so nothing here proves anything")
+
+    def test_a_server_bound_to_a_key_you_administer_is_reported_and_never_started(self):
+        """The defect's own case. This installation is healthy and ordinary,
+        and the whole of what the report says about that server is a status
+        the manual did not have."""
+        code, _ = self.run_cli("install", "--cli", CLI, "--mcp", f"{REMOTE_SERVER}={OWN_KEY}")
+        self.assertEqual(code, 0)
+        health = self.health("--start-mcp-servers")
+        bound = {check["id"]: check["status"] for check in health["mcp_bound"]}
+        self.assertEqual(bound, {REMOTE_SERVER: "bound"})
+        self.assertEqual(health["mcp_servers"], [])
+        self.assertEqual(self.launcher.calls, [])
+
+    def test_the_bound_status_is_reported_without_the_flag_too(self):
+        """The paragraph's other half about it: a person who never passes the
+        flag still sees this, so it cannot be described as something the flag
+        produces."""
+        code, _ = self.run_cli("install", "--cli", CLI, "--mcp", f"{REMOTE_SERVER}={OWN_KEY}")
+        self.assertEqual(code, 0)
+        health = self.health()
+        bound = {check["id"]: check["status"] for check in health["mcp_bound"]}
+        self.assertEqual(bound, {REMOTE_SERVER: "bound"})
+        self.assertNotIn("mcp_servers", health)
+        self.assertEqual(self.launcher.calls, [])
+
+    def test_a_server_pegasus_administers_is_reported_in_the_launched_list(self):
+        """The other side of the same partition, so the paragraph's two
+        halves are each measured against a real installation rather than one
+        being inferred from the other."""
+        code, _ = self.run_cli("install", "--cli", CLI, "--mcp", REMOTE_SERVER)
+        self.assertEqual(code, 0)
+        health = self.health("--start-mcp-servers")
+        launched = {check["id"]: check["status"] for check in health["mcp_servers"]}
+        self.assertEqual(launched, {REMOTE_SERVER: "remote"})
+        self.assertEqual(health["mcp_bound"], [])
+        self.assertEqual(self.launcher.calls, [])
+
+    def test_the_paragraph_is_found_exactly_once(self):
+        self.assertTrue(
+            self.paragraph, f"no single line of {MANUAL.name} names {type(self).__name__}"
+        )
+
+    def test_the_paragraph_names_every_status_the_package_can_report(self):
+        """The defect itself: five of nine, typed by hand."""
+        missing = sorted(status for status in self.statuses if f"`{status}`" not in self.paragraph)
+        self.assertEqual(missing, [], f"{MANUAL.name} does not name these statuses: {missing}")
+
+    def test_the_paragraph_names_no_status_the_package_no_longer_has(self):
+        """The direction the check above cannot see. Dropping a status from
+        the package leaves every remaining one still documented, so that
+        check stays green while the manual describes a state nobody can ever
+        be in."""
+        spelled = set(SPELLED_STATUS.findall(self.paragraph))
+        self.assertTrue(spelled, "the paragraph spells no status at all, so this proves nothing")
+        self.assertEqual(spelled - self.statuses, set())
+
+    def test_the_paragraph_says_where_this_was_measured(self):
+        self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
 
 
 class ManualDocumentsEveryTopLevelCommandTest(RealHomeTestCase):
