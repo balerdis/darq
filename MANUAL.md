@@ -116,6 +116,19 @@ Tiene sentido correrlo después de instalar servidores MCP, o cuando un cliente 
 
 `pegasus repair --cli opencode` saca dos cosas que `doctor` sólo nombra, con `--dry-run` disponible para ver antes qué se va a remover: las entradas de `directories_quarantined` -- un `granted_directories` editado a mano en el journal que no pasó la validación y por eso no le concede nada a ningún agente -- y los directorios vacíos que `doctor` reporta bajo `unprunable_empty_directories`, de una instalación anterior a 5.28.0 que la poda automática nunca puede alcanzar. Toma un snapshot del journal antes de escribir, así que `pegasus restore` deshace la parte del journal igual que deshace cualquier otro comando; un directorio vacío borrado no se restaura -- no hay nada que recuperar más allá de un `mkdir`. Si `doctor` reporta `directories_not_walked`, hay un subárbol detrás de un symlink que ni `doctor` ni `repair` pudieron recorrer, y `repair` lo dice en su propio reporte en vez de sugerir que ahí no queda nada.
 
+## Mantener Pegasus al día
+
+Son dos actualizaciones distintas y conviene no confundirlas: `pegasus update --cli opencode` reaplica en OpenCode la selección que esa instalación ya tiene registrada, y `pegasus upgrade` no toca ninguna instalación — reemplaza el binario `pegasus` en sí. Para saber desde qué versión partís, `pegasus -V` (o `pegasus --version`) la contesta sin abrir tu home, sin leer el journal y sin resolver ningún adapter: es la versión del binario y no la de ninguna instalación suya, así que sigue contestando en una máquina donde la instalación esté rota, que es justo cuando hace falta.
+
+```sh
+pegasus upgrade --dry-run
+pegasus upgrade
+```
+
+No lleva `--cli` porque no se trata de ninguna instalación puntual. Se niega antes de bajar un solo byte si no está corriendo desde un ejecutable instalado, si el destino no es escribible, si el archivo que hay ahí es de otra persona, o si no llega a la red para averiguar cuál es la última versión publicada. Recién después baja el checksum y el binario, lo verifica contra ese checksum, y lo pone en su lugar con un único rename atómico: un checksum que no coincide o una escritura que falla dejan intacto el binario con el que arrancaste, así que nunca hay un momento sin un `pegasus` funcionando en disco. Estar ya en la última versión publicada no es un error — lo informa y sale en `0`. Después hace falta reiniciar Pegasus: el proceso que acaba de hacer el upgrade sigue siendo, en memoria, la versión vieja.
+
+Lo mismo está en la TUI (`pegasus`, sin argumentos), en el menú principal → `Upgrade`. Al abrir el menú, si hay un release más nuevo publicado que el binario que estás corriendo, el aviso aparece arriba de todo; ese chequeo corre en segundo plano, no bloquea el menú, y falla en silencio ante cualquier problema de red.
+
 ## Deshacer
 
 - `pegasus restore [generación]` vuelve al estado exacto anterior a un comando (o a una generación puntual del historial de snapshots).

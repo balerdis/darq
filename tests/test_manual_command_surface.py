@@ -28,14 +28,23 @@ The three claims, and how each was wrong:
   precisely so that silence cannot retire it -- and `--mcp none` is the
   spelling that revokes it on purpose.
 
-Each paragraph is found by the name of the guard that measures it, which is
-the convention `tests/test_manual_figures.py` already established: a
+And one gap, the same surface read the other way round: `pegasus upgrade`
+shipped and the manual never learned it existed. The last class here derives
+the whole top-level surface from the parser, so the next command cannot go
+missing the way that one did -- see its own docstring for what a coverage
+check can and cannot prove.
+
+Each corrected paragraph is found by the name of the guard that measures it,
+which is the convention `tests/test_manual_figures.py` already established: a
 machine-shaped token somebody has to edit on purpose, and the same sentence
-that tells a reader where the fact was checked.
+that tells a reader where the fact was checked. The coverage class is the
+exception and names itself nowhere in the document: it holds no single claim
+a sentence could point at.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import io
 import json
 import re
@@ -369,6 +378,105 @@ class ManualSaysHowAnMcpSelectionIsRevokedOnPurposeTest(RealHomeTestCase):
 
     def test_the_paragraph_says_where_this_was_measured(self):
         self.assertIn(f"`{GUARD_MODULE}`", paragraph_naming(type(self).__name__))
+
+
+class ManualDocumentsEveryTopLevelCommandTest(RealHomeTestCase):
+    """Every subcommand the flags offer is reachable from this manual.
+
+    `pegasus upgrade` shipped and the manual never learned it existed: the
+    document covered `install`, `update`, `uninstall`, `repair`, `doctor`,
+    `restore`, `models`, `mcp` and `directory`, and simply stopped there. A
+    reader looking for how to replace the binary found nothing, and nothing
+    anywhere said the list had gone short.
+
+    What this proves and what it does not, plainly: it proves each command is
+    named in the document as something a person can type, derived from the
+    real parser so the tenth command cannot slip past the way the ninth did.
+    It does not prove that what the manual then says about a command is true
+    -- that is held, one claim at a time, by the guards above and by
+    `tests/test_manual_figures.py`, and no coverage check can stand in for
+    them.
+
+    The version flag is here rather than in a class of its own because it is
+    the same gap in the same surface: a way to ask this binary what it is,
+    answered by the parser alone, that a person reads about in the same
+    breath as replacing it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.manual = MANUAL.read_text(encoding="utf-8")
+        self.program = cli.default_identity().program_name
+
+    def test_the_parser_offers_a_surface_to_check_against(self):
+        """Or every assertion below would pass over an empty set."""
+        self.assertGreater(len(subcommands_under("command")), 1)
+
+    def test_every_subcommand_is_named_as_something_a_person_can_type(self):
+        for name in sorted(subcommands_under("command")):
+            self.assertIn(
+                f"{self.program} {name}",
+                self.manual,
+                f"{MANUAL.name} never names `{self.program} {name}`",
+            )
+
+    def version_flags(self) -> list[str]:
+        return [
+            option
+            for action in cli._parser(cli.default_identity())._actions
+            if action.dest == "version"
+            for option in action.option_strings
+        ]
+
+    def test_the_version_flag_is_named_in_the_spelling_the_parser_accepts(self):
+        """Both spellings come off the parser's own action, never retyped."""
+        flags = self.version_flags()
+        self.assertTrue(flags, "the parser no longer offers a version flag")
+        for flag in flags:
+            self.assertIn(f"`{self.program} {flag}`", self.manual)
+
+    def test_the_manual_names_no_bare_flag_the_parser_would_reject(self):
+        """The other direction, which the check above cannot see.
+
+        Dropping a spelling from the parser leaves every remaining one still
+        documented, so that check stays green while the manual points at a
+        flag that no longer exists. This reads the bare-flag invocations out
+        of the document and requires the parser to know each one -- so a
+        spelling can be removed or renamed, but not silently left behind
+        here.
+        """
+        named = set(re.findall(rf"`{re.escape(self.program)} (-{{1,2}}[a-zA-Z][\w-]*)`", self.manual))
+        self.assertTrue(named, f"{MANUAL.name} names no bare flag at all, so this proves nothing")
+        accepted = {
+            option
+            for action in cli._parser(cli.default_identity())._actions
+            for option in action.option_strings
+        }
+        self.assertEqual(named - accepted, set())
+
+    def test_the_version_flag_answers_with_this_binarys_own_version(self):
+        """Run, not read: the manual's reason for naming it is that it answers
+        without opening a home or reading a journal, which is exactly when a
+        person needs it."""
+        printed = io.StringIO()
+        # argparse's version action writes straight to `sys.stdout` and exits,
+        # never through the runtime's own stream, so this is captured here
+        # rather than read off `runtime.out` -- and captured at all so the
+        # suite's own output stays the suite's.
+        with contextlib.redirect_stdout(printed), self.assertRaises(SystemExit) as raised:
+            cli.main(["--version"], runtime=self.runtime())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn(cli.default_identity().version, printed.getvalue())
+
+    def test_the_menu_entry_that_leads_to_the_upgrade_is_quoted_as_drawn(self):
+        """The TUI half, derived from the menu itself the same way
+        `tests/test_manual_mcp_screens.py` derives the two it documents."""
+        from pegasus.tui import navigator
+
+        labels = [entry.label for entry in navigator.main_menu().entries]
+        upgrade = [label for label in labels if label.lower() == "upgrade"]
+        self.assertEqual(len(upgrade), 1, f"the main menu no longer offers one Upgrade entry: {labels}")
+        self.assertIn(f"`{upgrade[0]}`", self.manual)
 
 
 if __name__ == "__main__":  # pragma: no cover
