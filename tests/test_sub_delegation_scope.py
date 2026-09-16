@@ -101,5 +101,28 @@ class ReferencesUpdatedTest(unittest.TestCase):
         self.assertNotIn("the only agent you may fan out to", text)
 
 
+class ParallelIssuanceMechanicTest(unittest.TestCase):
+    """Concluding two parts are independent (the gates) is not the same as
+    running them concurrently (how the calls are issued). The file must state
+    the actual mechanic — every independent call emitted in the same reply,
+    before any result returns — not just gesture at the word "parallel"."""
+
+    def setUp(self):
+        self.text = CRITERION.read_text(encoding="utf-8")
+
+    def test_states_same_reply_before_any_result_returns(self):
+        self.assertIn("in the same reply", self.text)
+        self.assertIn("before any of their results has come back", self.text)
+
+    def test_names_issue_one_then_next_as_sequential_regardless_of_gates(self):
+        """A bare keyword like "parallel" proves nothing — this pins the
+        actual claim: issuing calls one at a time IS sequential execution,
+        even when the gates concluded the parts were independent."""
+        self.assertIn(
+            "you have picked sequential execution regardless of what the gates\nconcluded",
+            self.text,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

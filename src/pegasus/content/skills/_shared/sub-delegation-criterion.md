@@ -76,6 +76,18 @@ exactly test 4's failure; so the two tests are tied: if you cannot state how you
 no write fan-out. The safety net stays: nothing committed, everything diffable against unmodified
 code, and nothing is committed without permission.
 
+## Emit together, not one at a time
+
+Independence is a property of the parts; concurrency is a property of how you call. Judging two parts
+independent settles nothing by itself — the gates above decide whether and how to cut the work, not
+how the calls reach the runtime. Parts run at the same time only if every independent `task` call goes
+out in the same reply, before any of their results has come back. Issue one, wait to see what it
+returns, then issue the next, and you have picked sequential execution regardless of what the gates
+concluded — that is exactly what an agent with no instruction here defaults to: one call, a look at the
+result, the next call, and the concurrency the gates bought is never spent. So emit every independent
+call in the same turn, then wait for all of them, merge by the schema test 4 already committed to, and
+report as one.
+
 ## Fail-closed behavior (deliberate departure)
 
 This file governs whether a fan-out happens, not whether your own work happens. Unlike a required
