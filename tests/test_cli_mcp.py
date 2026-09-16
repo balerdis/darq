@@ -107,7 +107,7 @@ class GrantTest(RealHomeTestCase):
         code, report = self.run_cli("mcp", "grant", "--cli", CLI, "figma")
         self.assertEqual(code, 0)
         self.assertEqual(report["action"], "grant")
-        self.assertEqual(report["key"], "figma")
+        self.assertEqual(report["keys"], ["figma"])
         self.assertIn("figma", report["granted"])
 
     def test_granting_persists_to_the_journal(self):

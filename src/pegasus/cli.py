@@ -323,16 +323,27 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
     models.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     models_commands = models.add_subparsers(dest="models_command")
 
-    set_parser = models_commands.add_parser("set", help="assign a model to one agent")
+    set_parser = models_commands.add_parser("set", help="assign a model to one or more agents, in one command")
     set_parser.add_argument("--cli", required=True)
-    set_parser.add_argument("--agent", required=True)
-    set_parser.add_argument("--model", required=True, metavar="PROVIDER/MODEL")
-    set_parser.add_argument("--effort", default=None)
+    set_parser.add_argument(
+        "--assign",
+        action="append",
+        required=True,
+        metavar="AGENT=PROVIDER/MODEL",
+        help="assign a model to an agent (repeatable): --assign AGENT=PROVIDER/MODEL",
+    )
+    set_parser.add_argument(
+        "--effort",
+        action="append",
+        default=[],
+        metavar="AGENT=LEVEL",
+        help="set the reasoning effort for an agent also named by --assign (repeatable)",
+    )
     set_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
-    unset_parser = models_commands.add_parser("unset", help="remove one agent's model assignment")
+    unset_parser = models_commands.add_parser("unset", help="remove one or more agents' model assignment")
     unset_parser.add_argument("--cli", required=True)
-    unset_parser.add_argument("--agent", required=True)
+    unset_parser.add_argument("--agent", action="append", required=True, help="repeatable")
     unset_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
     list_parser = models_commands.add_parser("list", help="show current model assignments")
@@ -346,17 +357,17 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
     mcp_commands = mcp.add_subparsers(dest="mcp_command")
 
     mcp_grant_parser = mcp_commands.add_parser(
-        "grant", help="grant a server key you administer to every agent, and reapply"
+        "grant", help="grant one or more server keys you administer to every agent, in one command"
     )
     mcp_grant_parser.add_argument("--cli", required=True)
-    mcp_grant_parser.add_argument("key")
+    mcp_grant_parser.add_argument("key", nargs="+")
     mcp_grant_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
     mcp_revoke_parser = mcp_commands.add_parser(
-        "revoke", help="revoke a previously granted server key, and reapply"
+        "revoke", help="revoke one or more previously granted server keys, in one command"
     )
     mcp_revoke_parser.add_argument("--cli", required=True)
-    mcp_revoke_parser.add_argument("key")
+    mcp_revoke_parser.add_argument("key", nargs="+")
     mcp_revoke_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
     mcp_list_parser = mcp_commands.add_parser(
@@ -372,19 +383,19 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
     directory_commands = directory.add_subparsers(dest="directory_command")
 
     directory_grant_parser = directory_commands.add_parser(
-        "grant", help="grant a directory of your own choosing to every agent, and reapply"
+        "grant", help="grant one or more directories of your own choosing to every agent, in one command"
     )
     directory_grant_parser.add_argument("--cli", required=True)
-    directory_grant_parser.add_argument("path")
+    directory_grant_parser.add_argument("path", nargs="+")
     directory_grant_parser.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS
     )
 
     directory_revoke_parser = directory_commands.add_parser(
-        "revoke", help="revoke a previously granted directory, and reapply"
+        "revoke", help="revoke one or more previously granted directories, in one command"
     )
     directory_revoke_parser.add_argument("--cli", required=True)
-    directory_revoke_parser.add_argument("path")
+    directory_revoke_parser.add_argument("path", nargs="+")
     directory_revoke_parser.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS
     )
@@ -447,6 +458,23 @@ class Progress:
         return 100 * self.fraction
 
 
+@dataclass(frozen=True)
+class ModelAssignmentSpec:
+    """One item of a model-assignment batch: an agent name, an unparsed
+    `PROVIDER/MODEL` spec, and an optional effort.
+
+    This is the shape `install`'s own `model_assignments` parameter takes,
+    mirroring `mcp`/`granted`/`granted_directories`'s own list-of-plain-values
+    shape closely enough for a caller to build the whole batch before making
+    one call -- but a model assignment carries three fields, not one, so a
+    bare string cannot hold it the way an mcp id or a directory path can.
+    """
+
+    agent: str
+    model: str
+    effort: str | None = None
+
+
 def install(
     cli_id: str,
     runtime: Runtime,
@@ -455,6 +483,7 @@ def install(
     mcp: list[str] | None = None,
     granted: list[str] | None = None,
     granted_directories: list[str] | None = None,
+    model_assignments: list[ModelAssignmentSpec] | None = None,
     on_progress: Callable[["Progress"], None] | None = None,
 ) -> dict[str, Any]:
     """Place Pegasus into one CLI's configuration, and report what happened.
@@ -480,6 +509,20 @@ def install(
     it replaces the whole set; left `None`, a plain reinstall carries the
     previous install's set forward unchanged rather than silently revoking
     every working directory the person declared.
+
+    `model_assignments`, when given, is a whole batch of preferences to
+    record in the same call that renders them -- the same "record then
+    apply" split `models_set` already documents, but for as many agents as a
+    caller wants in one call, one snapshot, one render, rather than one
+    `install` per agent. Every item is validated (the agent is configurable,
+    the model spec parses) before anything is recorded: an invalid item
+    refuses the whole batch, names the offending agent and why, and writes
+    nothing -- neither to the model-assignment store nor to disk. Unlike
+    `mcp`/`granted`, `None` here does not mean "carry the previous set
+    forward": model assignments already live in their own store, read fresh
+    on every render regardless of this parameter, so there is no equivalent
+    "silence retires everything" risk for this parameter to guard against --
+    `None` simply means this call is not the one changing any assignment.
     """
     adapter = _adapter(cli_id)
     environment = runtime.environment
@@ -569,6 +612,31 @@ def install(
             if not dry_run:
                 raise CommandError(message)
             mcp_warnings = [f"a real (non-dry) run would refuse: {message}"]
+    # `model_assignments`, validated and folded into an in-memory view of the
+    # store before anything downstream reads it -- `_resolve_model_overrides`
+    # below reads `effective_assignments`, never the store directly, so a dry
+    # run previews exactly what a real run would render. Every item is
+    # checked before any of them are applied: an invalid one raises here,
+    # before `effective_assignments` differs from the stored one at all, so a
+    # batch that fails never gets even a partial write. The store itself is
+    # only touched later, once this run is known not to be a dry run and
+    # everything else has already succeeded -- see the write near the end of
+    # this function.
+    stored_assignments = model_assignment_store(runtime).load()
+    effective_assignments = stored_assignments
+    if model_assignments is not None:
+        parsed_assignments: list[tuple[str, ModelAssignment]] = []
+        for spec in model_assignments:
+            _require_configurable_agent(spec.agent)
+            try:
+                parsed = ModelAssignment.parse(spec.model, spec.effort)
+            except ValueError as error:
+                raise CommandError(f"invalid model assignment for {spec.agent!r}: {error}") from error
+            parsed_assignments.append((spec.agent, parsed))
+        for agent, parsed in parsed_assignments:
+            effective_assignments = model_assignments_module.with_assignment(
+                effective_assignments, adapter.id, agent, parsed
+            )
     # Resolved here, once `installed` is known, and applied before anything
     # downstream reads `content` again -- the Node guard included, since a
     # granted key never carries a distribution to fetch and so never changes
@@ -623,7 +691,7 @@ def install(
     activation = list(adapter.activation_steps())
 
     catalog = catalog_module.build(content, adapter, runtime.identity)
-    model_overrides, model_warnings = _resolve_model_overrides(runtime, adapter, environment, content)
+    model_overrides, model_warnings = _resolve_model_overrides(effective_assignments, adapter, environment, content)
     artifacts = catalog_module.render(
         content, adapter, environment, runtime.identity, model_overrides=model_overrides
     )
@@ -886,6 +954,15 @@ def install(
             pruned=pruned,
             retired=list(stale.removed),
         ) from error
+
+    # The model-assignment batch is persisted only now, after everything else
+    # this run does has already succeeded -- the journal write above
+    # included. Every earlier failure path in this function returns or raises
+    # before reaching here, so a run that fails partway leaves the store
+    # exactly as it was, never holding a preference the render it was meant
+    # to reach never happened for.
+    if model_assignments is not None:
+        model_assignment_store(runtime).save(effective_assignments)
 
     # `kept_dependencies` were not touched this run at all -- the version and
     # checksum already on disk are the ones this release still asks for, so
@@ -1437,7 +1514,10 @@ def upgrade(
 
 
 def _resolve_model_overrides(
-    runtime: Runtime, adapter, environment: Environment, content: content_module.Content
+    assignments: model_assignments_module.ModelAssignments,
+    adapter,
+    environment: Environment,
+    content: content_module.Content,
 ) -> tuple[dict[str, str], tuple[str, ...]]:
     """Which stored model preferences this install can actually honour.
 
@@ -1446,10 +1526,15 @@ def _resolve_model_overrides(
     declared `per_agent_model` has nothing to resolve and nothing to warn
     about -- the capability was never offered, so a preference for it could
     never have been set through `models set` in the first place.
+
+    `assignments` is passed in rather than read off the store here: `install`
+    computes it once, as `effective_assignments` -- the stored set with this
+    call's own `model_assignments` batch folded in, before any of it is
+    written -- so a dry run previews the batch this call would record, not
+    only what an earlier call already persisted.
     """
     if not adapter.capabilities().declares(Capability.PER_AGENT_MODEL):
         return {}, ()
-    assignments = model_assignment_store(runtime).load()
     configurable = frozenset(agent.name for agent in content.agents if agent.model_configurable)
     catalog = adapter.model_catalog(environment)
     return model_assignments_module.resolve_for_render(assignments, adapter.id, configurable, catalog)
@@ -1864,7 +1949,8 @@ def uninstall(cli_id: str, runtime: Runtime) -> dict[str, Any]:
 
 def _models(arguments, runtime: Runtime) -> dict[str, Any]:
     if arguments.models_command == "set":
-        return models_set(arguments.cli, arguments.agent, arguments.model, runtime, effort=arguments.effort)
+        specs = _model_assignment_specs(arguments.assign, arguments.effort)
+        return models_set(arguments.cli, specs, runtime)
     if arguments.models_command == "unset":
         return models_unset(arguments.cli, arguments.agent, runtime)
     if arguments.models_command == "list":
@@ -1872,28 +1958,74 @@ def _models(arguments, runtime: Runtime) -> dict[str, Any]:
     raise CommandError("models needs a subcommand: set, unset, or list")
 
 
+def _model_assignment_specs(assign: list[str], effort: list[str]) -> list[ModelAssignmentSpec]:
+    """Turn `--assign AGENT=PROVIDER/MODEL` and `--effort AGENT=LEVEL` --
+    each repeated independently -- into one `ModelAssignmentSpec` per agent.
+
+    Paired by the agent name each names, never by position: two independent
+    repeated flags paired positionally is an implicit relation argparse
+    cannot validate, and a misalignment (an `--effort` meant for the third
+    `--assign` landing on the second) would pass silently. Naming the agent
+    in both flags is the `key=value`-in-a-repeated-flag idiom this product
+    already uses for `--mcp id=server-key`; it costs one repeated word per
+    flag and buys a batch a mismatched count could never produce by accident.
+
+    Refuses an `--effort` naming an agent no `--assign` named: an effort with
+    nothing to attach a model to could otherwise be silently dropped, or
+    -- worse -- misread as belonging to a different agent.
+    """
+    models: dict[str, str] = {}
+    order: list[str] = []
+    for spelling in assign:
+        agent, separator, model = spelling.partition("=")
+        if not separator or not agent or not model:
+            raise CommandError(f"--assign must be AGENT=PROVIDER/MODEL: {spelling!r}")
+        if agent in models:
+            raise CommandError(f"--assign named {agent!r} more than once")
+        models[agent] = model
+        order.append(agent)
+    efforts: dict[str, str] = {}
+    for spelling in effort:
+        agent, separator, level = spelling.partition("=")
+        if not separator or not agent or not level:
+            raise CommandError(f"--effort must be AGENT=LEVEL: {spelling!r}")
+        if agent in efforts:
+            raise CommandError(f"--effort named {agent!r} more than once")
+        efforts[agent] = level
+    unmatched = sorted(set(efforts) - set(models))
+    if unmatched:
+        raise CommandError(
+            f"--effort named agent(s) {', '.join(unmatched)} that --assign never named; an effort has "
+            f"nothing to attach a model to without a matching --assign AGENT=PROVIDER/MODEL"
+        )
+    return [ModelAssignmentSpec(agent=agent, model=models[agent], effort=efforts.get(agent)) for agent in order]
+
+
 def models_set(
-    cli_id: str, agent: str, model: str, runtime: Runtime, *, effort: str | None = None
+    cli_id: str, assignments: list[ModelAssignmentSpec], runtime: Runtime
 ) -> dict[str, Any]:
-    """Assign a model to one agent, and reapply so the assignment actually
-    reaches the rendered configuration.
+    """Assign a model to one or more agents in a single command, and reapply
+    once so the whole batch reaches the rendered configuration in one
+    render and one snapshot generation, instead of one per agent.
 
     Mirrors `mcp_grant`'s shape exactly, and for the same reason: recording a
     decision and applying it are one step everywhere else in this product, so
-    this records the preference and delegates the write to `install` rather
+    this records the preferences and delegates the write to `install` rather
     than placing artifacts a second time. It used to record and then hand
     back a note telling the person to reinstall -- which left the only path
     from the TUI's models screen to the rendered file running through the
     Install menu entry, and so through an MCP selection screen that has
     nothing to do with models.
 
-    The three refusals are `mcp_grant`'s own, in its own order: an argument
-    the person just mistyped first (an agent nothing will ever read a model
-    for, or a model spelling this release cannot parse), then a CLI with
-    nothing installed, then an install whose MCP selection cannot be
-    reconstructed. Nothing is recorded until all three have passed: a
-    preference saved beside a refusal to apply it would be exactly the
-    record-without-render split this change exists to close.
+    Every item is validated -- through `install`'s own `model_assignments`
+    batch handling -- before anything is recorded: an agent nothing will ever
+    read a model for, or a model spelling this release cannot parse, refuses
+    the *whole* batch and writes nothing, naming which item and why, rather
+    than applying the valid ones and silently dropping the rest. Checked
+    before a CLI with nothing installed and before an install whose MCP
+    selection cannot be reconstructed, the same order `mcp_grant` already
+    follows for the same reason: an argument the person just mistyped is more
+    actionable than either of those facts about the machine.
 
     `_mcp_update_selection` is the same reconstruction `update`, `mcp_grant`
     and `directory_grant` already make, for the same reason each of them
@@ -1905,11 +2037,24 @@ def models_set(
     the previous install's own set forward unchanged.
     """
     adapter = _adapter(cli_id)
-    _require_configurable_agent(agent)
-    try:
-        assignment = ModelAssignment.parse(model, effort)
-    except ValueError as error:
-        raise CommandError(str(error)) from error
+    if not assignments:
+        raise CommandError("models set needs at least one --assign AGENT=PROVIDER/MODEL")
+    # Validated here too, ahead of the "nothing installed" refusal below --
+    # the same order `install`'s own batch handling documents, and the same
+    # reason: an argument the person just mistyped is more actionable than a
+    # fact about the machine. `install` validates this exact batch again once
+    # called, so a caller that reaches it directly is held to the identical
+    # rule; this is only about which refusal a person sees first.
+    seen_agents: set[str] = set()
+    for spec in assignments:
+        if spec.agent in seen_agents:
+            raise CommandError(f"--assign named {spec.agent!r} more than once")
+        seen_agents.add(spec.agent)
+        _require_configurable_agent(spec.agent)
+        try:
+            ModelAssignment.parse(spec.model, spec.effort)
+        except ValueError as error:
+            raise CommandError(f"invalid model assignment for {spec.agent!r}: {error}") from error
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
@@ -1918,45 +2063,61 @@ def models_set(
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    store = model_assignment_store(runtime)
-    store.save(model_assignments_module.with_assignment(store.load(), cli_id, agent, assignment))
-    report = install(cli_id, runtime, mcp=selection)
+    report = install(cli_id, runtime, mcp=selection, model_assignments=list(assignments))
     return {
         **report,
         "action": "set",
-        "agent": agent,
-        "model": assignment.full_id,
-        "effort": assignment.effort,
+        "assignments": [
+            {
+                "agent": spec.agent,
+                "model": ModelAssignment.parse(spec.model, spec.effort).full_id,
+                "effort": spec.effort,
+            }
+            for spec in assignments
+        ],
         "status": "set",
     }
 
 
-def models_unset(cli_id: str, agent: str, runtime: Runtime) -> dict[str, Any]:
-    """Remove one agent's assignment, and reapply. Removing one never set is
-    success, not an error -- the same `mcp_revoke` precedent, checked in the
-    same order: a CLI with nothing installed is refused before the
-    already-unset shortcut, because a removal nobody can apply is a refusal
-    whether or not there was anything to remove.
+def models_unset(cli_id: str, agents: list[str], runtime: Runtime) -> dict[str, Any]:
+    """Remove one or more agents' assignment in a single command, and reapply
+    once. Removing an assignment never set is a no-op, not an error -- the
+    same `mcp_revoke` precedent, checked in the same order: a CLI with
+    nothing installed is refused before the already-unset shortcut, because a
+    removal nobody can apply is a refusal whether or not there was anything
+    to remove. A batch where *every* named agent is already unset is a whole
+    no-op and writes nothing at all; a batch where only *some* are removes
+    exactly those, in the one call.
 
     See `models_set` for why the recorded MCP selection is reconstructed
     before `install` is called at all.
     """
     adapter = _adapter(cli_id)
+    if not agents:
+        raise CommandError("models unset needs at least one --agent")
+    seen: set[str] = set()
+    for agent in agents:
+        if agent in seen:
+            raise CommandError(f"--agent named {agent!r} more than once")
+        seen.add(agent)
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
     store = model_assignment_store(runtime)
     assignments = store.load()
-    if model_assignments_module.get(assignments, cli_id, agent) is None:
-        return {"action": "unset", "cli": cli_id, "agent": agent, "status": "already-unset"}
+    to_remove = [agent for agent in agents if model_assignments_module.get(assignments, cli_id, agent) is not None]
+    if not to_remove:
+        return {"action": "unset", "cli": cli_id, "agents": list(agents), "status": "already-unset"}
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    store.save(model_assignments_module.without_assignment(assignments, cli_id, agent))
+    for agent in to_remove:
+        assignments = model_assignments_module.without_assignment(assignments, cli_id, agent)
+    store.save(assignments)
     report = install(cli_id, runtime, mcp=selection)
-    return {**report, "action": "unset", "agent": agent, "status": "unset"}
+    return {**report, "action": "unset", "agents": list(agents), "removed": to_remove, "status": "unset"}
 
 
 def models_list(runtime: Runtime, *, cli_id: str | None = None) -> dict[str, Any]:
@@ -1984,66 +2145,79 @@ def _mcp(arguments, runtime: Runtime) -> dict[str, Any]:
     raise CommandError("mcp needs a subcommand: grant, revoke, or list")
 
 
-def mcp_grant(cli_id: str, key: str, runtime: Runtime) -> dict[str, Any]:
-    """Grant a server key the user administers themselves to every agent,
-    and reapply so the grant actually reaches the rendered configuration.
+def mcp_grant(cli_id: str, keys: list[str], runtime: Runtime) -> dict[str, Any]:
+    """Grant one or more server keys the user administers themselves to
+    every agent, in a single command, and reapply once so the whole batch
+    reaches the rendered configuration in one render and one snapshot
+    generation.
 
     Peeled the same way `install` and `models_set` are: a plain function an
     agent or another program can call directly, with `_mcp` doing only the
     argparse unpacking.
 
-    Refuses a key nothing in the CLI's own configuration declares. A
-    mistyped id would otherwise grant a permission nobody notices is
-    missing -- the exact class of bug `_require_mcp_convention_referenced`
-    exists to catch for a shipped server, and there is no equivalent
-    catch for a key Pegasus never heard of, so it has to happen here
-    instead, against the one source of truth for what the user actually
-    administers. Granting it anyway with a warning was considered and
-    rejected: a warning is easy to miss, and a missing tool is often
-    invisible until someone goes looking for exactly the moment it would
-    have mattered.
+    Every key is checked against the CLI's own declared keys before any of
+    them is granted: a mistyped id would otherwise grant a permission nobody
+    notices is missing -- the exact class of bug
+    `_require_mcp_convention_referenced` exists to catch for a shipped
+    server, and there is no equivalent catch for a key Pegasus never heard
+    of, so it has to happen here instead, against the one source of truth
+    for what the user actually administers. One bad key in the batch names
+    itself and refuses the whole call -- nothing is granted, not even the
+    keys that were fine -- rather than granting the valid ones and silently
+    leaving the mistyped one out. Granting anyway with a warning was
+    considered and rejected: a warning is easy to miss, and a missing tool
+    is often invisible until someone goes looking for exactly the moment it
+    would have mattered.
     """
     adapter = _adapter(cli_id)
+    if not keys:
+        raise CommandError("mcp grant needs at least one key")
     declared = _declared_mcp_keys(runtime, adapter)
-    if key not in declared:
+    unknown = sorted({key for key in keys if key not in declared})
+    if unknown:
         raise CommandError(
-            f"{key!r} is not declared in {cli_id}'s own configuration, so it cannot be granted; "
-            f"the server key(s) it declares are: {', '.join(sorted(declared)) or 'none'}. "
-            f"Add it to {cli_id}'s own configuration first, or check for a typo."
+            f"{', '.join(repr(key) for key in unknown)} not declared in {cli_id}'s own configuration, so "
+            f"nothing was granted; the server key(s) it declares are: {', '.join(sorted(declared)) or 'none'}. "
+            f"Add the missing key(s) to {cli_id}'s own configuration first, or check for a typo."
         )
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
-    granted = tuple(sorted(set(installed.granted_mcp) | {key}))
+    granted = tuple(sorted(set(installed.granted_mcp) | set(keys)))
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(cli_id, runtime, mcp=selection, granted=list(granted))
-    return {**report, "action": "grant", "key": key, "granted": list(granted), "status": "granted"}
+    return {**report, "action": "grant", "keys": list(keys), "granted": list(granted), "status": "granted"}
 
 
-def mcp_revoke(cli_id: str, key: str, runtime: Runtime) -> dict[str, Any]:
-    """Remove a granted key, and reapply. Revoking one never granted is
-    success, not an error -- the same `models unset` / `upgrade`
-    "already-current" precedent: being in the desired state already is not a
-    failure.
+def mcp_revoke(cli_id: str, keys: list[str], runtime: Runtime) -> dict[str, Any]:
+    """Remove one or more granted keys, in a single command, and reapply
+    once. Revoking a key never granted is a no-op, not an error -- the same
+    `models unset` / `upgrade` "already-current" precedent: being in the
+    desired state already is not a failure. A batch where *every* named key
+    is already ungranted is a whole no-op and writes nothing; a batch where
+    only *some* are revokes exactly those, in the one call.
     """
     adapter = _adapter(cli_id)
+    if not keys:
+        raise CommandError("mcp revoke needs at least one key")
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
-    if key not in installed.granted_mcp:
-        return {"action": "revoke", "cli": cli_id, "key": key, "status": "already-revoked"}
-    granted = tuple(sorted(set(installed.granted_mcp) - {key}))
+    to_revoke = [key for key in keys if key in installed.granted_mcp]
+    if not to_revoke:
+        return {"action": "revoke", "cli": cli_id, "keys": list(keys), "status": "already-revoked"}
+    granted = tuple(sorted(set(installed.granted_mcp) - set(to_revoke)))
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(cli_id, runtime, mcp=selection, granted=list(granted))
-    return {**report, "action": "revoke", "key": key, "granted": list(granted), "status": "revoked"}
+    return {**report, "action": "revoke", "keys": list(keys), "granted": list(granted), "status": "revoked"}
 
 
 def mcp_list(cli_id: str, runtime: Runtime) -> dict[str, Any]:
@@ -2118,26 +2292,29 @@ def _directory(arguments, runtime: Runtime) -> dict[str, Any]:
     raise CommandError("directory needs a subcommand: grant or revoke")
 
 
-def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
-    """Grant a working directory of the person's own choosing to every
-    agent's `external_directory` permission, and reapply so the grant
-    actually reaches the rendered configuration.
+def directory_grant(cli_id: str, paths: list[str], runtime: Runtime) -> dict[str, Any]:
+    """Grant one or more working directories of the person's own choosing to
+    every agent's `external_directory` permission, in a single command, and
+    reapply once so the whole batch reaches the rendered configuration in
+    one render and one snapshot generation.
 
     Mirrors `mcp_grant`'s shape exactly: a plain function an agent or another
     program can call directly, with `_directory` doing only the argparse
     unpacking, and the actual write delegated to `install` the same way
     `mcp_grant` delegates to it rather than placing artifacts a second time.
 
-    Unlike `mcp_grant`, there is no CLI-declared set to check the path
-    against first -- a working directory is never declared anywhere in the
-    CLI's own configuration the way an MCP server key is, so there is no
-    typo class to catch before the fact. The only refusal here is
+    Unlike `mcp_grant`, there is no CLI-declared set to check a path against
+    first -- a working directory is never declared anywhere in the CLI's own
+    configuration the way an MCP server key is, so there is no typo class to
+    catch before the fact. The only refusal here is
     `content.validate_granted_directory`'s own validation (absolute, free of
     `..` and of glob metacharacters, not the filesystem root, not the CLI's
     own configuration directory or Pegasus's own data directory, nor an
-    ancestor of either) -- surfaced as a `CommandError` the moment it raises.
+    ancestor of either) -- surfaced as a `CommandError` the moment it raises,
+    for the first offending path found, naming it and why; nothing in the
+    batch is recorded until every path in it has validated.
 
-    The path is normalized through that same validation *before* it is
+    Each path is normalized through that same validation *before* it is
     stored or reported, not only when `install` renders it: `render.py`
     writes `f"{path}/*": "allow"` from whatever string sits in the journal,
     so the journal, the rendered permission, this report, and whatever a
@@ -2153,26 +2330,32 @@ def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
     directory. Refusing the grant outright would change this command's
     contract for a case the person did not ask to be blocked on, so it is not
     refused: it is still recorded and still reported as granted, with a
-    warning that it can never take effect, checked through
-    `opencode_render_module.deny_floor_shadows` -- the OpenCode-specific fact
-    of which directories the floor covers has no business in `content.py`
-    (`core` may not import an adapter), so the predicate lives in the adapter
-    and this CLI layer, which already depends on everything, is what calls
-    it. Only for `opencode` -- another CLI adapter this product ships may have
-    no such floor, and must not inherit a warning describing OpenCode's own.
+    warning -- one per shadowed path in the batch -- that it can never take
+    effect, checked through `opencode_render_module.deny_floor_shadows` --
+    the OpenCode-specific fact of which directories the floor covers has no
+    business in `content.py` (`core` may not import an adapter), so the
+    predicate lives in the adapter and this CLI layer, which already depends
+    on everything, is what calls it. Only for `opencode` -- another CLI
+    adapter this product ships may have no such floor, and must not inherit a
+    warning describing OpenCode's own.
     """
     adapter = _adapter(cli_id)
+    if not paths:
+        raise CommandError("directory grant needs at least one path")
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
     layout = adapter.layout(runtime.environment)
-    try:
-        normalized = content_module.validate_granted_directory(
-            path, config_dir=layout.config_dir, data_dir=runtime.filesystem.data_dir(runtime.home)
-        )
-    except content_module.ContentError as error:
-        raise CommandError(str(error)) from error
-    granted = tuple(sorted(set(installed.granted_directories) | {normalized}))
+    normalized_paths: list[str] = []
+    for path in paths:
+        try:
+            normalized = content_module.validate_granted_directory(
+                path, config_dir=layout.config_dir, data_dir=runtime.filesystem.data_dir(runtime.home)
+            )
+        except content_module.ContentError as error:
+            raise CommandError(f"{path!r}: {error}") from error
+        normalized_paths.append(normalized)
+    granted = tuple(sorted(set(installed.granted_directories) | set(normalized_paths)))
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
@@ -2182,24 +2365,34 @@ def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
         cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
     )
     result = {
-        **report, "action": "grant", "path": normalized, "granted_directories": list(granted), "status": "granted"
+        **report,
+        "action": "grant",
+        "paths": normalized_paths,
+        "granted_directories": list(granted),
+        "status": "granted",
     }
-    if adapter.id == OPENCODE_CLI_ID and opencode_render_module.deny_floor_shadows(normalized):
-        result["warning"] = (
-            f"{normalized!r} is granted and recorded, but it will never take effect: it falls under "
-            f"OpenCode's own always-denied floor (.ssh, .aws, .credentials, .config/gh, secrets), which "
-            f"is written after every grant so it always wins the match. This is not the ordinary dormant "
-            f"case -- an ordinary grant regains meaning if the baseline ever goes back to \"ask\"; this "
-            f"one never will, because the floor is written last regardless of the baseline."
-        )
+    if adapter.id == OPENCODE_CLI_ID:
+        shadowed = [path for path in normalized_paths if opencode_render_module.deny_floor_shadows(path)]
+        if shadowed:
+            result["warning"] = "\n\n".join(
+                f"{path!r} is granted and recorded, but it will never take effect: it falls under "
+                f"OpenCode's own always-denied floor (.ssh, .aws, .credentials, .config/gh, secrets), which "
+                f"is written after every grant so it always wins the match. This is not the ordinary dormant "
+                f"case -- an ordinary grant regains meaning if the baseline ever goes back to \"ask\"; this "
+                f"one never will, because the floor is written last regardless of the baseline."
+                for path in shadowed
+            )
     return result
 
 
-def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
-    """Remove a granted directory, and reapply. Revoking one never granted is
-    success, not an error -- the same `mcp_revoke` precedent.
+def directory_revoke(cli_id: str, paths: list[str], runtime: Runtime) -> dict[str, Any]:
+    """Remove one or more granted directories, in a single command, and
+    reapply once. Revoking a directory never granted is a no-op, not an
+    error -- the same `mcp_revoke` precedent. A batch where *every* named
+    path is already ungranted is a whole no-op and writes nothing; a batch
+    where only *some* are revokes exactly those, in the one call.
 
-    The argument is normalized through `content.validate_granted_directory`
+    Every argument is normalized through `content.validate_granted_directory`
     before it is compared against `installed.granted_directories` -- see
     `directory_grant`'s own docstring for why the journal only ever holds
     the normalized spelling. Without this, a directory granted as
@@ -2207,19 +2400,25 @@ def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]
     unequal, report `already-revoked`, and leave the grant rendered.
     """
     adapter = _adapter(cli_id)
+    if not paths:
+        raise CommandError("directory revoke needs at least one path")
     installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
     if installed is None:
         raise CommandError(f"{adapter.id} has nothing installed; run install first")
     layout = adapter.layout(runtime.environment)
-    try:
-        normalized = content_module.validate_granted_directory(
-            path, config_dir=layout.config_dir, data_dir=runtime.filesystem.data_dir(runtime.home)
-        )
-    except content_module.ContentError as error:
-        raise CommandError(str(error)) from error
-    if normalized not in installed.granted_directories:
-        return {"action": "revoke", "cli": cli_id, "path": normalized, "status": "already-revoked"}
-    granted = tuple(sorted(set(installed.granted_directories) - {normalized}))
+    normalized_paths: list[str] = []
+    for path in paths:
+        try:
+            normalized = content_module.validate_granted_directory(
+                path, config_dir=layout.config_dir, data_dir=runtime.filesystem.data_dir(runtime.home)
+            )
+        except content_module.ContentError as error:
+            raise CommandError(f"{path!r}: {error}") from error
+        normalized_paths.append(normalized)
+    to_revoke = [path for path in normalized_paths if path in installed.granted_directories]
+    if not to_revoke:
+        return {"action": "revoke", "cli": cli_id, "paths": normalized_paths, "status": "already-revoked"}
+    granted = tuple(sorted(set(installed.granted_directories) - set(to_revoke)))
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
@@ -2229,7 +2428,11 @@ def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]
         cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
     )
     return {
-        **report, "action": "revoke", "path": normalized, "granted_directories": list(granted), "status": "revoked"
+        **report,
+        "action": "revoke",
+        "paths": normalized_paths,
+        "granted_directories": list(granted),
+        "status": "revoked",
     }
 
 
@@ -3331,14 +3534,19 @@ def _prose(report: dict[str, Any], *, identity: Identity | None = None) -> str:
 def _models_prose(report: dict[str, Any]) -> str:
     action = report.get("action")
     if action == "set":
-        effort = f", effort {report['effort']}" if report.get("effort") else ""
-        line = f"{report['cli']}/{report['agent']}: assigned {report['model']}{effort}."
-        return "\n".join(_and_activation([line], report))
+        lines = [
+            f"{report['cli']}/{entry['agent']}: assigned {entry['model']}"
+            + (f", effort {entry['effort']}" if entry.get("effort") else "")
+            + "."
+            for entry in report["assignments"]
+        ]
+        return "\n".join(_and_activation(lines, report))
     if action == "unset":
         if report["status"] == "already-unset":
-            return f"{report['cli']}/{report['agent']}: no assignment to remove."
-        line = f"{report['cli']}/{report['agent']}: assignment removed."
-        return "\n".join(_and_activation([line], report))
+            agents = ", ".join(report["agents"])
+            return f"{report['cli']}/{agents}: no assignment to remove."
+        lines = [f"{report['cli']}/{agent}: assignment removed." for agent in report["removed"]]
+        return "\n".join(_and_activation(lines, report))
     if action == "list":
         if not report["assignments"]:
             return "No model assignments."
@@ -3353,12 +3561,14 @@ def _models_prose(report: dict[str, Any]) -> str:
 def _mcp_prose(report: dict[str, Any]) -> str:
     action = report.get("action")
     if action == "grant":
-        line = f"{report['cli']}: granted {report['key']} to every agent."
+        keys = ", ".join(report["keys"])
+        line = f"{report['cli']}: granted {keys} to every agent."
         return "\n".join(_and_activation([line], report))
     if action == "revoke":
+        keys = ", ".join(report["keys"])
         if report.get("status") == "already-revoked":
-            return f"{report['cli']}: {report['key']} was not granted; nothing to do."
-        line = f"{report['cli']}: revoked {report['key']}."
+            return f"{report['cli']}: {keys} was not granted; nothing to do."
+        line = f"{report['cli']}: revoked {keys}."
         return "\n".join(_and_activation([line], report))
     if action == "list":
         lines = [f"Granted: {', '.join(report['granted']) or 'none'}."]
@@ -3378,13 +3588,15 @@ def _mcp_prose(report: dict[str, Any]) -> str:
 def _directory_prose(report: dict[str, Any]) -> str:
     action = report.get("action")
     if action == "grant":
-        line = f"{report['cli']}: granted {report['path']} to every agent."
+        paths = ", ".join(report["paths"])
+        line = f"{report['cli']}: granted {paths} to every agent."
         lines = [line, report["warning"]] if report.get("warning") else [line]
         return "\n".join(_and_activation(lines, report))
     if action == "revoke":
+        paths = ", ".join(report["paths"])
         if report.get("status") == "already-revoked":
-            return f"{report['cli']}: {report['path']} was not granted; nothing to do."
-        line = f"{report['cli']}: revoked {report['path']}."
+            return f"{report['cli']}: {paths} was not granted; nothing to do."
+        line = f"{report['cli']}: revoked {paths}."
         return "\n".join(_and_activation([line], report))
     return "directory: nothing to report."
 

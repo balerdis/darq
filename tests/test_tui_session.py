@@ -478,7 +478,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         runtime = self.runtime()
         cli.install(CLI, runtime)
         _declare_own_mcp_server(self.home, "jira")
-        cli.mcp_grant(CLI, "jira", runtime)
+        cli.mcp_grant(CLI, ["jira"], runtime)
         navigator = self.to_screen(runtime)
         self.assertEqual(navigator.current.chosen, ("jira",))
         self.assertEqual(navigator.current.granted, ("jira",))
@@ -519,7 +519,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         runtime = self.runtime()
         cli.install(CLI, runtime)
         _declare_own_mcp_server(self.home, "jira")
-        cli.mcp_grant(CLI, "jira", runtime)
+        cli.mcp_grant(CLI, ["jira"], runtime)
         navigator = self.to_screen(runtime)  # jira opens checked
         navigator = self.toggle(navigator, "jira")  # unchecks it
         navigator = self.to_continue(navigator)
@@ -535,7 +535,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         cli.install(CLI, runtime)
         _declare_own_mcp_server(self.home, "jira")
         _declare_own_mcp_server(self.home, "figma")
-        cli.mcp_grant(CLI, "figma", runtime)
+        cli.mcp_grant(CLI, ["figma"], runtime)
         navigator = self.to_screen(runtime)  # figma checked, jira unchecked
         navigator = self.toggle(navigator, "jira")  # checks jira
         navigator = self.toggle(navigator, "figma")  # unchecks figma
@@ -546,13 +546,16 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         installed = journal_module.install_for(cli.journal_store(runtime).load(), CLI)
         self.assertEqual(set(installed.granted_mcp), {"jira"})
 
-    def test_a_key_that_raced_out_from_under_the_screen_is_not_reported_as_granted(self):
+    def test_a_key_that_raced_out_from_under_the_screen_fails_the_whole_grant(self):
         """The exact race `GrantMcpResultScreen`'s own docstring anticipates:
         `figma` is checked on screen, but removed from the CLI's own
-        configuration before Continue is confirmed. The result must report
-        only what its own call actually landed -- `jira` -- never the
-        requested delta unfiltered, and the on-disk `granted_mcp` is the
-        proof, not an inference from the screen's own claim."""
+        configuration before Continue is confirmed. `jira` and `figma` are
+        requested in the same batched `cli.mcp_grant` call now (see
+        `_grant_mcp_write`), and `mcp_grant`'s own all-or-nothing contract
+        means one bad key in that batch refuses the whole call -- so `jira`
+        is not granted either, even though nothing raced out from under it.
+        The on-disk `granted_mcp` is the proof, not an inference from the
+        screen's own claim."""
         _present(self.home)
         runtime = self.runtime()
         cli.install(CLI, runtime)
@@ -565,11 +568,11 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         _undeclare_own_mcp_server(self.home, "figma")  # the race: gone by the time Continue runs.
         navigator = session.step(navigator, runtime, Action.CHOOSE)
         self.assertIsInstance(navigator.current, GrantMcpResultScreen)
-        self.assertEqual(navigator.current.granted, ("jira",))
+        self.assertEqual(navigator.current.granted, ())
         self.assertTrue(navigator.current.errors)
         self.assertTrue(any("figma" in error for error in navigator.current.errors))
         installed = journal_module.install_for(cli.journal_store(runtime).load(), CLI)
-        self.assertEqual(set(installed.granted_mcp), {"jira"})
+        self.assertEqual(set(installed.granted_mcp), set())
         # The claim on screen and the disk it claims to describe must agree.
         self.assertEqual(set(navigator.current.granted), set(installed.granted_mcp))
 
@@ -602,11 +605,11 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         runtime = self.runtime()
         cli.install(CLI, runtime)
         _declare_own_mcp_server(self.home, "jira")
-        cli.mcp_grant(CLI, "jira", runtime)
+        cli.mcp_grant(CLI, ["jira"], runtime)
         navigator = self.to_screen(runtime)
         navigator = self.toggle(navigator, "jira")  # unchecks it
         navigator = self.to_continue(navigator)
-        cli.mcp_revoke(CLI, "jira", runtime)  # already revoked by the time Continue runs.
+        cli.mcp_revoke(CLI, ["jira"], runtime)  # already revoked by the time Continue runs.
         navigator = session.step(navigator, runtime, Action.CHOOSE)
         self.assertEqual(navigator.current.revoked, ("jira",))
         self.assertEqual(navigator.current.errors, ())
@@ -621,7 +624,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         cli.install(CLI, runtime)
         _declare_own_mcp_server(self.home, "jira")
         _declare_own_mcp_server(self.home, "figma")
-        cli.mcp_grant(CLI, "figma", runtime)
+        cli.mcp_grant(CLI, ["figma"], runtime)
         navigator = self.to_screen(runtime)
         navigator = self.toggle(navigator, "jira")
         navigator = self.toggle(navigator, "figma")
@@ -1478,7 +1481,7 @@ class RemovingAnAssignmentTest(ModelsScreenTestCase):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         self.install(runtime)
-        cli.models_set(CLI, CONFIGURABLE_AGENT, "anthropic/fast-model", runtime)
+        cli.models_set(CLI, [cli.ModelAssignmentSpec(agent=CONFIGURABLE_AGENT, model="anthropic/fast-model")], runtime)
 
         navigator = self.to_models_screen(runtime)
         index = next(i for i, row in enumerate(navigator.current.rows) if row.agent == CONFIGURABLE_AGENT)
@@ -1530,7 +1533,9 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
         navigator = navigator.handle(Action.CHOOSE)  # the one provider
         navigator = session.step(navigator, runtime, Action.CHOOSE)  # the one, plain, model: commits
 
-        expected = cli.models_set(CLI, "sdd-verify", "anthropic/fast-model", runtime)["activation"]
+        expected = cli.models_set(
+            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/fast-model")], runtime
+        )["activation"]
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertEqual(navigator.current.activation, tuple(expected))
         self.assertTrue(navigator.current.activation)
@@ -1544,7 +1549,9 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
         navigator = navigator.handle(Action.CHOOSE)  # the one, reasoning, model: only narrows
 
         navigator = session.step(navigator, runtime, Action.CHOOSE)  # the first effort offered: commits
-        expected = cli.models_set(CLI, "sdd-verify", "anthropic/deep-thinker", runtime, effort="low")["activation"]
+        expected = cli.models_set(
+            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/deep-thinker", effort="low")], runtime
+        )["activation"]
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertEqual(navigator.current.activation, tuple(expected))
 
@@ -1552,7 +1559,7 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         self.install(runtime)
-        cli.models_set(CLI, CONFIGURABLE_AGENT, "anthropic/fast-model", runtime)
+        cli.models_set(CLI, [cli.ModelAssignmentSpec(agent=CONFIGURABLE_AGENT, model="anthropic/fast-model")], runtime)
 
         navigator = self.to_models_screen(runtime)
         index = next(i for i, row in enumerate(navigator.current.rows) if row.agent == CONFIGURABLE_AGENT)

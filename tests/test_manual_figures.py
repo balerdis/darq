@@ -400,7 +400,7 @@ class EveryShippedAgentAcceptsAModelAssignmentTest(RealHomeTestCase):
         self.assertEqual(code, 0)
 
     def assign_to(self, agent: str) -> tuple[int, dict]:
-        return self.run_cli("models", "set", "--cli", CLI, "--agent", agent, "--model", A_MODEL)
+        return self.run_cli("models", "set", "--cli", CLI, "--assign", f"{agent}={A_MODEL}")
 
     def test_the_release_ships_agents_to_measure(self):
         """Or every assertion below would pass over an empty list."""

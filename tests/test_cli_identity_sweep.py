@@ -335,7 +335,7 @@ class ModelsBrandLeakTest(AcmeRuntimeTestCase):
     def test_models_set_report_has_no_engine_brand(self):
         self.install()
         _code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         self.assertNoEngineBrand(report["schema"])
         self.assertNoEngineBrand(report["journal"])
@@ -344,7 +344,7 @@ class ModelsBrandLeakTest(AcmeRuntimeTestCase):
     def test_models_unset_report_has_no_engine_brand(self):
         self.install()
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         _code, report = self.run_cli("models", "unset", "--cli", CLI, "--agent", self.AGENT)
         self.assertNoEngineBrand(report["schema"])
@@ -356,7 +356,7 @@ class ModelsBrandLeakTest(AcmeRuntimeTestCase):
         two commands only started saying once they began rendering."""
         self.present()
         _code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         self.assertEqual(report["status"], "failed")
         self.assertNoEngineBrand(report["error"])

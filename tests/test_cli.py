@@ -855,7 +855,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         code, report = self.run_cli("install", "--cli", CLI)
         self.assertEqual(code, 0)
@@ -873,8 +873,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True, "reasoning": True}}}}
         )
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT,
-            "--model", "anthropic/claude-sonnet-5", "--effort", "high",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5", "--effort", f"{self.AGENT}=high",
         )
         code, report = self.run_cli("install", "--cli", CLI)
         self.assertEqual(code, 0)
@@ -889,7 +888,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         self.run_cli("install", "--cli", CLI)
         self.assertNotIn("variant", self.rendered_agent_value())
@@ -898,7 +897,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         self.installed()
         # No models.json at all: no provider is reachable on this machine.
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         code, report = self.run_cli("install", "--cli", CLI)
         self.assertEqual(code, 0)
@@ -913,7 +912,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/retired-model",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/retired-model",
         )
         code, report = self.run_cli("install", "--cli", CLI)
         self.assertEqual(code, 0)
@@ -947,7 +946,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}=anthropic/claude-sonnet-5",
         )
         self.run_cli("install", "--cli", CLI)
         with_assignment = journal_module.install_for(self.store().load(), CLI).release["catalog_digest"]

@@ -464,27 +464,38 @@ def _grant_mcp_write(
     granted: list[str] = []
     revoked: list[str] = []
     errors: list[str] = []
-    # Each key's own call, not the requested delta, decides what actually
-    # landed: `screen.chosen` names what was asked for at the moment Continue
-    # was pressed, but the CLI's own configuration can change between opening
-    # this screen and confirming it (the exact race `GrantMcpResultScreen`'s
-    # own docstring already anticipates for `errors`), and `cli.mcp_grant`/
-    # `cli.mcp_revoke` refuse a key that raced out from under it. A key only
-    # ever joins `granted`/`revoked` once *its own* call reports `cli.OK` --
-    # never the requested set, unfiltered, which would have this screen claim
-    # a write that never reached disk.
-    for key in requested_grant:
-        code, report = cli.safe_report("mcp", lambda key=key: cli.mcp_grant(screen.cli.id, key, runtime))
+    # One call per direction, not one per key: this is the exact storm this
+    # screen used to cause -- checking four keys used to fire four
+    # `cli.mcp_grant` calls, each its own `install()`, each its own snapshot
+    # generation, for what the person experienced as one Continue. `mcp_grant`
+    # and `mcp_revoke` both take the whole list now, so pressing Continue is
+    # one call per direction (at most two total) regardless of how many keys
+    # were toggled.
+    #
+    # All-or-nothing is `mcp_grant`/`mcp_revoke`'s own contract now: a key
+    # that raced out from under this screen (declared, then withdrawn,
+    # between opening it and confirming it -- the same race
+    # `GrantMcpResultScreen`'s own docstring already anticipates) fails the
+    # *whole* batch it is part of, not just its own key, so `granted`/
+    # `revoked` below are only ever the requested set in full or not at all
+    # for that direction -- never a partial list this screen would have to
+    # reconcile against what the batch call actually decided.
+    if requested_grant:
+        code, report = cli.safe_report(
+            "mcp", lambda: cli.mcp_grant(screen.cli.id, list(requested_grant), runtime)
+        )
         if code == cli.OK:
-            granted.append(key)
+            granted.extend(requested_grant)
         else:
-            errors.append(report.get("error", f"could not grant {key!r}"))
-    for key in requested_revoke:
-        code, report = cli.safe_report("mcp", lambda key=key: cli.mcp_revoke(screen.cli.id, key, runtime))
+            errors.append(report.get("error", f"could not grant {', '.join(requested_grant)}"))
+    if requested_revoke:
+        code, report = cli.safe_report(
+            "mcp", lambda: cli.mcp_revoke(screen.cli.id, list(requested_revoke), runtime)
+        )
         if code == cli.OK:
-            revoked.append(key)
+            revoked.extend(requested_revoke)
         else:
-            errors.append(report.get("error", f"could not revoke {key!r}"))
+            errors.append(report.get("error", f"could not revoke {', '.join(requested_revoke)}"))
     # The same wording `update` already shows for the same fact -- this CLI
     # reads agent configuration once, at startup -- fetched directly from
     # the adapter rather than pulled out of a report, since it holds
@@ -596,28 +607,24 @@ def _models_write(screen: ModelsScreen, navigator: Navigator, runtime: cli.Runti
     """
     if action is Action.REMOVE and screen.agent is None and screen.rows:
         agent = screen.rows[navigator.cursor].agent
-        _, report = cli.safe_report("models", lambda: cli.models_unset(screen.cli.id, agent, runtime))
+        _, report = cli.safe_report("models", lambda: cli.models_unset(screen.cli.id, [agent], runtime))
         return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
     if action is not Action.CHOOSE:
         return None
     if screen.model_id is not None:
         effort = EFFORT_OPTIONS[navigator.cursor]
-        _, report = cli.safe_report(
-            "models",
-            lambda: cli.models_set(
-                screen.cli.id, screen.agent, f"{screen.provider_id}/{screen.model_id}", runtime, effort=effort
-            ),
+        spec = cli.ModelAssignmentSpec(
+            agent=screen.agent, model=f"{screen.provider_id}/{screen.model_id}", effort=effort
         )
+        _, report = cli.safe_report("models", lambda: cli.models_set(screen.cli.id, [spec], runtime))
         return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
     if screen.provider_id is not None:
         provider = next(provider for provider in screen.providers if provider.id == screen.provider_id)
         if not provider.models or provider.models[navigator.cursor].reasoning:
             return None  # a reasoning model: `Navigator` narrows to the effort step itself.
         model_id = provider.models[navigator.cursor].id
-        _, report = cli.safe_report(
-            "models",
-            lambda: cli.models_set(screen.cli.id, screen.agent, f"{screen.provider_id}/{model_id}", runtime, effort=None),
-        )
+        spec = cli.ModelAssignmentSpec(agent=screen.agent, model=f"{screen.provider_id}/{model_id}", effort=None)
+        _, report = cli.safe_report("models", lambda: cli.models_set(screen.cli.id, [spec], runtime))
         return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
     return None
 

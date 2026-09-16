@@ -76,7 +76,7 @@ class GrantTest(RealHomeTestCase):
         code, report = self.run_cli("directory", "grant", "--cli", CLI, path)
         self.assertEqual(code, 0)
         self.assertEqual(report["action"], "grant")
-        self.assertEqual(report["path"], path)
+        self.assertEqual(report["paths"], [path])
         self.assertIn(path, report["granted_directories"])
 
     def test_granting_persists_to_the_journal(self):
@@ -246,7 +246,7 @@ class GrantTest(RealHomeTestCase):
         typed = f"{base}//"
         code, report = self.run_cli("directory", "grant", "--cli", CLI, typed)
         self.assertEqual(code, 0, report)
-        self.assertEqual(report["path"], base)
+        self.assertEqual(report["paths"], [base])
         self.assertIn(base, report["granted_directories"])
 
 

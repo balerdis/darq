@@ -659,7 +659,7 @@ La TUI no puede hacer nada que los flags no puedan. Esta regla protege `INSTALL_
 ```bash
 pegasus                                          # TUI
 pegasus install --cli opencode --mcp context7 --mcp engram
-pegasus models set --cli opencode --agent sdd-apply --model anthropic/claude-sonnet-5 --effort high
+pegasus models set --cli opencode --assign sdd-apply=anthropic/claude-sonnet-5 --effort sdd-apply=high
 pegasus models unset --cli opencode --agent sdd-apply
 pegasus uninstall --cli opencode
 pegasus doctor --json

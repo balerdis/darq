@@ -808,13 +808,13 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         opens rather than off what the command reported."""
         model = self.MODELS[0]
         self.assertNotEqual(self.rendered_model(), model, "the fixture had nothing left to write")
-        code, _ = self.run_cli("models", "set", "--cli", CLI, "--agent", self.agent, "--model", model)
+        code, _ = self.run_cli("models", "set", "--cli", CLI, "--assign", f"{self.agent}={model}")
         self.assertEqual(code, 0)
         self.assertEqual(self.rendered_model(), model)
 
     def test_removing_takes_the_assignment_back_out_with_no_further_command(self):
         model = self.MODELS[1]
-        self.run_cli("models", "set", "--cli", CLI, "--agent", self.agent, "--model", model)
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{self.agent}={model}")
         self.assertEqual(self.rendered_model(), model)
         code, _ = self.run_cli("models", "unset", "--cli", CLI, "--agent", self.agent)
         self.assertEqual(code, 0)
@@ -825,8 +825,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         comes back is the CLI's own step, derived from the adapter so a
         rewording there reaches the document instead of going unnoticed."""
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", self.MODELS[0]
-        )
+            "models", "set", "--cli", CLI, "--assign", f"{self.agent}={self.MODELS[0]}")
         self.assertEqual(code, 0)
         self.assertEqual(tuple(report["activation"]), available().get(CLI).activation_steps())
 
@@ -840,7 +839,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         code, _ = self.run_cli("uninstall", "--cli", CLI)
         self.assertEqual(code, 0)
         for argv in (
-            ("models", "set", "--cli", CLI, "--agent", self.agent, "--model", self.MODELS[0]),
+            ("models", "set", "--cli", CLI, "--assign", f"{self.agent}={self.MODELS[0]}"),
             ("models", "unset", "--cli", CLI, "--agent", self.agent),
         ):
             with self.subTest(command=" ".join(argv[:2])):

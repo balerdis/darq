@@ -219,20 +219,24 @@ class GrantMcpResultScreen:
     """What confirming a `GrantMcpScreen` actually changed -- the keys
     granted, the keys revoked, and the same activation wording `update`
     already shows (`adapter.activation_steps()`, fetched once by `session`
-    since it does not depend on which keys changed). `errors` names any key
-    `cli.mcp_grant`/`cli.mcp_revoke` refused -- rare, since the screen only
+    since it does not depend on which keys changed). `errors` names why a
+    call `_grant_mcp_write` made was refused -- rare, since the screen only
     ever offers a key `mcp_list` already reported as declared, but the
     journal can change between opening this screen and confirming it.
 
-    `granted` and `revoked` name only the keys whose *own* call actually
-    reported success -- never the requested delta, unfiltered. A key that
-    raced out from under the screen (removed from the CLI's own
-    configuration between opening it and confirming) surfaces in `errors`
-    instead, and must never also appear in `granted`/`revoked`: a screen
-    claiming a write for a key its own error line just refused would
-    contradict itself in two adjacent lines, worse than a plain failure,
-    since a person reading it would walk away believing the grant landed
-    when it did not.
+    Every key checked and every key unchecked reaches `cli.mcp_grant`/
+    `cli.mcp_revoke` in one call each, not one call per key -- see
+    `_grant_mcp_write`'s own docstring -- so `granted`/`revoked` name only
+    the *whole* requested set for a direction whose own call actually
+    reported success, never a per-key filtering of it: `cli.mcp_grant`'s own
+    all-or-nothing contract means one key that raced out from under the
+    screen (removed from the CLI's own configuration between opening it and
+    confirming) refuses the entire batch it is part of, so a sibling key
+    requested in the same direction is refused right along with it, and
+    neither surfaces in `granted`/`revoked` -- only in `errors`. A screen
+    claiming a write for a key a refused call never made would contradict
+    what the disk actually holds, worse than a plain failure, since a person
+    reading it would walk away believing the grant landed when it did not.
     """
 
     cli: CliOption

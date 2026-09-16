@@ -57,20 +57,20 @@ class SetTest(RealHomeTestCase):
     def test_setting_a_configurable_agent_succeeds_and_reports_it(self):
         self.install()
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT,
-            "--model", "anthropic/claude-sonnet-5", "--effort", "high",
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5", "--effort", f"{CONFIGURABLE_AGENT}=high",
         )
         self.assertEqual(code, 0)
         self.assertEqual(report["action"], "set")
         self.assertEqual(report["cli"], CLI)
-        self.assertEqual(report["agent"], CONFIGURABLE_AGENT)
-        self.assertEqual(report["model"], "anthropic/claude-sonnet-5")
-        self.assertEqual(report["effort"], "high")
+        self.assertEqual(
+            report["assignments"],
+            [{"agent": CONFIGURABLE_AGENT, "model": "anthropic/claude-sonnet-5", "effort": "high"}],
+        )
 
     def test_setting_persists_to_the_store(self):
         self.install()
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
         )
         loaded = cli.model_assignment_store(self.runtime()).load()
         from pegasus.core import model_assignments as model_assignments_module
@@ -81,7 +81,7 @@ class SetTest(RealHomeTestCase):
 
     def test_an_unknown_agent_is_refused_with_a_clear_reason(self):
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", "nonexistent-agent", "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", "nonexistent-agent=anthropic/claude-sonnet-5",
         )
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
@@ -99,7 +99,7 @@ class SetTest(RealHomeTestCase):
         )
         with patch("pegasus.core.content.load", return_value=Content(agents=(not_configurable,))):
             code, report = self.run_cli(
-                "models", "set", "--cli", CLI, "--agent", "static-agent", "--model", "anthropic/claude-sonnet-5",
+                "models", "set", "--cli", CLI, "--assign", "static-agent=anthropic/claude-sonnet-5",
             )
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
@@ -108,7 +108,7 @@ class SetTest(RealHomeTestCase):
 
     def test_a_malformed_model_spec_is_refused(self):
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT, "--model", "not-a-provider-slash-model",
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=not-a-provider-slash-model",
         )
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
@@ -124,7 +124,7 @@ class UnsetTest(RealHomeTestCase):
     def test_unsetting_a_set_assignment_removes_it(self):
         self.install()
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
         )
         code, report = self.run_cli("models", "unset", "--cli", CLI, "--agent", CONFIGURABLE_AGENT)
         self.assertEqual(code, 0)
@@ -196,7 +196,7 @@ class AppliesTest(RealHomeTestCase):
     def test_an_assignment_reaches_the_rendered_agent_with_no_further_command(self):
         self.install()
         code, _ = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL, "--effort", "high",
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}", "--effort", f"{self.AGENT}=high",
         )
         self.assertEqual(code, 0)
         value = self.rendered_agent()
@@ -205,7 +205,7 @@ class AppliesTest(RealHomeTestCase):
 
     def test_removing_an_assignment_takes_it_back_out_of_the_rendered_agent(self):
         self.install()
-        self.run_cli("models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL)
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}")
         self.assertEqual(self.rendered_agent()["model"], self.MODEL)
         code, _ = self.run_cli("models", "unset", "--cli", CLI, "--agent", self.AGENT)
         self.assertEqual(code, 0)
@@ -215,7 +215,7 @@ class AppliesTest(RealHomeTestCase):
         self.present()
         self.write_models_catalog()
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL,
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}",
         )
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
@@ -239,7 +239,7 @@ class AppliesTest(RealHomeTestCase):
         self.install("--mcp", "=".join(self.BOUND))
         self.assertTrue(self.convention_path().exists(), "the fixture never bound a server")
         code, _ = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL,
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}",
         )
         self.assertEqual(code, 0)
         self.assertEqual(self.rendered_agent()["model"], self.MODEL)
@@ -250,7 +250,7 @@ class AppliesTest(RealHomeTestCase):
 
     def test_a_bound_mcp_server_survives_a_removal(self):
         self.install("--mcp", "=".join(self.BOUND))
-        self.run_cli("models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL)
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}")
         # Or the removal below would have nothing to take back out and this
         # would approve a configuration that never carried the model at all.
         self.assertEqual(self.rendered_agent()["model"], self.MODEL)
@@ -266,7 +266,7 @@ class AppliesTest(RealHomeTestCase):
         self.install("--mcp", "=".join(self.BOUND))
         self.drop_mcp_bindings()
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL,
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}",
         )
         self.assertNotEqual(code, 0)
         self.assertEqual(
@@ -283,7 +283,7 @@ class AppliesTest(RealHomeTestCase):
         step left is the one every other write already reports."""
         self.install()
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", self.MODEL,
+            "models", "set", "--cli", CLI, "--assign", f"{self.AGENT}={self.MODEL}",
         )
         self.assertEqual(code, 0)
         self.assertEqual(tuple(report["activation"]), available().get(CLI).activation_steps())
@@ -298,7 +298,7 @@ class ListTest(RealHomeTestCase):
     def test_listing_shows_what_was_set(self):
         self.install()
         self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT, "--model", "anthropic/claude-sonnet-5",
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
         )
         code, report = self.run_cli("models", "list")
         self.assertEqual(code, 0)
@@ -321,7 +321,7 @@ class ProseTest(RealHomeTestCase):
         self.install()
         context = self.runtime()
         cli.main(
-            ["models", "set", "--cli", CLI, "--agent", CONFIGURABLE_AGENT, "--model", "anthropic/claude-sonnet-5"],
+            ["models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5"],
             runtime=context,
         )
         self.assertIn(CONFIGURABLE_AGENT, context.out.getvalue())
