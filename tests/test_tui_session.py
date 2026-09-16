@@ -1318,8 +1318,22 @@ ONE_REASONING_MODEL = {"anthropic": {"builtin": True, "models": {"deep-thinker":
 
 
 class ModelsScreenTestCase(SessionTestCase):
-    def to_models_screen(self, runtime: cli.Runtime) -> Navigator:
+    def install(self, runtime: cli.Runtime) -> None:
+        """An installation for this screen to stand on.
+
+        `cli.models_set`/`cli.models_unset` render what they record, so they
+        refuse a CLI with nothing installed exactly the way `cli.mcp_grant`
+        already does -- a models screen over an uninstalled CLI could only
+        ever collect choices nothing would apply. Idempotent, so a test that
+        needs an installation *before* it navigates can ask for one without
+        paying for a second install here.
+        """
         _present(self.home)
+        if journal_module.install_for(cli.journal_store(runtime).load(), CLI) is None:
+            cli.install(CLI, runtime)
+
+    def to_models_screen(self, runtime: cli.Runtime) -> Navigator:
+        self.install(runtime)
         navigator = Navigator.starting(session.detect_clis(runtime), session.detect_installed(runtime))
         models_index = [entry.label for entry in navigator.current.entries].index("Configure models")
         for _ in range(models_index):
@@ -1397,6 +1411,7 @@ class RemovingAnAssignmentTest(ModelsScreenTestCase):
     def test_d_unsets_the_assignment_and_matches_models_unset(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
+        self.install(runtime)
         cli.models_set(CLI, CONFIGURABLE_AGENT, "anthropic/fast-model", runtime)
 
         navigator = self.to_models_screen(runtime)
@@ -1414,20 +1429,24 @@ class RemovingAnAssignmentTest(ModelsScreenTestCase):
 
 
 class ModelsWriteActivationTest(ModelsScreenTestCase):
-    """The bug the product owner hit: the models screen only ever shows what
-    Pegasus's own state remembers, never what the *running* CLI configuration
-    actually holds -- those only line up again after an install/update writes
-    the assignment into the rendered file. `cli.models_set`/`models_unset`
-    already say so under `activation` (`cli._NOT_INSTALLED_YET`); this is the
-    one place that notice reaches a person, so every write this screen makes
-    must carry it forward onto the screen it rebuilds.
+    """Whatever the engine says is still left to do reaches the screen.
 
-    Deliberately not asserting the exact `_NOT_INSTALLED_YET` wording -- that
-    string belongs to `cli.py`, which this change does not own and must not
-    pin in a TUI test. Asserting instead that whatever `report["activation"]`
-    says survives the round trip, whatever its shape, is the mirror: a test
-    pinned to today's wording would stay green even if `_models_write` started
-    dropping the report and hardcoding its own text instead.
+    The bug this started as: the models screen only ever showed what Pegasus's
+    own state remembered, never what the running CLI configuration actually
+    held, and the two only lined up again after a separate install. The
+    assignment now reaches the rendered file in the same command, so what
+    `cli.models_set`/`models_unset` report under `activation` is the CLI's own
+    activation step -- restarting it, since it reads agent prompts once at
+    startup. Either way this screen is the one place that notice reaches a
+    person, so every write it makes must carry the report's own `activation`
+    forward onto the screen it rebuilds.
+
+    Deliberately not asserting any particular wording -- that string belongs
+    to the engine, which this layer does not own and must not pin in a TUI
+    test. Asserting instead that whatever `report["activation"]` says survives
+    the round trip, whatever its shape, is the mirror: a test pinned to today's
+    wording would stay green even if `_models_write` started dropping the
+    report and hardcoding its own text instead.
     """
 
     def _to_agent_row(self, navigator: Navigator) -> Navigator:
@@ -1466,6 +1485,7 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
     def test_removing_an_assignment_surfaces_the_notice_too(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
+        self.install(runtime)
         cli.models_set(CLI, CONFIGURABLE_AGENT, "anthropic/fast-model", runtime)
 
         navigator = self.to_models_screen(runtime)

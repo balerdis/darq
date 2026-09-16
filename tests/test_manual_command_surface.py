@@ -78,7 +78,7 @@ from fakes import FakeMCPProcess
 from pegasus import cli
 from pegasus.adapters import available
 from pegasus.core import journal as journal_module
-from pegasus.core.types import Environment
+from pegasus.core.types import Environment, ModelAssignment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -696,32 +696,36 @@ MODEL_PREFERENCES = tuple(f"{MODEL_PROVIDER}/claude-preference-{index}" for inde
 
 
 class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase):
-    """When the activation notice appears, and what carries an assignment in.
+    """When an assignment reaches the rendered configuration, and what puts it there.
 
-    Two claims in one sentence, each wrong in its own way.
+    The sentence has been wrong twice, in opposite directions, and both are
+    worth keeping in view because the guard below is shaped by them.
 
-    The notice was described as conditional -- "avisa esto mismo **si** el
-    agente no la tiene todavía" -- and it is not. `models set` and `models
-    unset` put it in every report they return, and never ask the installation
-    anything. So a person who had just reinstalled read a notice that, as the
-    manual explained it, meant their assignment had not landed. It is run
-    here in the state the old sentence said would silence it: the assignment
-    already written into the rendered configuration.
+    It first described the activation notice as conditional -- "avisa esto
+    mismo **si** el agente no la tiene todavía" -- when `models set` and
+    `models unset` emitted it unconditionally and asked the installation
+    nothing. It then said `install` was what wrote the assignment in, when
+    three other commands re-render the configuration and carry a stored
+    assignment with them.
 
-    And `install` was named as the path that writes it. It is the path the
-    product's own notice tells a person to run, which is why the sentence
-    still names it -- but three other commands re-render the configuration
-    and carry the stored assignment in with them. Each is RUN against a real
-    installation and the rendered file read back, because "writes it" is a
-    claim about a file on disk; a source-level check for "this one calls
-    `install`" would approve by a proxy.
+    Both of those described a product where recording a preference and
+    rendering it were two steps. They are one step now: `models set` reapplies
+    the configuration itself, the way `mcp grant` and `directory grant` always
+    have, so there is no second command for a person to remember and no notice
+    telling them to run one. What is left afterwards is the CLI's own
+    activation step, which is a fact about the CLI and not about Pegasus.
 
-    What this cannot prove is that no FIFTH command does the same: the set is
-    the one the sentence names, not one derived from the parser, because
-    deriving it would mean running every top-level command against a live
-    installation -- `uninstall` and `restore` among them -- and measuring the
-    wreckage. The direction that matters to a reader is held: everything the
-    sentence names really does write it.
+    Everything here is RUN against a real installation and the rendered file
+    read back off disk, because "reaches the configuration" is a claim about a
+    file OpenCode opens; a source-level check for "this one calls `install`"
+    would approve by a proxy.
+
+    What this cannot prove is that no FIFTH command re-renders the same way:
+    the set is the one the sentence names, not one derived from the parser,
+    because deriving it would mean running every top-level command against a
+    live installation -- `uninstall` and `restore` among them -- and measuring
+    the wreckage. The direction that matters to a reader is held: everything
+    the sentence names really does write it.
     """
 
     PROVIDER = MODEL_PROVIDER
@@ -756,7 +760,10 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         return found[0] if found else ""
 
     def writers(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        """Every path the paragraph names, and how a person types it."""
+        """Every path the paragraph names as re-rendering the whole
+        configuration, and how a person types it. `models set` is not here:
+        it is measured on its own below, because what it proves is that
+        nothing else has to be run at all."""
         return (
             ("install", ("install", "--cli", CLI)),
             ("update", ("update", "--cli", CLI)),
@@ -767,47 +774,81 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
     def rendered_model(self) -> str | None:
         return json.loads(self.rendered())["agent"][self.agent].get("model")
 
-    def assign(self, model: str) -> dict:
-        self.run_cli("models", "unset", "--cli", CLI, "--agent", self.agent)
-        code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", model
-        )
-        self.assertEqual(code, 0, f"assigning {model} failed, so nothing here measured anything")
-        return report
+    def store_without_rendering(self, model: str) -> None:
+        """A preference sitting in Pegasus's own state that the rendered
+        configuration does not carry.
+
+        `models set` renders what it records, so this state can no longer be
+        produced by running it -- and it is exactly the state the four
+        commands below exist to rescue (an assignment stored while its
+        provider was unreachable, say, or one carried over from a release
+        that did not render on assignment). Written straight to the store,
+        the same way `tests/test_cli.py` builds a stale preference, so what
+        each command is measured against is real rather than arranged.
+        """
+        from pegasus.core import model_assignments as model_assignments_module
+
+        store = cli.model_assignment_store(self.runtime())
+        store.save(model_assignments_module.with_assignment(
+            store.load(), CLI, self.agent, ModelAssignment.parse(model, None)
+        ))
 
     def test_there_is_an_agent_to_assign_a_model_to(self):
         """Or every run below would be measuring a refusal."""
         self.assertTrue(self.agent, "this release ships no agent that accepts a model assignment")
 
-    def test_the_notice_comes_back_even_when_the_configuration_already_carries_it(self):
-        """The condition the sentence invented. The assignment is written in
-        first, so the state the old sentence said would silence the notice is
-        the state this is run in."""
+    def test_setting_writes_the_assignment_with_no_further_command(self):
+        """The claim the corrected sentence makes, read off the file OpenCode
+        opens rather than off what the command reported."""
         model = self.MODELS[0]
-        self.assign(model)
-        self.run_cli("install", "--cli", CLI)
+        self.assertNotEqual(self.rendered_model(), model, "the fixture had nothing left to write")
+        code, _ = self.run_cli("models", "set", "--cli", CLI, "--agent", self.agent, "--model", model)
+        self.assertEqual(code, 0)
         self.assertEqual(self.rendered_model(), model)
 
+    def test_removing_takes_the_assignment_back_out_with_no_further_command(self):
+        model = self.MODELS[1]
+        self.run_cli("models", "set", "--cli", CLI, "--agent", self.agent, "--model", model)
+        self.assertEqual(self.rendered_model(), model)
+        code, _ = self.run_cli("models", "unset", "--cli", CLI, "--agent", self.agent)
+        self.assertEqual(code, 0)
+        self.assertIsNone(self.rendered_model())
+
+    def test_what_is_left_afterwards_is_the_clis_own_activation_step(self):
+        """Why the sentence no longer tells a person to run anything: what
+        comes back is the CLI's own step, derived from the adapter so a
+        rewording there reaches the document instead of going unnoticed."""
         code, report = self.run_cli(
-            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", model
+            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", self.MODELS[0]
         )
         self.assertEqual(code, 0)
-        self.assertTrue(report["activation"], "`models set` no longer reports how to activate an assignment")
+        self.assertEqual(tuple(report["activation"]), available().get(CLI).activation_steps())
 
-    def test_the_notice_tells_a_person_to_run_install(self):
-        """Why the sentence still names `install` and not one of the others:
-        it is what the product itself says. Derived from the report, so a
-        rewording that changes the command fails here."""
-        report = self.assign(self.MODELS[0])
-        program = cli.default_identity().program_name
-        self.assertIn(f"{program} install --cli {CLI}", " ".join(report["activation"]))
+    def test_a_cli_with_nothing_installed_is_refused(self):
+        """The other half of "lo escribe en el mismo comando": there has to be
+        a configuration to write into, so both commands refuse without one --
+        the same refusal `mcp grant` and `directory grant` already give. The
+        installation is taken back out by running `uninstall`, rather than by
+        arranging a home that never had one, so what is measured is the state
+        a person actually ends up in."""
+        code, _ = self.run_cli("uninstall", "--cli", CLI)
+        self.assertEqual(code, 0)
+        for argv in (
+            ("models", "set", "--cli", CLI, "--agent", self.agent, "--model", self.MODELS[0]),
+            ("models", "unset", "--cli", CLI, "--agent", self.agent),
+        ):
+            with self.subTest(command=" ".join(argv[:2])):
+                code, report = self.run_cli(*argv)
+                self.assertNotEqual(code, 0)
+                self.assertIn("nothing installed", report["error"])
 
-    def test_every_path_the_paragraph_names_writes_the_stored_assignment(self):
+    def test_every_path_the_paragraph_names_writes_a_stored_assignment(self):
         """The half that was too narrow, one real installation and one real
         rendered file at a time."""
         for model, (name, argv) in zip(self.MODELS, self.writers()):
             with self.subTest(command=name):
-                self.assign(model)
+                self.run_cli("models", "unset", "--cli", CLI, "--agent", self.agent)
+                self.store_without_rendering(model)
                 self.assertNotEqual(self.rendered_model(), model, f"{name} had nothing left to write")
                 code, _ = self.run_cli(*argv)
                 self.assertEqual(code, 0, f"`{name}` failed, so nothing here measured anything")
@@ -817,6 +858,10 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         self.assertTrue(
             self.paragraph, f"no single line of {MANUAL.name} names {type(self).__name__}"
         )
+
+    def test_the_paragraph_names_the_commands_that_write_it_themselves(self):
+        for command in ("models set", "models unset"):
+            self.assertIn(f"`{command}", self.paragraph, f"{MANUAL.name} does not name {command}")
 
     def test_the_paragraph_names_every_path_measured_here(self):
         program = cli.default_identity().program_name

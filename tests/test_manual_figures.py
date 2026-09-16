@@ -44,6 +44,7 @@ import pegasus
 from pegasus import cli
 from pegasus.adapters import available
 from pegasus.core import content as content_module
+from pegasus.core.types import Environment
 from pegasus.infra.fs_posix import PosixFileSystem
 from real_home import RealHomeTestCase
 
@@ -376,12 +377,27 @@ class EveryShippedAgentAcceptsAModelAssignmentTest(RealHomeTestCase):
         self.content = content_module.load()
         self.agents = sorted(agent.name for agent in self.content.agents)
         self.paragraph = paragraph_naming(type(self).__name__)
+        self.install()
 
     def run_cli(self, *argv) -> tuple[int, dict]:
         out = io.StringIO()
         context = cli.Runtime(filesystem=self.filesystem, home=self.home, now=AT, out=out)
         code = cli.main([*argv, "--json"], runtime=context)
         return code, json.loads(out.getvalue())
+
+    def install(self) -> None:
+        """A real installation under every assignment measured below.
+
+        `models set` renders what it records, so it refuses a CLI with nothing
+        installed. The claim this class holds is about which agents the
+        command ACCEPTS, so an installation has to be there or every agent
+        would be "refused" for a reason that has nothing to do with the
+        paragraph.
+        """
+        layout = available().get(CLI).layout(Environment(home=self.home))
+        layout.config_dir.mkdir(parents=True, exist_ok=True)
+        code, _ = self.run_cli("install", "--cli", CLI)
+        self.assertEqual(code, 0)
 
     def assign_to(self, agent: str) -> tuple[int, dict]:
         return self.run_cli("models", "set", "--cli", CLI, "--agent", agent, "--model", A_MODEL)

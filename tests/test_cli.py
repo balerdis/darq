@@ -839,8 +839,18 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         document = json.loads((self.layout().settings_file).read_text(encoding="utf-8"))
         return document["agent"][self.AGENT]
 
-    def test_an_honoured_assignment_is_written_into_the_rendered_agent(self):
+    def installed(self) -> None:
+        """`models set` renders what it records, so it refuses a CLI with
+        nothing installed -- every case below that stores a preference has to
+        stand on an installation first. What each one still measures is the
+        half `models set` does not do on its own: what a LATER `install` makes
+        of a preference already sitting in the store."""
         self.present()
+        code, _ = self.run_cli("install", "--cli", CLI)
+        self.assertEqual(code, 0)
+
+    def test_an_honoured_assignment_is_written_into_the_rendered_agent(self):
+        self.installed()
         self.write_models_catalog(
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
@@ -858,7 +868,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         self.assertNotIn("model", self.rendered_agent_value())
 
     def test_an_effort_reaches_the_rendered_agent_as_this_clis_variant(self):
-        self.present()
+        self.installed()
         self.write_models_catalog(
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True, "reasoning": True}}}}
         )
@@ -874,7 +884,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         self.assertEqual(value["variant"], "high")
 
     def test_no_effort_stored_renders_no_variant_key(self):
-        self.present()
+        self.installed()
         self.write_models_catalog(
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )
@@ -885,7 +895,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         self.assertNotIn("variant", self.rendered_agent_value())
 
     def test_an_unreachable_provider_does_not_break_the_install(self):
-        self.present()
+        self.installed()
         # No models.json at all: no provider is reachable on this machine.
         self.run_cli(
             "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
@@ -898,7 +908,7 @@ class InstallModelAssignmentTest(RealHomeTestCase):
         self.assertIn("anthropic", report["model_warnings"][0])
 
     def test_a_model_the_catalog_no_longer_lists_does_not_break_the_install(self):
-        self.present()
+        self.installed()
         self.write_models_catalog(
             {"anthropic": {"builtin": True, "models": {"claude-sonnet-5": {"tool_call": True}}}}
         )

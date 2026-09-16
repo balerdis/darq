@@ -1873,51 +1873,88 @@ def _models(arguments, runtime: Runtime) -> dict[str, Any]:
 def models_set(
     cli_id: str, agent: str, model: str, runtime: Runtime, *, effort: str | None = None
 ) -> dict[str, Any]:
-    """Assign a model to one agent, refusing an assignment nothing will ever read.
+    """Assign a model to one agent, and reapply so the assignment actually
+    reaches the rendered configuration.
 
-    Peeled the same way `install` is: a plain function a future TUI screen can
-    call directly, with `_models` doing only the argparse unpacking.
+    Mirrors `mcp_grant`'s shape exactly, and for the same reason: recording a
+    decision and applying it are one step everywhere else in this product, so
+    this records the preference and delegates the write to `install` rather
+    than placing artifacts a second time. It used to record and then hand
+    back a note telling the person to reinstall -- which left the only path
+    from the TUI's models screen to the rendered file running through the
+    Install menu entry, and so through an MCP selection screen that has
+    nothing to do with models.
+
+    The three refusals are `mcp_grant`'s own, in its own order: an argument
+    the person just mistyped first (an agent nothing will ever read a model
+    for, or a model spelling this release cannot parse), then a CLI with
+    nothing installed, then an install whose MCP selection cannot be
+    reconstructed. Nothing is recorded until all three have passed: a
+    preference saved beside a refusal to apply it would be exactly the
+    record-without-render split this change exists to close.
+
+    `_mcp_update_selection` is the same reconstruction `update`, `mcp_grant`
+    and `directory_grant` already make, for the same reason each of them
+    makes it: `install` refuses a bare `mcp=None` against an installation
+    that has a selection recorded, and an explicitly empty one would retire
+    every server, convention and binding it holds. `granted`/
+    `granted_directories` are left `None` on purpose -- nothing here changes
+    either set, and `install`'s documented default for silence is to carry
+    the previous install's own set forward unchanged.
     """
-    _adapter(cli_id)
+    adapter = _adapter(cli_id)
     _require_configurable_agent(agent)
     try:
         assignment = ModelAssignment.parse(model, effort)
     except ValueError as error:
         raise CommandError(str(error)) from error
+    installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
+    if installed is None:
+        raise CommandError(f"{adapter.id} has nothing installed; run install first")
+    selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
+    if unresolved:
+        raise CommandError(
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+        )
     store = model_assignment_store(runtime)
-    assignments = store.load()
-    store.save(model_assignments_module.with_assignment(assignments, cli_id, agent, assignment))
+    store.save(model_assignments_module.with_assignment(store.load(), cli_id, agent, assignment))
+    report = install(cli_id, runtime, mcp=selection)
     return {
+        **report,
         "action": "set",
-        "cli": cli_id,
         "agent": agent,
         "model": assignment.full_id,
         "effort": assignment.effort,
-        "activation": (_NOT_INSTALLED_YET.format(cli=cli_id, program=runtime.identity.program_name),),
+        "status": "set",
     }
 
 
 def models_unset(cli_id: str, agent: str, runtime: Runtime) -> dict[str, Any]:
-    """Remove one agent's assignment. Removing one never set is success, not an error."""
-    _adapter(cli_id)
+    """Remove one agent's assignment, and reapply. Removing one never set is
+    success, not an error -- the same `mcp_revoke` precedent, checked in the
+    same order: a CLI with nothing installed is refused before the
+    already-unset shortcut, because a removal nobody can apply is a refusal
+    whether or not there was anything to remove.
+
+    See `models_set` for why the recorded MCP selection is reconstructed
+    before `install` is called at all.
+    """
+    adapter = _adapter(cli_id)
+    installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
+    if installed is None:
+        raise CommandError(f"{adapter.id} has nothing installed; run install first")
     store = model_assignment_store(runtime)
     assignments = store.load()
     if model_assignments_module.get(assignments, cli_id, agent) is None:
         return {"action": "unset", "cli": cli_id, "agent": agent, "status": "already-unset"}
+    selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
+    if unresolved:
+        raise CommandError(
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+        )
     store.save(model_assignments_module.without_assignment(assignments, cli_id, agent))
-    return {
-        "action": "unset",
-        "cli": cli_id,
-        "agent": agent,
-        "status": "unset",
-        "activation": (_NOT_INSTALLED_YET.format(cli=cli_id, program=runtime.identity.program_name),),
-    }
-
-
-_NOT_INSTALLED_YET = (
-    "The current installation at {cli} does not carry this yet; reinstall "
-    "(`{program} install --cli {cli}`) to write it into the rendered configuration."
-)
+    report = install(cli_id, runtime, mcp=selection)
+    return {**report, "action": "unset", "agent": agent, "status": "unset"}
 
 
 def models_list(runtime: Runtime, *, cli_id: str | None = None) -> dict[str, Any]:

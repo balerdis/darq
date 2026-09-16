@@ -317,21 +317,49 @@ class UpdateBrandLeakTest(AcmeRuntimeTestCase):
 
 
 class ModelsBrandLeakTest(AcmeRuntimeTestCase):
+    """`models set`/`models unset` render what they record, so their report is
+    an `install` report with the assignment's own fields merged onto it -- the
+    same fields `InstallBrandLeakTest` already holds `install` to, now reachable
+    through a second command. Scoped to what `cli.py` itself renders, for the
+    reason that test states.
+
+    This used to cover `_NOT_INSTALLED_YET`'s own "pegasus install --cli ..."
+    literal, which was the one place these two commands built a branded
+    sentence of their own. That sentence is gone: the assignment reaches the
+    configuration in the same command now, so what is left to do is the
+    adapter's own activation step and nothing here spells a program name.
+    """
+
     AGENT = "sdd-apply"
 
-    def test_models_set_activation_note_has_no_engine_brand(self):
-        """Covers `_NOT_INSTALLED_YET`'s "pegasus install --cli ..." literal."""
+    def test_models_set_report_has_no_engine_brand(self):
+        self.install()
         _code, report = self.run_cli(
             "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
         )
+        self.assertNoEngineBrand(report["schema"])
+        self.assertNoEngineBrand(report["journal"])
         self.assertNoEngineBrand(" ".join(report["activation"]))
 
-    def test_models_unset_activation_note_has_no_engine_brand(self):
+    def test_models_unset_report_has_no_engine_brand(self):
+        self.install()
         self.run_cli(
             "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
         )
         _code, report = self.run_cli("models", "unset", "--cli", CLI, "--agent", self.AGENT)
+        self.assertNoEngineBrand(report["schema"])
+        self.assertNoEngineBrand(report["journal"])
         self.assertNoEngineBrand(" ".join(report["activation"]))
+
+    def test_models_set_refusal_has_no_engine_brand(self):
+        """The refusal a CLI with nothing installed gets -- a sentence these
+        two commands only started saying once they began rendering."""
+        self.present()
+        _code, report = self.run_cli(
+            "models", "set", "--cli", CLI, "--agent", self.AGENT, "--model", "anthropic/claude-sonnet-5",
+        )
+        self.assertEqual(report["status"], "failed")
+        self.assertNoEngineBrand(report["error"])
 
 
 class UpgradeBrandLeakTest(AcmeRuntimeTestCase):

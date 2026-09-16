@@ -547,15 +547,15 @@ class ModelsScreen:
     `_ENGINE_TARGETS` already draws for every other screen.
 
     `activation` is the same wording `GrantMcpResultScreen` already carries
-    for the same reason: a write here only ever changes Pegasus's own state,
-    never the rendered CLI configuration a running agent actually reads --
-    that only happens on the next install/update. `cli.models_set`/
-    `models_unset` already say so under their own `activation` key; `session`
-    copies it onto the screen it rebuilds after a write so the person is told,
-    rather than left to trust a "Current model" column that can now silently
-    disagree with what the CLI is actually running. Empty by default, so a
-    screen reached by narrowing rather than writing (or a screen built before
-    this field existed) renders exactly as before -- no notice, nothing to say.
+    for the same reason: a write here reaches the rendered CLI configuration,
+    and a CLI that reads an agent's prompt once at startup is still running
+    the previous one until it is restarted. `cli.models_set`/`models_unset`
+    say what is left under their own `activation` key; `session` copies it
+    onto the screen it rebuilds after a write so the person is told, rather
+    than left to trust a "Current model" column that would otherwise look
+    like the whole story. Empty by default, so a screen reached by narrowing
+    rather than writing (or a screen built before this field existed) renders
+    exactly as before -- no notice, nothing to say.
     """
 
     cli: CliOption

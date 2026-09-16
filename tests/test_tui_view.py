@@ -563,11 +563,10 @@ class ModelsRowsRenderingTest(unittest.TestCase):
 
     def test_an_activation_notice_from_a_write_is_shown(self):
         """The bug: the rows step is the screen a write to this wizard
-        rebuilds, so it is the one place a person would ever see the notice
-        that the assignment just made is not in the running CLI configuration
-        yet. Nothing pins today's `_NOT_INSTALLED_YET` wording here -- that
-        string belongs to `cli.py` -- only that whatever `screen.activation`
-        holds reaches a rendered line."""
+        rebuilds, so it is the one place a person would ever see whatever the
+        engine says is still left to do after the assignment lands. Nothing
+        pins that wording here -- the string belongs to `cli.py` -- only that
+        whatever `screen.activation` holds reaches a rendered line."""
         lines = [line.text for line in render(_models_screen(activation=("Reinstall to write it.",)), cursor=0)]
         self.assertIn("Reinstall to write it.", lines)
 
