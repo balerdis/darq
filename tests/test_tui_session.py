@@ -1433,6 +1433,16 @@ class AssignmentListTest(ModelsScreenTestCase):
         self.assertEqual([model.id for model in navigator.current.providers[0].models], ["fast-model"])
 
 
+def _to_confirm_row(navigator: Navigator) -> Navigator:
+    """Move the cursor from wherever it sits on the rows step onto the
+    trailing Confirm row -- the same row `McpSelectionScreen`'s own
+    Continue occupies after its last server."""
+    count = len(navigator.current.rows)
+    while navigator.cursor != count:
+        navigator = navigator.handle(Action.MOVE_DOWN)
+    return navigator
+
+
 class WalkTheFourStepsTest(ModelsScreenTestCase):
     def _to_agent_row(self, navigator: Navigator) -> Navigator:
         rows = navigator.current.rows
@@ -1441,16 +1451,31 @@ class WalkTheFourStepsTest(ModelsScreenTestCase):
             navigator = navigator.handle(Action.MOVE_DOWN)
         return navigator.handle(Action.CHOOSE)
 
-    def test_a_plain_model_is_assigned_immediately_and_matches_models_set(self):
+    def test_a_plain_model_is_staged_pure_and_only_applied_on_confirm(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         navigator = self.to_models_screen(runtime)
         navigator = self._to_agent_row(navigator)  # agent chosen
         navigator = navigator.handle(Action.CHOOSE)  # the one provider
-        navigator = session.step(navigator, runtime, Action.CHOOSE)  # the one, plain, model: commits
+        navigator = navigator.handle(Action.CHOOSE)  # the one, plain, model: stages, pure -- no engine call
 
         self.assertIsInstance(navigator.current, ModelsScreen)
-        self.assertIsNone(navigator.current.agent)  # back at the rows step, refreshed
+        self.assertIsNone(navigator.current.agent)  # back at the rows step
+        self.assertEqual(
+            navigator.current.staged,
+            (navigator_module.StagedChange(agent=CONFIGURABLE_AGENT, model="anthropic/fast-model", effort=None),),
+        )
+        # Staged only -- nothing reached the store or the rendered rows yet.
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
+        row = next(row for row in navigator.current.rows if row.agent == CONFIGURABLE_AGENT)
+        self.assertIsNone(row.current)
+
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)  # applies the staged batch
+
+        self.assertIsInstance(navigator.current, ModelsScreen)
+        self.assertEqual(navigator.current.staged, ())
         assignments = cli.model_assignment_store(runtime).load()
         assignment = model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT)
         self.assertEqual(assignment.full_id, "anthropic/fast-model")
@@ -1458,7 +1483,7 @@ class WalkTheFourStepsTest(ModelsScreenTestCase):
         row = next(row for row in navigator.current.rows if row.agent == CONFIGURABLE_AGENT)
         self.assertEqual(row.current, "anthropic/fast-model")
 
-    def test_a_reasoning_model_asks_for_effort_before_it_is_assigned(self):
+    def test_a_reasoning_model_asks_for_effort_before_it_is_staged(self):
         _write_catalog(self.home, ONE_REASONING_MODEL)
         runtime = self.runtime()
         navigator = self.to_models_screen(runtime)
@@ -1467,9 +1492,18 @@ class WalkTheFourStepsTest(ModelsScreenTestCase):
         navigator = navigator.handle(Action.CHOOSE)  # the one, reasoning, model: only narrows
         self.assertEqual(navigator.current.model_id, "deep-thinker")
 
-        navigator = session.step(navigator, runtime, Action.CHOOSE)  # the first effort offered: commits
+        navigator = navigator.handle(Action.CHOOSE)  # the first effort offered: stages, pure
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertIsNone(navigator.current.agent)
+        [staged] = navigator.current.staged
+        self.assertEqual(staged.agent, CONFIGURABLE_AGENT)
+        self.assertEqual(staged.model, "anthropic/deep-thinker")
+        self.assertIsNotNone(staged.effort)
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
+
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
         assignments = cli.model_assignment_store(runtime).load()
         assignment = model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT)
         self.assertEqual(assignment.full_id, "anthropic/deep-thinker")
@@ -1477,7 +1511,7 @@ class WalkTheFourStepsTest(ModelsScreenTestCase):
 
 
 class RemovingAnAssignmentTest(ModelsScreenTestCase):
-    def test_d_unsets_the_assignment_and_matches_models_unset(self):
+    def test_d_stages_a_removal_pure_and_only_applies_it_on_confirm(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         self.install(runtime)
@@ -1489,12 +1523,143 @@ class RemovingAnAssignmentTest(ModelsScreenTestCase):
             navigator = navigator.handle(Action.MOVE_DOWN)
         self.assertEqual(navigator.current.rows[navigator.cursor].current, "anthropic/fast-model")
 
-        navigator = session.step(navigator, runtime, Action.REMOVE)
+        navigator = navigator.handle(Action.REMOVE)  # stages, pure -- no engine call
+        self.assertEqual(
+            navigator.current.staged,
+            (navigator_module.StagedChange(agent=CONFIGURABLE_AGENT, model=None),),
+        )
+        # Still applied on disk -- staging alone must not write.
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertIsNotNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
+
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
+
         self.assertIsInstance(navigator.current, ModelsScreen)
+        self.assertEqual(navigator.current.staged, ())
         assignments = cli.model_assignment_store(runtime).load()
         self.assertIsNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
         row = next(row for row in navigator.current.rows if row.agent == CONFIGURABLE_AGENT)
         self.assertIsNone(row.current)
+
+
+class LeavingWithoutConfirmingTest(ModelsScreenTestCase):
+    """The other half of staging's contract: `esc` at the rows step, not
+    Confirm, must discard whatever was staged and write nothing at all."""
+
+    def test_staging_then_leaving_without_confirming_writes_nothing_and_moves_no_generation(self):
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        runtime = self.runtime()
+        navigator = self.to_models_screen(runtime)
+        before = cli.snapshot_store(runtime).readable_generations()
+
+        rows = navigator.current.rows
+        index = next(i for i, row in enumerate(rows) if row.agent == CONFIGURABLE_AGENT)
+        for _ in range(index):
+            navigator = navigator.handle(Action.MOVE_DOWN)
+        navigator = navigator.handle(Action.CHOOSE)  # agent chosen
+        navigator = navigator.handle(Action.CHOOSE)  # the one provider
+        navigator = navigator.handle(Action.CHOOSE)  # the one, plain, model: stages
+        self.assertTrue(navigator.current.staged)
+
+        # Through `session.step`, the real dispatcher every key press in
+        # `app.py` goes through -- not `navigator.handle` directly -- so a
+        # regression that made `_models_write` fire on `BACK` would be
+        # caught here, not just a defect in `Navigator`'s own pure pop.
+        navigator = session.step(navigator, runtime, Action.BACK)  # esc at the rows step: leaves, discards
+
+        self.assertNotIsInstance(navigator.current, ModelsScreen)
+        after = cli.snapshot_store(runtime).readable_generations()
+        self.assertEqual(after, before)
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
+
+
+class MixedBatchOneConfirmOneGenerationTest(ModelsScreenTestCase):
+    """The definition of done for this whole change: staging several
+    assignments and a removal, confirming once, moves the snapshot
+    generation count by exactly one -- not once per staged item."""
+
+    OTHER_AGENT = "sdd-verify"
+
+    def test_several_assignments_and_a_removal_confirmed_once_move_one_generation(self):
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        runtime = self.runtime()
+        self.install(runtime)
+        # A pre-existing assignment on a third agent, staged for removal below.
+        cli.models_set(CLI, [cli.ModelAssignmentSpec(agent=self.OTHER_AGENT, model="anthropic/fast-model")], runtime)
+
+        navigator = self.to_models_screen(runtime)
+        before = cli.snapshot_store(runtime).readable_generations()
+
+        # Stage a plain-model assignment for CONFIGURABLE_AGENT.
+        rows = navigator.current.rows
+        index = next(i for i, row in enumerate(rows) if row.agent == CONFIGURABLE_AGENT)
+        for _ in range(index):
+            navigator = navigator.handle(Action.MOVE_DOWN)
+        navigator = navigator.handle(Action.CHOOSE)  # agent chosen
+        navigator = navigator.handle(Action.CHOOSE)  # the one provider
+        navigator = navigator.handle(Action.CHOOSE)  # the one, plain, model: stages
+
+        # Stage a removal for OTHER_AGENT, in the same sitting -- the cursor
+        # sits at 0 after staging the assignment above (`.replaced` resets
+        # it), so this walks it down to OTHER_AGENT's own row.
+        rows = navigator.current.rows
+        index = next(i for i, row in enumerate(rows) if row.agent == self.OTHER_AGENT)
+        for _ in range(index):
+            navigator = navigator.handle(Action.MOVE_DOWN)
+        navigator = navigator.handle(Action.REMOVE)
+
+        self.assertEqual(len(navigator.current.staged), 2)
+        self.assertEqual(cli.snapshot_store(runtime).readable_generations(), before)  # nothing written yet
+
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
+
+        after = cli.snapshot_store(runtime).readable_generations()
+        self.assertEqual(len(after), len(before) + 1)
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertEqual(
+            model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT).full_id, "anthropic/fast-model"
+        )
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, self.OTHER_AGENT))
+
+
+class ModelsAllOrNothingTest(ModelsScreenTestCase):
+    """A staged batch with one invalid item must refuse the whole Confirm
+    and write nothing -- the same all-or-nothing contract
+    `test_batch_snapshot_atomicity.py` already proves for `cli.models_apply`
+    directly, proven again here through the actual TUI confirm path."""
+
+    def test_an_invalid_staged_item_writes_nothing_and_moves_no_generation(self):
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        runtime = self.runtime()
+        navigator = self.to_models_screen(runtime)
+        before = cli.snapshot_store(runtime).readable_generations()
+
+        rows = navigator.current.rows
+        index = next(i for i, row in enumerate(rows) if row.agent == CONFIGURABLE_AGENT)
+        for _ in range(index):
+            navigator = navigator.handle(Action.MOVE_DOWN)
+        navigator = navigator.handle(Action.CHOOSE)  # agent chosen
+        navigator = navigator.handle(Action.CHOOSE)  # the one provider
+        navigator = navigator.handle(Action.CHOOSE)  # the one, plain, model: stages
+
+        # Corrupt the staged batch with an agent this release does not
+        # configure -- `cli.models_apply` refuses this, the same way
+        # `models_set` already refuses it for a single-item batch.
+        corrupted = navigator.current.staged + (
+            navigator_module.StagedChange(agent="nonexistent-agent", model="anthropic/fast-model"),
+        )
+        navigator = navigator.replaced(replace(navigator.current, staged=corrupted))
+
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
+
+        after = cli.snapshot_store(runtime).readable_generations()
+        self.assertEqual(after, before)
+        assignments = cli.model_assignment_store(runtime).load()
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, CONFIGURABLE_AGENT))
 
 
 class ModelsWriteActivationTest(ModelsScreenTestCase):
@@ -1502,13 +1667,13 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
 
     The bug this started as: the models screen only ever showed what Pegasus's
     own state remembered, never what the running CLI configuration actually
-    held, and the two only lined up again after a separate install. The
-    assignment now reaches the rendered file in the same command, so what
-    `cli.models_set`/`models_unset` report under `activation` is the CLI's own
+    held, and the two only lined up again after a separate install. Confirming
+    now reaches the rendered file in one `cli.models_apply` call for the whole
+    staged batch, so what it reports under `activation` is the CLI's own
     activation step -- restarting it, since it reads agent prompts once at
     startup. Either way this screen is the one place that notice reaches a
-    person, so every write it makes must carry the report's own `activation`
-    forward onto the screen it rebuilds.
+    person, so every Confirm must carry the report's own `activation` forward
+    onto the screen it rebuilds.
 
     Deliberately not asserting any particular wording -- that string belongs
     to the engine, which this layer does not own and must not pin in a TUI
@@ -1525,37 +1690,41 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
             navigator = navigator.handle(Action.MOVE_DOWN)
         return navigator.handle(Action.CHOOSE)
 
-    def test_setting_a_plain_model_surfaces_the_engine_s_own_activation_notice(self):
+    def test_confirming_a_staged_plain_model_surfaces_the_engine_s_own_activation_notice(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         navigator = self.to_models_screen(runtime)
         navigator = self._to_agent_row(navigator)  # agent chosen
         navigator = navigator.handle(Action.CHOOSE)  # the one provider
-        navigator = session.step(navigator, runtime, Action.CHOOSE)  # the one, plain, model: commits
+        navigator = navigator.handle(Action.CHOOSE)  # the one, plain, model: stages, pure
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)  # applies the staged batch
 
-        expected = cli.models_set(
-            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/fast-model")], runtime
+        expected = cli.models_apply(
+            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/fast-model")], [], runtime
         )["activation"]
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertEqual(navigator.current.activation, tuple(expected))
         self.assertTrue(navigator.current.activation)
 
-    def test_setting_a_reasoning_model_with_an_effort_surfaces_the_notice(self):
+    def test_confirming_a_staged_reasoning_model_with_an_effort_surfaces_the_notice(self):
         _write_catalog(self.home, ONE_REASONING_MODEL)
         runtime = self.runtime()
         navigator = self.to_models_screen(runtime)
         navigator = self._to_agent_row(navigator)
         navigator = navigator.handle(Action.CHOOSE)  # the one provider
         navigator = navigator.handle(Action.CHOOSE)  # the one, reasoning, model: only narrows
+        navigator = navigator.handle(Action.CHOOSE)  # the first effort offered: stages, pure
+        navigator = _to_confirm_row(navigator)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
 
-        navigator = session.step(navigator, runtime, Action.CHOOSE)  # the first effort offered: commits
-        expected = cli.models_set(
-            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/deep-thinker", effort="low")], runtime
+        expected = cli.models_apply(
+            CLI, [cli.ModelAssignmentSpec(agent="sdd-verify", model="anthropic/deep-thinker", effort="low")], [], runtime
         )["activation"]
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertEqual(navigator.current.activation, tuple(expected))
 
-    def test_removing_an_assignment_surfaces_the_notice_too(self):
+    def test_confirming_a_staged_removal_surfaces_the_notice_too(self):
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         self.install(runtime)
@@ -1565,24 +1734,42 @@ class ModelsWriteActivationTest(ModelsScreenTestCase):
         index = next(i for i, row in enumerate(navigator.current.rows) if row.agent == CONFIGURABLE_AGENT)
         for _ in range(index):
             navigator = navigator.handle(Action.MOVE_DOWN)
+        navigator = navigator.handle(Action.REMOVE)  # stages, pure
+        navigator = _to_confirm_row(navigator)
 
-        navigator = session.step(navigator, runtime, Action.REMOVE)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertTrue(navigator.current.activation)
 
-    def test_a_failed_write_withholds_the_activation_notice(self):
+    def test_confirming_nothing_staged_is_a_no_op_that_asks_no_question(self):
+        """Reaching Confirm with nothing staged must not call
+        `cli.models_apply` at all -- there is nothing for it to apply."""
+        _write_catalog(self.home, ONE_PLAIN_MODEL)
+        runtime = self.runtime()
+        navigator = self.to_models_screen(runtime)
+        navigator = _to_confirm_row(navigator)
+
+        with unittest.mock.patch.object(cli, "models_apply") as mocked:
+            navigator = session.step(navigator, runtime, Action.CHOOSE)
+        mocked.assert_not_called()
+        self.assertIsInstance(navigator.current, ModelsScreen)
+        self.assertEqual(navigator.current.activation, ())
+
+    def test_a_failed_confirm_withholds_the_activation_notice(self):
         """The same discipline `_grant_mcp_write` already follows: a failure
         report carries no `activation` key at all (`cli.safe_report` never
-        invents one), so a screen rebuilt after a failed write must not claim
-        the write landed by showing the notice anyway."""
+        invents one), so a screen rebuilt after a failed Confirm must not
+        claim the write landed by showing the notice anyway."""
         _write_catalog(self.home, ONE_PLAIN_MODEL)
         runtime = self.runtime()
         navigator = self.to_models_screen(runtime)
         navigator = self._to_agent_row(navigator)
         navigator = navigator.handle(Action.CHOOSE)  # the one provider
+        navigator = navigator.handle(Action.CHOOSE)  # stages, pure
+        navigator = _to_confirm_row(navigator)
 
-        with unittest.mock.patch.object(cli, "models_set", side_effect=cli.CommandError("boom")):
-            navigator = session.step(navigator, runtime, Action.CHOOSE)  # commits, but the write fails
+        with unittest.mock.patch.object(cli, "models_apply", side_effect=cli.CommandError("boom")):
+            navigator = session.step(navigator, runtime, Action.CHOOSE)  # confirms, but the write fails
 
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertEqual(navigator.current.activation, ())

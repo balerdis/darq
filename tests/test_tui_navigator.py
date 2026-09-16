@@ -733,8 +733,11 @@ class ModelsMenuTest(unittest.TestCase):
 
 
 class ModelsWizardRowsStepTest(unittest.TestCase):
-    def test_moving_the_cursor_wraps_across_rows(self):
-        navigator = Navigator(_stack=(_models_screen(),), _cursors=(1,))
+    def test_moving_the_cursor_wraps_across_rows_and_the_confirm_row(self):
+        # `ROWS` has two agents, so the rows step carries three positions --
+        # two rows plus Confirm -- the same `+ 1` `McpSelectionScreen`'s own
+        # Continue row already adds.
+        navigator = Navigator(_stack=(_models_screen(),), _cursors=(2,))
         navigator = navigator.handle(Action.MOVE_DOWN)
         self.assertEqual(navigator.cursor, 0)
 
@@ -744,13 +747,39 @@ class ModelsWizardRowsStepTest(unittest.TestCase):
         self.assertEqual(navigator.current.agent, "sdd-apply")
         self.assertEqual(navigator.cursor, 0)
 
-    def test_removing_an_assignment_does_nothing_by_itself(self):
+    def test_choosing_the_confirm_row_directly_does_nothing_by_itself(self):
+        """Applying every staged change in one call is real engine work,
+        left to `session` -- the same reasoning every other
+        `_ENGINE_TARGETS`-like row follows."""
+        navigator = Navigator(_stack=(_models_screen(),), _cursors=(len(ROWS),))
+        navigator = navigator.handle(Action.CHOOSE)
+        self.assertIsNone(navigator.current.agent)
+        self.assertEqual(navigator.current.staged, ())
+
+    def test_removing_an_assignment_stages_a_removal_without_leaving_the_rows_step(self):
         navigator = Navigator(_stack=(_models_screen(),), _cursors=(0,))
         navigator = navigator.handle(Action.REMOVE)
         self.assertIsNone(navigator.current.agent)
+        self.assertEqual(navigator.current.staged, (navigator_module.StagedChange(agent="sdd-apply", model=None),))
+        # The cursor stays put -- the same `_swapped` behaviour toggling a
+        # row on `McpSelectionScreen` already gets, not the reset `.replaced`
+        # would give it.
+        self.assertEqual(navigator.cursor, 0)
 
-    def test_back_at_the_rows_step_leaves_the_wizard(self):
-        navigator = Navigator.starting().opened(_models_screen())
+    def test_removing_replaces_a_previously_staged_change_for_the_same_agent(self):
+        staged = (navigator_module.StagedChange(agent="sdd-apply", model="openai/fast-model"),)
+        navigator = Navigator(_stack=(_models_screen(staged=staged),), _cursors=(0,))
+        navigator = navigator.handle(Action.REMOVE)
+        self.assertEqual(navigator.current.staged, (navigator_module.StagedChange(agent="sdd-apply", model=None),))
+
+    def test_removing_on_the_confirm_row_does_nothing(self):
+        navigator = Navigator(_stack=(_models_screen(),), _cursors=(len(ROWS),))
+        navigator = navigator.handle(Action.REMOVE)
+        self.assertEqual(navigator.current.staged, ())
+
+    def test_back_at_the_rows_step_leaves_the_wizard_and_drops_staged_changes(self):
+        staged = (navigator_module.StagedChange(agent="sdd-apply", model="openai/fast-model"),)
+        navigator = Navigator.starting().opened(_models_screen(staged=staged))
         navigator = navigator.handle(Action.BACK)
         self.assertIsInstance(navigator.current, Menu)
 
@@ -775,10 +804,17 @@ class ModelsWizardModelStepTest(unittest.TestCase):
         navigator = navigator.handle(Action.CHOOSE)
         self.assertEqual(navigator.current.model_id, "deep-thinker")
 
-    def test_choosing_a_plain_model_is_a_commit_left_to_session(self):
+    def test_choosing_a_plain_model_stages_it_and_returns_to_the_rows_step(self):
         navigator = Navigator(_stack=(_models_screen(agent="sdd-apply", provider_id="openai"),), _cursors=(0,))
         navigator = navigator.handle(Action.CHOOSE)
+        self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertIsNone(navigator.current.model_id)
+        self.assertIsNone(navigator.current.agent)
+        self.assertIsNone(navigator.current.provider_id)
+        self.assertEqual(
+            navigator.current.staged,
+            (navigator_module.StagedChange(agent="sdd-apply", model="openai/fast-model", effort=None),),
+        )
 
     def test_back_clears_the_provider_rather_than_leaving_the_wizard(self):
         navigator = Navigator(_stack=(_models_screen(agent="sdd-apply", provider_id="anthropic"),), _cursors=(0,))
@@ -788,11 +824,16 @@ class ModelsWizardModelStepTest(unittest.TestCase):
 
 
 class ModelsWizardEffortStepTest(unittest.TestCase):
-    def test_choosing_an_effort_is_a_commit_left_to_session(self):
+    def test_choosing_an_effort_stages_it_and_returns_to_the_rows_step(self):
         screen = _models_screen(agent="sdd-apply", provider_id="anthropic", model_id="deep-thinker")
         navigator = Navigator(_stack=(screen,), _cursors=(0,))
         navigator = navigator.handle(Action.CHOOSE)
-        self.assertIs(navigator.current, screen)
+        self.assertIsInstance(navigator.current, ModelsScreen)
+        self.assertIsNone(navigator.current.agent)
+        self.assertEqual(
+            navigator.current.staged,
+            (navigator_module.StagedChange(agent="sdd-apply", model="anthropic/deep-thinker", effort="low"),),
+        )
 
     def test_back_clears_the_model_rather_than_leaving_the_wizard(self):
         screen = _models_screen(agent="sdd-apply", provider_id="anthropic", model_id="deep-thinker")
@@ -941,14 +982,18 @@ class BusyMessageOnStatusScreenTest(unittest.TestCase):
 
 
 class BusyMessageOnModelsWizardTest(unittest.TestCase):
-    def test_the_rows_step_says_nothing_for_a_pure_choose(self):
+    def test_choosing_a_row_says_nothing_for_a_pure_choose(self):
         screen = _models_screen()
         self.assertIsNone(busy_message_for(screen, 0, Action.CHOOSE))
 
-    def test_removing_an_assignment_names_the_agent(self):
+    def test_choosing_the_confirm_row_names_the_cli(self):
         screen = _models_screen()
-        message = busy_message_for(screen, 0, Action.REMOVE)
-        self.assertIn(ROWS[0].agent, message)
+        message = busy_message_for(screen, len(ROWS), Action.CHOOSE)
+        self.assertIn(SAMPLE.display_name, message)
+
+    def test_removing_an_assignment_says_nothing_now_it_is_pure_staging(self):
+        screen = _models_screen()
+        self.assertIsNone(busy_message_for(screen, 0, Action.REMOVE))
 
     def test_removing_with_no_rows_says_nothing(self):
         screen = _models_screen(rows=())
@@ -962,15 +1007,13 @@ class BusyMessageOnModelsWizardTest(unittest.TestCase):
         screen = _models_screen(agent="sdd-apply", provider_id="anthropic")
         self.assertIsNone(busy_message_for(screen, 0, Action.CHOOSE))
 
-    def test_choosing_a_plain_model_names_the_agent(self):
+    def test_choosing_a_plain_model_says_nothing_now_it_is_pure_staging(self):
         screen = _models_screen(agent="sdd-apply", provider_id="openai")
-        message = busy_message_for(screen, 0, Action.CHOOSE)
-        self.assertIn("sdd-apply", message)
+        self.assertIsNone(busy_message_for(screen, 0, Action.CHOOSE))
 
-    def test_choosing_an_effort_names_the_agent(self):
+    def test_choosing_an_effort_says_nothing_now_it_is_pure_staging(self):
         screen = _models_screen(agent="sdd-apply", provider_id="anthropic", model_id="deep-thinker")
-        message = busy_message_for(screen, 0, Action.CHOOSE)
-        self.assertIn("sdd-apply", message)
+        self.assertIsNone(busy_message_for(screen, 0, Action.CHOOSE))
 
     def test_movement_and_back_say_nothing_anywhere_in_the_wizard(self):
         for screen in (

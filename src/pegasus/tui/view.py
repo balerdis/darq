@@ -27,6 +27,7 @@ from pegasus.tui.navigator import (
     Screen,
     StatusScreen,
     UninstallResultScreen,
+    staged_label,
 )
 
 #: A generous default for callers that render without knowing a real
@@ -536,25 +537,54 @@ def _render_grant_mcp_result(screen: GrantMcpResultScreen) -> tuple[Line, ...]:
     return tuple(lines)
 
 
+#: The row after the last agent on the models screen's rows step -- the
+#: exact mirror of `CONTINUE_LABEL` on `McpSelectionScreen`, worded for what
+#: this row does instead of borrowing that one's wording: it applies a batch
+#: rather than fetching a preview.
+CONFIRM_MODELS_LABEL = "Confirm — apply staged changes"
+
+
+def _staged_column(screen: ModelsScreen, agent: str) -> str:
+    """What the rows step shows in the "Staged change" column for `agent` --
+    empty when nothing is staged for it, so a row nobody touched this
+    sitting reads exactly as blank as it always did."""
+    for change in screen.staged:
+        if change.agent == agent:
+            return f"→ {staged_label(change)}"
+    return ""
+
+
 def _render_models(screen: ModelsScreen, cursor: int) -> tuple[Line, ...]:
     """The doc's four-step walk, one step's worth of choices at a time --
     which step depends only on how much of `screen` is already filled in,
     matching `navigator._models_step_count`'s own reading of the same state.
+
+    The rows step carries a third column, "Staged change", and a trailing
+    Confirm row after the last agent -- a person choosing a plain model, an
+    effort, or `d` no longer writes anything by itself (see `ModelsScreen`'s
+    own docstring); this is where the accumulated batch becomes visible
+    before it is ever applied, so nobody has to infer what they are about to
+    change from the "Current model" column alone.
     """
     heading = f"Models · {screen.cli.display_name}"
     if screen.agent is None:
-        items = tuple(f"{row.agent:<24} {row.current or '(no model)'}" for row in screen.rows)
+        items = tuple(
+            f"{row.agent:<24} {(row.current or '(no model)'):<28} {_staged_column(screen, row.agent)}"
+            for row in screen.rows
+        )
+        if items:
+            items = items + (CONFIRM_MODELS_LABEL,)
         # `activation` is only ever set right after `session` rebuilds this
-        # rows step following a write (set or remove) -- narrowing into the
-        # wizard's later steps starts a fresh `ModelsScreen` with none, so
-        # this is the one place on this screen the notice ever has something
-        # to say.
+        # rows step following a Confirm -- narrowing into the wizard's later
+        # steps starts a fresh `ModelsScreen` with none, so this is the one
+        # place on this screen the notice ever has something to say.
         return _render_choices(
             heading,
             items,
             cursor,
-            "enter: configure · d: remove current model · esc: back",
-            header=f"{'Agent':<24} Current model",
+            "enter: configure, or confirm to apply · d: stage a removal · "
+            "esc: back, discards staged changes",
+            header=f"{'Agent':<24} {'Current model':<28} Staged change",
             empty="This release ships no agent that accepts a model assignment.",
             trailer=screen.activation,
         )
@@ -568,4 +598,4 @@ def _render_models(screen: ModelsScreen, cursor: int) -> tuple[Line, ...]:
         items = tuple(model.id for model in provider.models)
         return _render_choices(f"{heading} · choose a model", items, cursor, "enter: choose · esc: back")
     heading = f"{heading}/{screen.model_id}"
-    return _render_choices(f"{heading} · choose an effort", EFFORT_OPTIONS, cursor, "enter: assign · esc: back")
+    return _render_choices(f"{heading} · choose an effort", EFFORT_OPTIONS, cursor, "enter: stage · esc: back")

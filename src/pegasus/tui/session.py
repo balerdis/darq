@@ -23,7 +23,6 @@ from pegasus.core import journal as journal_module
 from pegasus.core import model_assignments as model_assignments_module
 from pegasus.tui.navigator import (
     CANCEL,
-    EFFORT_OPTIONS,
     Action,
     AgentRow,
     CliOption,
@@ -61,6 +60,8 @@ from pegasus.tui.navigator import (
     program_option,
     readable_timestamp,
     restore_menu,
+    staged_assignments,
+    staged_removals,
 )
 
 
@@ -536,17 +537,18 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
     their own read-only screens.
 
     Two states have an explanation instead of a wizard, and the installation
-    is asked about first because it is the more fundamental of the two: a
-    model assignment is written straight into the rendered configuration
-    (`cli.models_set` reapplies it the way `cli.mcp_grant` always has), so a
-    CLI with nothing installed has nothing for any choice on this screen to
-    reach. Refused here, when the screen opens, rather than at the write:
-    `_models_write` is four choices further along, and a person who learns
-    it there learns it after making every one of them. `grant_mcp_menu`
-    narrows its own menu for exactly this reason; this answers the same
-    refusal one step later because the models menu offers every *detected*
-    CLI -- its model catalog is a per-CLI read this screen is the first to
-    make -- so the CLI is still reachable and has to be told why.
+    is asked about first because it is the more fundamental of the two:
+    confirming this screen's staged changes writes straight into the
+    rendered configuration (`cli.models_apply` reapplies it the way
+    `cli.mcp_grant` always has), so a CLI with nothing installed has nothing
+    for any staged change on this screen to reach. Refused here, when the
+    screen opens, rather than at Confirm: `_models_write` is a whole sitting
+    of staging further along, and a person who learns it there learns it
+    after staging everything they meant to. `grant_mcp_menu` narrows its own
+    menu for exactly this reason; this answers the same refusal one step
+    later because the models menu offers every *detected* CLI -- its model
+    catalog is a per-CLI read this screen is the first to make -- so the CLI
+    is still reachable and has to be told why.
     """
     if journal_module.install_for(cli.journal_store(runtime).load(), cli_option.id) is None:
         return Placeholder(
@@ -578,8 +580,8 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
 
 
 def _models_activation(report: dict) -> tuple[str, ...]:
-    """The activation notice `cli.models_set`/`models_unset` return, carried
-    onto the screen `_models_write` rebuilds -- or nothing, on a failure.
+    """The activation notice `cli.models_apply` returns, carried onto the
+    screen `_models_write` rebuilds -- or nothing, on a failure.
 
     Same discipline `_grant_mcp_write` already follows for its own write: a
     failed `cli.safe_report` document is `{"status": "failed", "error": ...}`
@@ -591,42 +593,51 @@ def _models_activation(report: dict) -> tuple[str, ...]:
 
 
 def _models_write(screen: ModelsScreen, navigator: Navigator, runtime: cli.Runtime, action: Action) -> Navigator | None:
-    """The three moments in the wizard that are a real write rather than a
-    pure narrowing: removing an assignment, and committing a plain model or
-    an effort. `Navigator` leaves each of these as a no-op on purpose --
-    see `ModelsScreen`'s own docstring -- so this is where they actually
-    happen. Returns `None` for every other action, which tells `step` to
-    fall through to `navigator.handle` as usual.
+    """The one moment on this screen that is real engine work rather than a
+    pure narrowing or staging: reaching Confirm, the row after every agent,
+    and choosing it. `Navigator` leaves this row a no-op on purpose -- see
+    `ModelsScreen`'s own docstring -- so this is where it actually happens.
+    Returns `None` for every other action (staging a model, an effort, or a
+    removal is now pure, handled entirely in `Navigator`), which tells
+    `step` to fall through to `navigator.handle` as usual, the same as
+    `_mcp_write`/`_grant_mcp_write` already do for their own pure steps.
 
-    Each branch keeps the write's own report only long enough to read
-    `activation` off it, then rebuilds the screen fresh from state (the same
-    `_models_screen` read every other step already does) and stamps that
-    notice onto it -- the fix for the bug where this screen's own "Current
-    model" column stayed truthful about Pegasus's stored assignment while
-    never telling anyone the running CLI configuration had not moved.
+    Everything staged -- assignments and removals alike -- reaches
+    `cli.models_apply` in one call, and so one `install()`, one snapshot:
+    the exact storm four separate `cli.models_set`/`cli.models_unset` calls
+    used to cause for four agents configured in one sitting (see
+    `ModelsScreen`'s own docstring). Nothing staged is a no-op -- there is
+    nothing for `cli.models_apply` to apply -- so this returns to a freshly
+    read screen without making an engine call at all, the same "nothing to
+    do" shortcut `models_unset` already takes for a batch that turns out to
+    be entirely already-unset.
+
+    The screen is rebuilt fresh from state either way -- the same
+    `_models_screen` read every other step already does, and the same thing
+    every write on this screen has always done, success or failure alike
+    (see `_models_activation`'s own docstring: a failure report carries no
+    `activation` key at all, so the notice is silently withheld rather than
+    shown for a write that never reached disk). `staged` is empty again on
+    the rebuilt screen regardless of which branch ran: on success because
+    everything it held just landed, and on a failure because
+    `cli.models_apply`'s all-or-nothing contract means nothing landed at
+    all, so there is nothing left half-applied for a person to keep staring
+    at -- the same "start over" a failed `models_set` already meant for this
+    screen before staging existed.
     """
-    if action is Action.REMOVE and screen.agent is None and screen.rows:
-        agent = screen.rows[navigator.cursor].agent
-        _, report = cli.safe_report("models", lambda: cli.models_unset(screen.cli.id, [agent], runtime))
-        return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
-    if action is not Action.CHOOSE:
+    if action is not Action.CHOOSE or screen.agent is not None or navigator.cursor != len(screen.rows):
         return None
-    if screen.model_id is not None:
-        effort = EFFORT_OPTIONS[navigator.cursor]
-        spec = cli.ModelAssignmentSpec(
-            agent=screen.agent, model=f"{screen.provider_id}/{screen.model_id}", effort=effort
-        )
-        _, report = cli.safe_report("models", lambda: cli.models_set(screen.cli.id, [spec], runtime))
-        return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
-    if screen.provider_id is not None:
-        provider = next(provider for provider in screen.providers if provider.id == screen.provider_id)
-        if not provider.models or provider.models[navigator.cursor].reasoning:
-            return None  # a reasoning model: `Navigator` narrows to the effort step itself.
-        model_id = provider.models[navigator.cursor].id
-        spec = cli.ModelAssignmentSpec(agent=screen.agent, model=f"{screen.provider_id}/{model_id}", effort=None)
-        _, report = cli.safe_report("models", lambda: cli.models_set(screen.cli.id, [spec], runtime))
-        return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
-    return None
+    if not screen.staged:
+        return navigator.replaced(_models_screen(screen.cli, runtime))
+    assignments = [
+        cli.ModelAssignmentSpec(agent=change.agent, model=change.model, effort=change.effort)
+        for change in staged_assignments(screen)
+    ]
+    removals = list(staged_removals(screen))
+    _, report = cli.safe_report(
+        "models", lambda: cli.models_apply(screen.cli.id, assignments, removals, runtime)
+    )
+    return navigator.replaced(replace(_models_screen(screen.cli, runtime), activation=_models_activation(report)))
 
 
 def install_task(

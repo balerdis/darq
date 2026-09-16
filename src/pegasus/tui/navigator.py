@@ -519,6 +519,39 @@ class AgentRow:
 
 
 @dataclass(frozen=True)
+class StagedChange:
+    """One agent's change, staged on `ModelsScreen` but not yet written --
+    completing a walk (a plain model, or a reasoning model plus its effort)
+    or pressing `d` on the rows step records one of these instead of calling
+    `cli.models_set`/`cli.models_unset` right there, the same way toggling a
+    row on `McpSelectionScreen` records a checkbox instead of calling
+    `cli.install` for it.
+
+    `model` is the unparsed `PROVIDER/MODEL` spec for a staged assignment,
+    the same shape `cli.ModelAssignmentSpec.model` already takes -- `None`
+    for a staged removal, mirroring `AgentRow.current`'s own "a model spec or
+    nothing" shape so a row and its staged change read the same way. `effort`
+    is only ever set alongside a `model`; a staged removal carries none to
+    have an opinion about.
+    """
+
+    agent: str
+    model: str | None = None
+    effort: str | None = None
+
+
+def staged_label(change: StagedChange) -> str:
+    """The one line a staged change reads as, next to the row it belongs to
+    -- `"(remove)"` for a staged removal, or the assignment itself, effort
+    included, for a staged assignment. The one place this formatting lives,
+    so the agent list and any test asserting against it read the same
+    sentence."""
+    if change.model is None:
+        return "(remove)"
+    return f"{change.model} · {change.effort}" if change.effort else change.model
+
+
+@dataclass(frozen=True)
 class ModelsTarget:
     """Chosen a CLI to configure models for. Fetching its model catalog and
     current assignments is real engine work, same reasoning as `InstallTarget`."""
@@ -544,22 +577,57 @@ class ModelsScreen:
     four screens stacked on top of each other.
 
     `providers` and `rows` are fetched once, when the CLI is chosen; every
-    step after that only narrows them, which is why choosing an agent, a
-    provider, or a reasoning model is pure and handled right here, while
-    choosing a plain model, an effort, or removing an assignment needs a real
-    write and is left to `session` to notice and act on -- the same split
-    `_ENGINE_TARGETS` already draws for every other screen.
+    step after that only narrows them or, on the last step of a walk (a
+    plain model, or a reasoning model's effort), stages a change into
+    `staged` and returns to the rows step -- all of it pure and handled right
+    here, the same way toggling a row is pure on `McpSelectionScreen`.
+    Removing an assignment (`d`, on the rows step) stages a removal the same
+    way. Nothing here calls `cli.models_set`/`cli.models_unset` any more: a
+    person configuring four agents used to mean four writes, four
+    `install()` runs, four snapshot generations and four separate activation
+    notices for what they experienced as one sitting -- exactly the storm
+    `McpSelectionScreen`'s own Continue row already learned to avoid for the
+    MCP selection screen (see that class's docstring). The row after the
+    last agent is Confirm, mirroring that Continue row exactly: reaching it
+    and choosing it is real engine work -- applying every staged assignment
+    and removal in one `cli.models_apply` call, one `install()`, one
+    snapshot -- so `Navigator` leaves it a no-op, the same reasoning
+    `_ENGINE_TARGETS` already follows for every other request only `session`
+    can act on.
+
+    A walk started but not finished (an `agent`/`provider_id`/`model_id`
+    filled in) carries no staged change of its own -- only completing it
+    (a plain model, or an effort) does. `staged` holds at most one entry per
+    agent: staging a second change for an agent already staged replaces the
+    first rather than accumulating both, since only the most recent choice
+    for that agent is ever meant to reach Confirm.
+
+    Leaving this screen -- `esc` at the rows step -- without reaching Confirm
+    discards whatever is in `staged`: popping a screen off `Navigator`'s
+    stack drops its whole value, staged changes included, and the footer at
+    the rows step says so. This is deliberate, not an oversight: the
+    alternative, carrying staged changes back into a freshly reopened screen,
+    would mean a person's "no" (leaving without confirming) sometimes still
+    applies part of what they were looking at, which is worse than losing
+    unconfirmed work outright.
 
     `activation` is the same wording `GrantMcpResultScreen` already carries
     for the same reason: a write here reaches the rendered CLI configuration,
     and a CLI that reads an agent's prompt once at startup is still running
-    the previous one until it is restarted. `cli.models_set`/`models_unset`
-    say what is left under their own `activation` key; `session` copies it
-    onto the screen it rebuilds after a write so the person is told, rather
-    than left to trust a "Current model" column that would otherwise look
-    like the whole story. Empty by default, so a screen reached by narrowing
-    rather than writing (or a screen built before this field existed) renders
-    exactly as before -- no notice, nothing to say.
+    the previous one until it is restarted. On a successful Confirm,
+    `cli.models_apply` says what is left under its own `activation` key;
+    `session` copies it onto the screen it rebuilds so the person is told,
+    rather than left to infer it from a "Current model" column that would
+    otherwise look like the whole story -- the exact failure this field was
+    first added to close, now closed for a batch of staged changes instead of
+    one write at a time. On a failed Confirm it instead carries the refusal
+    itself, so a person sees why nothing was applied rather than a screen
+    that quietly did nothing; `staged` is left untouched on a failure; so
+    nothing already chosen has to be re-entered before fixing the one
+    offending item and confirming again. Empty by default, so a screen
+    reached by narrowing rather than confirming (or a screen built before
+    this field existed) renders exactly as before -- no notice, nothing to
+    say.
     """
 
     cli: CliOption
@@ -568,6 +636,7 @@ class ModelsScreen:
     agent: str | None = None
     provider_id: str | None = None
     model_id: str | None = None
+    staged: tuple[StagedChange, ...] = ()
     activation: tuple[str, ...] = ()
 
 
@@ -576,14 +645,41 @@ def _models_provider(screen: ModelsScreen) -> ProviderOption:
 
 
 def _models_step_count(screen: ModelsScreen) -> int:
-    """How many choices the current step offers, for cursor wrapping."""
+    """How many choices the current step offers, for cursor wrapping. The
+    rows step carries one extra row past the last agent -- Confirm -- the
+    same `+ 1` `McpSelectionScreen`'s own Continue row already adds to its
+    own count, and for the same reason: it is a choice on this step, not a
+    fifth wizard step of its own."""
     if screen.model_id is not None:
         return len(EFFORT_OPTIONS)
     if screen.provider_id is not None:
         return len(_models_provider(screen).models)
     if screen.agent is not None:
         return len(screen.providers)
-    return len(screen.rows)
+    return len(screen.rows) + 1
+
+
+def _staged_with(screen: ModelsScreen, change: StagedChange) -> tuple[StagedChange, ...]:
+    """`screen.staged` with `change` replacing whatever was staged for the
+    same agent, if anything -- at most one staged entry per agent, see
+    `ModelsScreen`'s own docstring."""
+    remaining = tuple(existing for existing in screen.staged if existing.agent != change.agent)
+    return remaining + (change,)
+
+
+def staged_assignments(screen: ModelsScreen) -> tuple[StagedChange, ...]:
+    """The staged entries that are assignments -- `model` is not `None` --
+    in the order they were staged. `session` turns each of these into a
+    `cli.ModelAssignmentSpec` for `cli.models_apply`; kept apart from
+    `staged_removals` because the two feed different arguments of that call.
+    """
+    return tuple(change for change in screen.staged if change.model is not None)
+
+
+def staged_removals(screen: ModelsScreen) -> tuple[str, ...]:
+    """The agents staged for removal -- `model` is `None` -- in the order
+    they were staged. `session` passes this straight to `cli.models_apply`."""
+    return tuple(change.agent for change in screen.staged if change.model is None)
 
 
 def _toggled(screen: McpSelectionScreen, index: int) -> McpSelectionScreen:
@@ -719,8 +815,8 @@ def busy_message_for(
     leaves a no-op for `session.step` to catch: `_ENGINE_TARGETS` for a menu
     entry, and the same three screens whose own docstrings already explain
     why one particular row or step on them is real work rather than a pure
-    narrowing — `McpSelectionScreen`'s Continue row, `ModelsScreen`'s three
-    writes, and `InstallPlanScreen`'s only action. Keeping the two lists in
+    narrowing — `McpSelectionScreen`'s Continue row, `ModelsScreen`'s Confirm
+    row, and `InstallPlanScreen`'s only action. Keeping the two lists in
     lockstep is a matter of discipline, not the type system: a target that
     became real work in one without the other would either lie about being
     idle or freeze without a word, which is the defect this exists to close.
@@ -790,16 +886,13 @@ def _busy_message_for_grant_mcp(screen: GrantMcpScreen, cursor: int, action: Act
 
 
 def _busy_message_for_models(screen: ModelsScreen, cursor: int, action: Action) -> str | None:
-    if action is Action.REMOVE and screen.agent is None and screen.rows:
-        return f"Removing the model assigned to {screen.rows[cursor].agent}…"
-    if action is not Action.CHOOSE:
-        return None
-    if screen.model_id is not None:
-        return f"Assigning a model to {screen.agent}…"
-    if screen.provider_id is not None:
-        provider = _models_provider(screen)
-        if provider.models and not provider.models[cursor].reasoning:
-            return f"Assigning a model to {screen.agent}…"
+    """Confirm, the row after the last agent, is now the only moment on this
+    screen that runs a real engine call -- staging a plain model, an effort,
+    or a removal is pure and handled in `Navigator` itself, the same as
+    toggling a row on `McpSelectionScreen`, so none of those says anything
+    here any more."""
+    if action is Action.CHOOSE and screen.agent is None and cursor == len(screen.rows):
+        return f"Applying staged model changes for {screen.cli.display_name}…"
     return None
 
 
@@ -1242,15 +1335,25 @@ class Navigator:
             return self._back_on_models(screen)
         if action is Action.CHOOSE:
             return self._choose_on_models(screen)
-        # `Action.REMOVE`, and a `CHOOSE` that lands on a plain model or an
-        # effort, are real writes only `session.step` can make; here, exactly
-        # like an `_ENGINE_TARGETS` member, they are a no-op.
+        if action is Action.REMOVE and screen.agent is None and screen.rows and self.cursor < len(screen.rows):
+            # Staging a removal is pure -- see `ModelsScreen`'s own docstring
+            # -- handled right here, the same as toggling a row is on
+            # `McpSelectionScreen`. `self.cursor < len(screen.rows)` excludes
+            # the Confirm row: there is no agent under it to remove.
+            agent = screen.rows[self.cursor].agent
+            staged = _staged_with(screen, StagedChange(agent=agent, model=None))
+            return self._swapped(replace(screen, staged=staged))
+        # Confirm, the row after the last agent, is real engine work only
+        # `session.step` can do; here, exactly like an `_ENGINE_TARGETS`
+        # member, it is a no-op.
         return self
 
     def _back_on_models(self, screen: ModelsScreen) -> "Navigator":
         """Clear the last field the walk filled in, one step at a time; with
         nothing left to clear, leave the wizard the way a `Menu`'s `BACK`
-        leaves any other screen."""
+        leaves any other screen -- dropping `screen.staged` along with it,
+        since popping the screen off the stack drops its whole value (see
+        `ModelsScreen`'s own docstring on why that is deliberate)."""
         if screen.model_id is not None:
             return self.replaced(replace(screen, model_id=None))
         if screen.provider_id is not None:
@@ -1262,6 +1365,11 @@ class Navigator:
     def _choose_on_models(self, screen: ModelsScreen) -> "Navigator":
         if screen.agent is None:
             if not screen.rows:
+                return self
+            if self.cursor == len(screen.rows):
+                # Confirm: applying every staged change in one call is real
+                # engine work, left to `session` -- see `ModelsScreen`'s own
+                # docstring.
                 return self
             return self.replaced(replace(screen, agent=screen.rows[self.cursor].agent))
         if screen.provider_id is None:
@@ -1275,8 +1383,22 @@ class Navigator:
             chosen = provider.models[self.cursor]
             if chosen.reasoning:
                 return self.replaced(replace(screen, model_id=chosen.id))
-            return self  # a plain model: `session.step` commits it.
-        return self  # an effort: `session.step` commits it.
+            # A plain model finishes the walk right here: stage it and
+            # return to the rows step, instead of leaving a write for
+            # `session` to make.
+            return self._stage_on_models(screen, model_id=chosen.id, effort=None)
+        return self._stage_on_models(screen, model_id=screen.model_id, effort=EFFORT_OPTIONS[self.cursor])
+
+    def _stage_on_models(self, screen: ModelsScreen, *, model_id: str, effort: str | None) -> "Navigator":
+        """Record one finished walk into `screen.staged` and return to the
+        rows step -- the pure counterpart of what `session._models_write`
+        used to do immediately with `cli.models_set`. `screen.agent` and
+        `screen.provider_id` are never `None` here: this is only ever called
+        once both are filled in (see `_choose_on_models`)."""
+        change = StagedChange(agent=screen.agent, model=f"{screen.provider_id}/{model_id}", effort=effort)
+        staged = _staged_with(screen, change)
+        reset = replace(screen, agent=None, provider_id=None, model_id=None, staged=staged)
+        return self.replaced(reset)
 
     def _handle_on_mcp_selection(self, screen: McpSelectionScreen, action: Action) -> "Navigator":
         count = len(screen.options) + 1  # the row after the last server is Continue.

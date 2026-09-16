@@ -25,6 +25,7 @@ from pegasus.tui.navigator import (
     ProviderOption,
     QUIT,
     RestoreResultScreen,
+    StagedChange,
     StatusScreen,
     UninstallResultScreen,
 )
@@ -553,9 +554,42 @@ class ModelsRowsRenderingTest(unittest.TestCase):
         lines = [line.text for line in render(_models_screen(), cursor=1)]
         self.assertTrue(any("sdd-verify" in text and "anthropic/x" in text for text in lines))
 
-    def test_the_footer_names_both_configuring_and_removing(self):
+    def test_the_footer_names_configuring_confirming_removing_and_discarding(self):
         lines = [line.text for line in render(_models_screen(), cursor=0)]
-        self.assertIn("enter: configure · d: remove current model · esc: back", lines)
+        self.assertIn(
+            "enter: configure, or confirm to apply · d: stage a removal · esc: back, discards staged changes",
+            lines,
+        )
+
+    def test_the_confirm_row_follows_the_last_agent(self):
+        lines = [line.text for line in render(_models_screen(), cursor=0)]
+        self.assertTrue(any("Confirm" in text for text in lines))
+
+    def test_no_confirm_row_when_there_is_no_agent_to_configure(self):
+        # The empty-catalog explanation must not gain a Confirm row that
+        # applies nothing.
+        lines = [line.text for line in render(_models_screen(rows=()), cursor=0)]
+        self.assertFalse(any("Confirm" in text for text in lines))
+
+    def test_a_staged_assignment_shows_in_its_own_column_distinct_from_current(self):
+        staged = (StagedChange(agent="sdd-apply", model="openai/fast-model", effort=None),)
+        lines = [line.text for line in render(_models_screen(staged=staged), cursor=0)]
+        row = next(text for text in lines if "sdd-apply" in text)
+        self.assertIn("(no model)", row)
+        self.assertIn("openai/fast-model", row)
+
+    def test_a_staged_removal_reads_as_remove_not_as_a_model_spec(self):
+        staged = (StagedChange(agent="sdd-verify", model=None),)
+        lines = [line.text for line in render(_models_screen(staged=staged), cursor=0)]
+        row = next(text for text in lines if "sdd-verify" in text)
+        self.assertIn("anthropic/x", row)  # still shows the applied model
+        self.assertIn("remove", row)
+
+    def test_an_agent_with_nothing_staged_shows_no_staged_column_text(self):
+        staged = (StagedChange(agent="sdd-verify", model=None),)
+        lines = [line.text for line in render(_models_screen(staged=staged), cursor=0)]
+        row = next(text for text in lines if "sdd-apply" in text)
+        self.assertNotIn("→", row)
 
     def test_no_configurable_agent_is_explained_not_shown_as_an_empty_table(self):
         lines = [line.text for line in render(_models_screen(rows=()), cursor=0)]
@@ -605,6 +639,19 @@ class ModelsEffortStepRenderingTest(unittest.TestCase):
         self.assertTrue(any("low" in text for text in lines))
         self.assertTrue(any("medium" in text for text in lines))
         self.assertTrue(any("high" in text for text in lines))
+
+    def test_the_footer_says_stage_not_assign(self):
+        """The hook this whole change turns on: an effort choice accumulates
+        into `staged` now, it does not write, so the footer must not still
+        promise the old immediate commit."""
+        lines = [
+            line.text
+            for line in render(
+                _models_screen(agent="sdd-apply", provider_id="anthropic", model_id="deep-thinker"), cursor=0
+            )
+        ]
+        self.assertIn("enter: stage · esc: back", lines)
+        self.assertFalse(any("assign" in text for text in lines))
 
 
 class ModelsLongListRenderingTest(unittest.TestCase):

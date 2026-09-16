@@ -632,25 +632,28 @@ About to remove 3:
 
 ### Configurar modelos
 
-Cuatro pasos, con opción de volver en cada uno.
+Cuatro pasos, con opción de volver en cada uno, y todo lo elegido queda **acumulado** en la propia pantalla hasta que se confirma de una sola vez -- no hay una escritura por cada asignación.
 
 ```
 CLI → agente → proveedor → modelo → [esfuerzo]
 ```
 
+Terminar la caminata (un modelo llano, o un modelo de razonamiento más su esfuerzo) no escribe nada: guarda la elección en el estado de la propia pantalla y vuelve a la lista de agentes, igual que tildar una fila no escribe nada en `McpSelectionScreen`. `d` hace lo mismo del otro lado: en vez de sacar la asignación ahí mismo, la marca para sacarla. La lista de agentes muestra las dos cosas por separado -- lo que ya está aplicado y lo que está pendiente de confirmar -- y una fila `Confirm` después del último agente es la única que efectivamente escribe: aplica todo lo acumulado, asignaciones y remociones por igual, en un solo `cli.models_apply`, y por lo tanto un solo `install()` y una sola generación de snapshot.
+
 ```
 Models · OpenCode
 
-  Agent                    Current model
+  Agent                    Current model                Staged change
   ▸ pegasus-orchestrator   (no model)
-    sdd-apply              anthropic/claude-sonnet-5 · high
-    sdd-verify             (no model)
+    sdd-apply              anthropic/claude-sonnet-5 · high  → anthropic/fast-model
+    sdd-verify             (no model)                   → (remove)
     …
+    Confirm — apply staged changes
 
-  enter: configure · d: remove current model · esc: back
+  enter: configure, or confirm to apply · d: stage a removal · esc: back, discards staged changes
 ```
 
-`d` devuelve el agente a "sin modelo": borra la preferencia de su propio store y se renderiza el default. No toca el journal, porque la asignación de modelo nunca vivió ahí.
+Salir sin confirmar (`esc` en la lista de agentes) descarta todo lo acumulado: el footer ya lo dice, y no hace falta ningún otro aviso porque nada llegó a escribirse. Configurar cuatro agentes en una sola sentada es, ahora, un `install()` y una generación -- antes eran cuatro de cada uno, con cuatro avisos de activación por separado, exactamente la misma tormenta que `McpSelectionScreen` ya resolvió para su propio Continue.
 
 ### Paridad con flags
 
