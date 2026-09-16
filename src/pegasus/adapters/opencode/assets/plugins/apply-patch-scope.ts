@@ -43,11 +43,14 @@ const SCOPE_MARKER = "writes to the local filesystem of the machine this session
 const SCOPE_NOTE = [
   "",
   "",
-  `Scope of this tool: it ${SCOPE_MARKER} and nowhere else. It cannot reach a file that lives on `,
-  "another host. When a request is about editing files, this tool means local files. It is not an ",
-  "instruction to avoid the shell, and it does not forbid editing a remote file over SSH with `bash` ",
-  "when the person has authorized that change. For a destination on another machine the shell is not ",
-  "a way around this tool -- it is the only way there.",
+  `Scope of this tool: it ${SCOPE_MARKER}, as the user that session runs as, and nowhere else. It `,
+  "cannot reach a file that lives on another host, and it cannot write a file owned by another user ",
+  "on this one. When a request is about editing files, this tool means local files that user can ",
+  "write. It is not an instruction to avoid the shell, and it does not forbid editing a remote file ",
+  "over SSH with `bash`, or a privileged local file with `sudo`, when the person has authorized that ",
+  "change. For a destination on another machine the shell is not a way around this tool -- it is the ",
+  "only way there, and for a file this user cannot write it is the way there for the same reason. A ",
+  "permission error this tool returns is a limit on this tool, not a prohibition on the change.",
 ].join("")
 
 const {{program_pascal_name}}ApplyPatchScope: Plugin = async () => ({

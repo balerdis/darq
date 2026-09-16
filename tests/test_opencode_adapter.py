@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,75 @@ IDENTITY = cli.default_identity()
 
 def only(artifacts, kind):
     return [item for item in artifacts if isinstance(item, kind)]
+
+
+#: The `apply_patch` scoping plugin builds its note out of an array of string
+#: fragments joined with no separator, so not one of its sentences exists as a
+#: literal anywhere in the source: a sentence ends mid-line and the next one
+#: starts after a quote, a comma and a newline. Asserting on the source text
+#: would therefore be asserting on the fragments rather than on what the model
+#: is actually handed, which is the proxy this project keeps getting bitten by.
+#: `scope_note_of` rebuilds the string the hook appends, and
+#: `ApplyPatchScopeHookTest` proves that reconstruction is the real thing by
+#: running the real hook under `node` and comparing.
+SCOPE_MARKER_CONST = re.compile(r'const SCOPE_MARKER = "([^"]*)"')
+SCOPE_NOTE_ARRAY = re.compile(r"const SCOPE_NOTE = \[(.*?)\n\]\.join\(\"\"\)", re.DOTALL)
+SCOPE_NOTE_FRAGMENT = re.compile(r'"([^"\\]*)"\s*,|`([^`\\]*)`\s*,')
+
+
+def scope_note_of(source: str) -> str:
+    """The exact text the scoping plugin appends to `apply_patch`'s description."""
+    array = SCOPE_NOTE_ARRAY.search(source)
+    marker = SCOPE_MARKER_CONST.search(source)
+    if array is None or marker is None:
+        return ""
+    fragments = [
+        plain if backtick is None else backtick
+        for plain, backtick in (
+            (match.group(1), match.group(2))
+            for match in SCOPE_NOTE_FRAGMENT.finditer(array.group(1))
+        )
+    ]
+    return "".join(fragments).replace("${SCOPE_MARKER}", marker.group(1))
+
+
+#: What the note has always said, and still has to: the tool is local, that is a
+#: statement about reach and not a ban on the shell, and for a remote destination
+#: the shell is the only road.
+NOTE_IS_LOCAL_ONLY = re.compile(r"\bScope of this tool\b[^.]*\bnowhere else\b", re.IGNORECASE)
+NOTE_NOT_A_BAN_ON_THE_SHELL = re.compile(
+    r"\bnot an instruction to avoid the shell\b", re.IGNORECASE
+)
+NOTE_REMOTE_IS_THE_ONLY_WAY = re.compile(
+    r"\bon another machine the shell is not a way around this tool\b[^.]*\bonly way there\b",
+    re.IGNORECASE,
+)
+
+#: What Piece 2 adds: the tool writes as one particular user, so a file owned by
+#: somebody else is out of reach for the same reason a remote file is -- and that
+#: is a limit on the tool, not a prohibition on the change.
+NOTE_WRITES_AS_THE_SESSION_USER = re.compile(
+    r"\bScope of this tool\b[^.]*\bas the user (?:this|that) session runs as\b", re.IGNORECASE
+)
+NOTE_CANNOT_WRITE_ANOTHER_USERS_FILE = re.compile(
+    r"\bcannot reach a file that lives on another host\b[^.]*"
+    r"\bcannot write a file owned by another user\b",
+    re.IGNORECASE,
+)
+NOTE_SUDO_IS_NOT_FORBIDDEN = re.compile(
+    r"\bdoes not forbid\b[^.]*`sudo`[^.]*\bwhen the person has authorized that change\b",
+    re.IGNORECASE,
+)
+NOTE_SAME_REASON_AS_REMOTE = re.compile(
+    r"\bonly way there\b[^.]*\bfile this user cannot write\b[^.]*"
+    r"\bthe way there for the same reason\b",
+    re.IGNORECASE,
+)
+NOTE_IS_A_LIMIT_NOT_A_PROHIBITION = re.compile(
+    r"\bpermission error this tool returns\b[^.]*"
+    r"\bis a limit on this tool, not a prohibition\b",
+    re.IGNORECASE,
+)
 
 
 class LayoutTest(unittest.TestCase):
@@ -1216,6 +1286,52 @@ class OwnArtifactsTest(unittest.TestCase):
         self.assertIn('"tool.definition"', source)
         self.assertIn('input.toolID !== "apply_patch"', source)
 
+    def rendered_apply_patch_scope(self) -> str:
+        """The installed plugin's own (placeholder-filled) content."""
+        plugin = self.files[CONFIG / f"plugins/{IDENTITY.program_name}-apply-patch-scope.ts"]
+        return plugin.content.decode("utf-8")
+
+    def test_the_scope_note_is_reconstructible_at_all(self):
+        """Everything below reads the rebuilt note; an empty one proves nothing."""
+        note = scope_note_of(self.rendered_apply_patch_scope())
+        self.assertTrue(note.strip(), "the SCOPE_NOTE array could not be read")
+        self.assertRegex(note, NOTE_IS_LOCAL_ONLY)
+        self.assertRegex(note, NOTE_NOT_A_BAN_ON_THE_SHELL)
+
+    def test_the_scope_note_still_covers_the_remote_case(self):
+        """The half that was already right, and that the new half reasons from."""
+        self.assertRegex(scope_note_of(self.rendered_apply_patch_scope()), NOTE_REMOTE_IS_THE_ONLY_WAY)
+
+    def test_the_scope_note_says_the_tool_writes_as_one_particular_user(self):
+        """Why a root-owned file is out of reach: not a rule, an ownership fact."""
+        self.assertRegex(
+            scope_note_of(self.rendered_apply_patch_scope()), NOTE_WRITES_AS_THE_SESSION_USER
+        )
+
+    def test_the_scope_note_puts_another_users_file_beside_another_host(self):
+        """The symmetry has to be made in one sentence, not left to the reader."""
+        self.assertRegex(
+            scope_note_of(self.rendered_apply_patch_scope()),
+            NOTE_CANNOT_WRITE_ANOTHER_USERS_FILE,
+        )
+        self.assertRegex(
+            scope_note_of(self.rendered_apply_patch_scope()), NOTE_SAME_REASON_AS_REMOTE
+        )
+
+    def test_the_scope_note_does_not_forbid_an_authorized_privileged_edit(self):
+        self.assertRegex(
+            scope_note_of(self.rendered_apply_patch_scope()), NOTE_SUDO_IS_NOT_FORBIDDEN
+        )
+
+    def test_the_scope_note_calls_its_own_refusal_a_limit_and_not_a_prohibition(self):
+        """An agent read this tool's `PermissionDenied` as a closed door. The
+        note has to say, on the same channel the tool definition travels on,
+        that it is this tool's ceiling and not a decision about the change."""
+        self.assertRegex(
+            scope_note_of(self.rendered_apply_patch_scope()),
+            NOTE_IS_A_LIMIT_NOT_A_PROHIBITION,
+        )
+
     def test_the_notifier_npm_manifests_agree_on_a_lowercase_package_name(self):
         """npm rejects any uppercase character in `package.json`'s `name`
         field, but `PROGRAM_NAME_PATTERN` allows one -- so a `program_name`
@@ -1262,6 +1378,122 @@ class OwnArtifactsTest(unittest.TestCase):
                 used.update(placeholders_module.names_in(text))
         self.assertTrue(used, "fixture drifted: no bundled asset uses a placeholder any more")
         self.assertEqual(used, used & placeholders_module.NAMES)
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not on PATH")
+class ApplyPatchScopeHookTest(unittest.TestCase):
+    """The scoping plugin's hook, run for real.
+
+    Everything else about this plugin is asserted against its text. Two facts
+    cannot be: what the model actually receives is the runtime's description
+    with the note concatenated onto it, and the note has to land exactly once
+    however many times the hook fires for the same tool. Reimplementing either
+    in Python would assert this test's own arithmetic rather than the plugin's
+    -- deleting the idempotence guard would leave a Python re-implementation
+    perfectly green. So the rendered plugin is executed by `node`, whose native
+    type stripping runs a `.ts` module with erasable annotations directly, and
+    the hook is driven the way the runtime drives it.
+
+    Running it also pins `scope_note_of` to reality: the reconstruction the
+    text-level tests read is asserted to be, character for character, what the
+    real hook appends.
+    """
+
+    HARNESS = textwrap.dedent(
+        """
+        import plugin from "./plugin.ts"
+
+        const hooks = await plugin({});
+        const hook = hooks["tool.definition"];
+
+        const patch = { description: "RUNTIME DESCRIPTION.", parameters: {} };
+        await hook({ toolID: "apply_patch" }, patch);
+        const once = patch.description;
+        await hook({ toolID: "apply_patch" }, patch);
+        await hook({ toolID: "apply_patch" }, patch);
+        const thrice = patch.description;
+
+        const other = { description: "RUNTIME DESCRIPTION.", parameters: {} };
+        await hook({ toolID: "write" }, other);
+
+        const missing = { parameters: {} };
+        await hook({ toolID: "apply_patch" }, missing);
+
+        console.log(JSON.stringify({ once, thrice, other: other.description, missing }));
+        """
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        layout = Adapter().layout(ENVIRONMENT)
+        artifacts = Adapter().own_artifacts(layout, ORCHESTRATOR, IDENTITY)
+        files = {item.path: item for item in only(artifacts, FileArtifact)}
+        cls.source = files[
+            CONFIG / f"plugins/{IDENTITY.program_name}-apply-patch-scope.ts"
+        ].content.decode("utf-8")
+
+        cls._tmp = tempfile.TemporaryDirectory()
+        workdir = Path(cls._tmp.name)
+        (workdir / "plugin.ts").write_text(cls.source, encoding="utf-8")
+        (workdir / "harness.mts").write_text(cls.HARNESS, encoding="utf-8")
+        result = subprocess.run(
+            ["node", "harness.mts"],
+            cwd=workdir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        cls.result = json.loads(lines[-1])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_the_hook_appends_to_the_runtime_description_rather_than_replacing_it(self):
+        """Appending is this plugin's deliberate pattern: it never has to match a
+        sentence the runtime owns and may reword without telling anyone."""
+        self.assertTrue(self.result["once"].startswith("RUNTIME DESCRIPTION."))
+
+    def test_what_the_hook_appends_is_exactly_the_note_the_text_tests_read(self):
+        """Pins `scope_note_of` to the real thing, so the assertions that run
+        without `node` are assertions about the model's actual input."""
+        appended = self.result["once"][len("RUNTIME DESCRIPTION.") :]
+        self.assertEqual(appended, scope_note_of(self.source))
+
+    def test_the_description_the_model_receives_carries_the_whole_scope(self):
+        """The fact, end to end: not that the source contains some words, but
+        that the string handed to the model says what this plugin exists to say."""
+        description = self.result["once"]
+        for pattern in (
+            NOTE_IS_LOCAL_ONLY,
+            NOTE_NOT_A_BAN_ON_THE_SHELL,
+            NOTE_REMOTE_IS_THE_ONLY_WAY,
+            NOTE_WRITES_AS_THE_SESSION_USER,
+            NOTE_CANNOT_WRITE_ANOTHER_USERS_FILE,
+            NOTE_SUDO_IS_NOT_FORBIDDEN,
+            NOTE_SAME_REASON_AS_REMOTE,
+            NOTE_IS_A_LIMIT_NOT_A_PROHIBITION,
+        ):
+            self.assertRegex(description, pattern)
+
+    def test_firing_the_hook_again_appends_nothing(self):
+        """The marker's whole job. The hook can fire more than once for the same
+        tool, and a second paragraph is a visible defect in every tool list."""
+        self.assertEqual(self.result["thrice"], self.result["once"])
+
+    def test_the_note_appears_exactly_once_however_often_the_hook_fires(self):
+        """Stronger than string equality above: equality would also hold if the
+        very first call had appended the note twice."""
+        self.assertEqual(self.result["thrice"].count(scope_note_of(self.source)), 1)
+
+    def test_the_hook_leaves_every_other_tool_alone(self):
+        self.assertEqual(self.result["other"], "RUNTIME DESCRIPTION.")
+
+    def test_a_definition_without_a_description_is_left_untouched(self):
+        """The runtime owns that object; inventing a field on it is not this
+        plugin's business."""
+        self.assertNotIn("description", self.result["missing"])
 
 
 class MissingAssetGroupTest(unittest.TestCase):
