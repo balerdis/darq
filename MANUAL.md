@@ -96,7 +96,7 @@ pegasus models list --cli opencode
 pegasus models unset --cli opencode --agent sdd-apply
 ```
 
-Una asignación se guarda de inmediato, pero no queda escrita en la configuración de OpenCode hasta el próximo `pegasus install --cli opencode`: el comando avisa esto mismo si el agente no la tiene todavía. No pongas tokens ni credenciales en el repo, en prompts, ni en comandos versionados.
+Una asignación se guarda de inmediato, pero no queda escrita en la configuración de OpenCode hasta que un comando la renderice. `models set` y `models unset` avisan esto siempre, sin fijarse en qué tiene la instalación, y nombran `pegasus install --cli opencode`, que es el que el propio aviso te dice que corras. No es el único que la escribe: `pegasus update --cli opencode`, `pegasus mcp grant` y `pegasus directory grant` reaplican la configuración entera y se llevan con ellos la asignación guardada. Que el aviso salga siempre, y que cada una de esas rutas la escriba de verdad, los corre contra una instalación real `ManualSaysWhenAModelAssignmentReachesTheConfigurationTest` (`tests/test_manual_command_surface.py`), leyendo el archivo renderizado de un lado y del otro de cada llamado. No pongas tokens ni credenciales en el repo, en prompts, ni en comandos versionados.
 
 ## Verificar el estado
 

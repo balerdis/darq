@@ -36,6 +36,14 @@ last person who remembered it -- and `bound`, the ordinary state of a server
 you administer yourself, was one of the missing ones, which left the normal
 report of such an installation looking like a gap.
 
+A fifth is a condition the product does not have and a path it does not
+own. "el comando avisa esto mismo **si** el agente no la tiene todavía"
+described a notice `models set` and `models unset` emit unconditionally,
+with nothing anywhere that looks at what the installation carries. And
+`install` is not the only way a stored assignment reaches the rendered
+configuration: `update`, `mcp grant` and `directory grant` re-render too, so
+a person who ran any of them already has it.
+
 And one gap, the same surface read the other way round: `pegasus upgrade`
 shipped and the manual never learned it existed. The last class here derives
 the whole top-level surface from the parser, so the next command cannot go
@@ -559,6 +567,147 @@ class ManualSaysEveryStatusDoctorCanReportTest(RealHomeTestCase):
         spelled = set(SPELLED_STATUS.findall(self.paragraph))
         self.assertTrue(spelled, "the paragraph spells no status at all, so this proves nothing")
         self.assertEqual(spelled - self.statuses, set())
+
+    def test_the_paragraph_says_where_this_was_measured(self):
+        self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
+
+
+#: A provider and four models the throwaway machine below is told it can
+#: reach. A stored assignment is only honoured when that machine's own catalog
+#: lists it, so without this every run there would render no model at all and
+#: prove nothing. One model per path measured, so a configuration still
+#: carrying the previous one cannot be mistaken for a fresh write.
+MODEL_PROVIDER = "anthropic"
+MODEL_PREFERENCES = tuple(f"{MODEL_PROVIDER}/claude-preference-{index}" for index in range(4))
+
+
+class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase):
+    """When the activation notice appears, and what carries an assignment in.
+
+    Two claims in one sentence, each wrong in its own way.
+
+    The notice was described as conditional -- "avisa esto mismo **si** el
+    agente no la tiene todavía" -- and it is not. `models set` and `models
+    unset` put it in every report they return, and never ask the installation
+    anything. So a person who had just reinstalled read a notice that, as the
+    manual explained it, meant their assignment had not landed. It is run
+    here in the state the old sentence said would silence it: the assignment
+    already written into the rendered configuration.
+
+    And `install` was named as the path that writes it. It is the path the
+    product's own notice tells a person to run, which is why the sentence
+    still names it -- but three other commands re-render the configuration
+    and carry the stored assignment in with them. Each is RUN against a real
+    installation and the rendered file read back, because "writes it" is a
+    claim about a file on disk; a source-level check for "this one calls
+    `install`" would approve by a proxy.
+
+    What this cannot prove is that no FIFTH command does the same: the set is
+    the one the sentence names, not one derived from the parser, because
+    deriving it would mean running every top-level command against a live
+    installation -- `uninstall` and `restore` among them -- and measuring the
+    wreckage. The direction that matters to a reader is held: everything the
+    sentence names really does write it.
+    """
+
+    PROVIDER = MODEL_PROVIDER
+    MODELS = MODEL_PREFERENCES
+
+    def setUp(self):
+        super().setUp()
+        self.present()
+        self.write_models_catalog()
+        self.run_cli("install", "--cli", CLI, "--mcp", cli._MCP_NONE)
+        self.declare_own_mcp_server(OWN_KEY)
+        self.agent = self.a_configurable_agent()
+        self.paragraph = paragraph_naming(type(self).__name__)
+
+    def write_models_catalog(self) -> None:
+        """What a machine with a reachable provider looks like, written the
+        same way `tests/test_cli.py` writes one."""
+        path = self.home / ".cache" / "opencode" / "models.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        models = {full_id.split("/", 1)[1]: {"tool_call": True} for full_id in self.MODELS}
+        path.write_text(
+            json.dumps({self.PROVIDER: {"builtin": True, "models": models}}), encoding="utf-8"
+        )
+
+    @staticmethod
+    def a_configurable_agent() -> str:
+        """One agent that accepts an assignment, off the content tree rather
+        than named here."""
+        from pegasus.core import content as content_module
+
+        found = sorted(agent.name for agent in content_module.load().agents if agent.model_configurable)
+        return found[0] if found else ""
+
+    def writers(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Every path the paragraph names, and how a person types it."""
+        return (
+            ("install", ("install", "--cli", CLI)),
+            ("update", ("update", "--cli", CLI)),
+            ("mcp grant", ("mcp", "grant", "--cli", CLI, OWN_KEY)),
+            ("directory grant", ("directory", "grant", "--cli", CLI, str(self.home / "worktrees" / "otro-repo"))),
+        )
+
+    def rendered_model(self) -> str | None:
+        return json.loads(self.rendered())["agent"][self.agent].get("model")
+
+    def assign(self, model: str) -> dict:
+        self.run_cli("models", "unset", "--cli", CLI, "--agent", self.agent)
+        code, report = self.run_cli(
+            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", model
+        )
+        self.assertEqual(code, 0, f"assigning {model} failed, so nothing here measured anything")
+        return report
+
+    def test_there_is_an_agent_to_assign_a_model_to(self):
+        """Or every run below would be measuring a refusal."""
+        self.assertTrue(self.agent, "this release ships no agent that accepts a model assignment")
+
+    def test_the_notice_comes_back_even_when_the_configuration_already_carries_it(self):
+        """The condition the sentence invented. The assignment is written in
+        first, so the state the old sentence said would silence the notice is
+        the state this is run in."""
+        model = self.MODELS[0]
+        self.assign(model)
+        self.run_cli("install", "--cli", CLI)
+        self.assertEqual(self.rendered_model(), model)
+
+        code, report = self.run_cli(
+            "models", "set", "--cli", CLI, "--agent", self.agent, "--model", model
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(report["activation"], "`models set` no longer reports how to activate an assignment")
+
+    def test_the_notice_tells_a_person_to_run_install(self):
+        """Why the sentence still names `install` and not one of the others:
+        it is what the product itself says. Derived from the report, so a
+        rewording that changes the command fails here."""
+        report = self.assign(self.MODELS[0])
+        program = cli.default_identity().program_name
+        self.assertIn(f"{program} install --cli {CLI}", " ".join(report["activation"]))
+
+    def test_every_path_the_paragraph_names_writes_the_stored_assignment(self):
+        """The half that was too narrow, one real installation and one real
+        rendered file at a time."""
+        for model, (name, argv) in zip(self.MODELS, self.writers()):
+            with self.subTest(command=name):
+                self.assign(model)
+                self.assertNotEqual(self.rendered_model(), model, f"{name} had nothing left to write")
+                code, _ = self.run_cli(*argv)
+                self.assertEqual(code, 0, f"`{name}` failed, so nothing here measured anything")
+                self.assertEqual(self.rendered_model(), model)
+
+    def test_the_paragraph_is_found_exactly_once(self):
+        self.assertTrue(
+            self.paragraph, f"no single line of {MANUAL.name} names {type(self).__name__}"
+        )
+
+    def test_the_paragraph_names_every_path_measured_here(self):
+        program = cli.default_identity().program_name
+        for name, _ in self.writers():
+            self.assertIn(f"`{program} {name}", self.paragraph, f"{MANUAL.name} does not name {name}")
 
     def test_the_paragraph_says_where_this_was_measured(self):
         self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
