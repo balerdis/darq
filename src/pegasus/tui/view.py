@@ -18,6 +18,7 @@ from pegasus.tui.navigator import (
     GrantMcpScreen,
     InstallPlanScreen,
     InstallResultScreen,
+    McpOption,
     McpSelectionScreen,
     Menu,
     ModelsScreen,
@@ -473,13 +474,30 @@ def _render_choices(
 CONTINUE_LABEL = "Continue"
 
 
+def _mcp_row_detail(option: McpOption) -> str:
+    """What a server row says about itself after its name.
+
+    A bound row has to read differently from one Pegasus administers, or the
+    screen shows two identical-looking checkboxes that mean different things
+    -- one "install and run this", the other "grant the contract against the
+    server I already run under this key" -- and unchecking either has a
+    different consequence. The key is the whole fact, so it is what is shown,
+    ahead of the shipped sentence rather than instead of it: the description
+    still answers "what is this server", the prefix answers "and who runs it
+    here". No new widget, the same one-line row every other checklist draws.
+    """
+    if option.bound_to is None:
+        return option.description
+    return f"bound to {option.bound_to} · {option.description}"
+
+
 def _render_mcp_selection(screen: McpSelectionScreen, cursor: int) -> tuple[Line, ...]:
     """The step between choosing a CLI and seeing its plan: a checklist of
     every server this release ships, and a Continue row after the last one
     that fetches the plan for whatever ended up checked."""
     heading = f"Install · {screen.cli.display_name} · choose which mcp servers to install"
     rows = tuple(
-        f"[{'x' if option.id in screen.chosen else ' '}] {option.id:<12} {option.description}"
+        f"[{'x' if option.id in screen.chosen else ' '}] {option.id:<12} {_mcp_row_detail(option)}"
         for option in screen.options
     )
     items = rows + (CONTINUE_LABEL,)

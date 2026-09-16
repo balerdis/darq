@@ -967,7 +967,7 @@ def update(
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
-            _unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     return install(
         cli_id,
@@ -1022,6 +1022,31 @@ def update_unresolved_bindings(install: Install, *, display_name: str) -> list[s
     return unresolved
 
 
+def recorded_mcp_selection(install: Install, *, display_name: str) -> list[str]:
+    """The `--mcp` selection this install already embodies, spelled the way
+    `install` itself reads it -- `id=key` for a server this installation
+    administers under a key of its own, the bare `id` for one Pegasus
+    obtains and administers.
+
+    `update_unresolved_bindings`' twin: the other half of the pair
+    `_mcp_update_selection` returns, exposed for the same caller and the
+    same reason. `session` (the TUI's engine bridge) opens its selection
+    screen on exactly this, so the checklist a person is shown and the
+    selection `update` would reapply can never disagree about what this
+    installation's selection is. They did disagree while the screen derived
+    it on its own from `mcp:<id>` journal entries: a bound server writes no
+    such entry (see `_bound_checks`), so every binding rendered unchecked
+    and sat one Continue away from being retired.
+
+    Ids whose key was never recorded are *not* here -- they are exactly
+    `update_unresolved_bindings`' answer, and a caller that offers this
+    selection as reproducible has to ask that question too before trusting
+    this one.
+    """
+    selection, _ = _mcp_update_selection(install, display_name=display_name)
+    return selection
+
+
 def install_command_for(cli_id: str, ids: list[str], *, program_name: str) -> str:
     """The exact `install` invocation that would (re)record a key for each
     of ``ids``, one placeholder per id, built from the ids actually
@@ -1044,7 +1069,7 @@ def install_command_for(cli_id: str, ids: list[str], *, program_name: str) -> st
 
 def mcp_placeholder_instruction() -> str:
     """The one explicit instruction both `update`'s refusal
-    (:func:`_unresolved_bindings_message`) and `doctor`'s matching line give
+    (:func:`unresolved_bindings_message`) and `doctor`'s matching line give
     beside :func:`install_command_for`'s command.
 
     Copying that command verbatim -- a very common habit -- runs the literal
@@ -1056,7 +1081,18 @@ def mcp_placeholder_instruction() -> str:
     return "replacing each <key> placeholder below with that server's actual key, which lives in the CLI's own configuration"
 
 
-def _unresolved_bindings_message(cli_id: str, ids: list[str], *, program_name: str) -> str:
+def unresolved_bindings_message(cli_id: str, ids: list[str], *, program_name: str) -> str:
+    """The one wording every surface that refuses over an unresolved binding
+    says it with -- `update`, `mcp grant`/`mcp revoke`, `mcp list`'s own
+    `blocked`, and the TUI's install selection screen, which cannot
+    reproduce a binding whose key was never recorded either.
+
+    Public rather than the `_unresolved_bindings_message` it used to be, for
+    the same reason `install_command_for` and `update_unresolved_bindings`
+    already are: `session` (the TUI's engine bridge) reuses it, so the
+    screen's blocker and this module's own refusal can never become two
+    phrasings of one fact.
+    """
     command = install_command_for(cli_id, ids, program_name=program_name)
     return (
         f"{cli_id} has bound mcp server(s) {', '.join(ids)} whose server key was never recorded "
@@ -1943,7 +1979,7 @@ def mcp_grant(cli_id: str, key: str, runtime: Runtime) -> dict[str, Any]:
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
-            _unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(cli_id, runtime, mcp=selection, granted=list(granted))
     return {**report, "action": "grant", "key": key, "granted": list(granted), "status": "granted"}
@@ -1965,7 +2001,7 @@ def mcp_revoke(cli_id: str, key: str, runtime: Runtime) -> dict[str, Any]:
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
-            _unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(cli_id, runtime, mcp=selection, granted=list(granted))
     return {**report, "action": "revoke", "key": key, "granted": list(granted), "status": "revoked"}
@@ -1998,7 +2034,7 @@ def mcp_list(cli_id: str, runtime: Runtime) -> dict[str, Any]:
     dropped the unresolved id, would be exactly the promise that refusal
     then breaks -- so in that state `available` and `already_covered` are
     both empty, `unresolved_mcp_bindings` names the blocking id(s), and
-    `blocked` carries `_unresolved_bindings_message`'s own wording verbatim
+    `blocked` carries `unresolved_bindings_message`'s own wording verbatim
     -- the identical text `mcp_grant`, `mcp_revoke`, and `update` already
     raise, never a second phrasing of the same fact.
 
@@ -2019,7 +2055,7 @@ def mcp_list(cli_id: str, runtime: Runtime) -> dict[str, Any]:
             "available": [],
             "already_covered": [],
             "unresolved_mcp_bindings": sorted(unresolved),
-            "blocked": _unresolved_bindings_message(
+            "blocked": unresolved_bindings_message(
                 adapter.id, unresolved, program_name=runtime.identity.program_name
             ),
         }
@@ -2085,7 +2121,7 @@ def directory_grant(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]:
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
-            _unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(
         cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
@@ -2123,7 +2159,7 @@ def directory_revoke(cli_id: str, path: str, runtime: Runtime) -> dict[str, Any]
     selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
     if unresolved:
         raise CommandError(
-            _unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(
         cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)

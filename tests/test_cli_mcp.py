@@ -365,7 +365,7 @@ class ListTest(RealHomeTestCase):
 
 class UnresolvedBindingBlocksListTest(RealHomeTestCase):
     """An unresolved binding blocks `mcp_grant`/`mcp_revoke` outright, for
-    every key, regardless of what was asked for (`_unresolved_bindings_message`).
+    every key, regardless of what was asked for (`unresolved_bindings_message`).
     `mcp list` must say so rather than advertise a key it cannot actually
     honour -- the exact gap `available ⊆ grantable` broke on."""
 
@@ -390,7 +390,7 @@ class UnresolvedBindingBlocksListTest(RealHomeTestCase):
         self.assertEqual(report["unresolved_mcp_bindings"], ["cbm"])
         self.assertEqual(
             report["blocked"],
-            cli._unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
+            cli.unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
         )
 
     def test_the_json_shape_is_additive_with_nothing_blocked(self):
@@ -413,7 +413,7 @@ class UnresolvedBindingBlocksListTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(
             report["error"],
-            cli._unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
+            cli.unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
         )
 
     def test_revoke_is_refused_the_same_way(self):
@@ -433,7 +433,7 @@ class UnresolvedBindingBlocksListTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(
             report["error"],
-            cli._unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
+            cli.unresolved_bindings_message(CLI, ["cbm"], program_name=cli.default_identity().program_name),
         )
 
     def test_the_prose_names_the_blocker_instead_of_a_plain_available_line(self):

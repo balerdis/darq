@@ -57,6 +57,7 @@ from pegasus.tui.navigator import (
     UpdateTarget,
     UpgradeTarget,
     BehindInstall,
+    mcp_selection,
     program_option,
     readable_timestamp,
     restore_menu,
@@ -254,30 +255,77 @@ def _restore_preview(generation: int, runtime: cli.Runtime) -> Menu:
     )
 
 
-def _currently_chosen_mcp(cli_id: str, runtime: cli.Runtime) -> tuple[str, ...]:
-    """Which mcp servers this CLI's own journal already records as
-    installed, read the same way `detect_installed` reads a CLI's own
-    presence: an entry's `id` names the server it is for as `mcp:<name>`,
-    the one convention every adapter's `render_mcp` follows, and the
-    convention file that travels alongside it is deliberately not counted
-    here since it names no server of its own."""
-    journal = cli.journal_store(runtime).load()
-    install = journal_module.install_for(journal, cli_id)
+def _recorded_mcp(cli_id: str, runtime: cli.Runtime) -> dict[str, str | None]:
+    """Which mcp servers this CLI's own journal records as part of the
+    installation, each against the key it is bound to -- `None` for one
+    Pegasus obtains and administers itself.
+
+    `cli.recorded_mcp_selection` is the source, parsed straight back through
+    `content.parse_mcp_choice`: it is the exact selection `update` would
+    reapply this installation from, so the checklist and the engine cannot
+    hold two opinions about what is installed. This used to scan the journal
+    here instead, counting an entry whose `id` starts `mcp:` -- the
+    configuration key an adapter's `render_mcp` writes. A bound server writes
+    no such key (only its convention travels), so every binding was absent
+    from this answer, rendered unchecked, and retired by a Continue that
+    touched nothing. Deriving it from the engine's own reconstruction rather
+    than from a second reading of the journal is what keeps that from
+    happening again the next time a server can be recorded a new way.
+    """
+    install = journal_module.install_for(cli.journal_store(runtime).load(), cli_id)
     if install is None:
-        return ()
-    return tuple(sorted(entry.id.split(":", 1)[1] for entry in install.entries if entry.id.startswith("mcp:")))
+        return {}
+    return dict(
+        content_module.parse_mcp_choice(spelling)
+        for spelling in cli.recorded_mcp_selection(install, display_name=runtime.identity.display_name)
+    )
 
 
-def _mcp_selection_screen(cli_option: CliOption, runtime: cli.Runtime) -> McpSelectionScreen:
+def _mcp_selection_screen(cli_option: CliOption, runtime: cli.Runtime) -> Placeholder | McpSelectionScreen:
     """The step between choosing a CLI and seeing its plan, built fresh
     every time -- the same reasoning `_models_screen` already follows for
-    its own read-only screen. `chosen` opens on what the journal already
-    records, so a person who touches nothing and moves straight to Continue
-    reproduces the machine's current state instead of retiring it."""
-    options = tuple(
-        McpOption(id=server.name, description=server.description) for server in content_module.load().mcp
+    its own read-only screen. `chosen` opens on everything the journal
+    records as installed, bindings included, so a person who touches nothing
+    and moves straight to Continue reproduces the machine's current state
+    instead of retiring part of it.
+
+    An install holding a binding whose key was never recorded gets the
+    specific blocker instead of a checklist, the same way `_grant_mcp_screen`
+    does and for the same reason: that selection cannot be reconstructed at
+    all (see `cli.recorded_mcp_selection`), so every row this screen could
+    draw for it would be a row Continue then reproduces wrongly -- a bound
+    server either retired or, worse, re-emitted bare and silently converted
+    into one Pegasus obtains for itself. `cli.unresolved_bindings_message` is
+    the same wording `update`, `mcp grant` and `mcp revoke` already refuse
+    with, and it names the one-time command that clears the state.
+    """
+    install = journal_module.install_for(cli.journal_store(runtime).load(), cli_option.id)
+    unresolved = (
+        cli.update_unresolved_bindings(install, display_name=runtime.identity.display_name)
+        if install is not None
+        else []
     )
-    return McpSelectionScreen(cli=cli_option, options=options, chosen=_currently_chosen_mcp(cli_option.id, runtime))
+    if unresolved:
+        return Placeholder(
+            f"Install · {cli_option.display_name}",
+            cli.unresolved_bindings_message(
+                cli_option.id, unresolved, program_name=runtime.identity.program_name
+            ),
+        )
+    recorded = _recorded_mcp(cli_option.id, runtime)
+    options = tuple(
+        McpOption(id=server.name, description=server.description, bound_to=recorded.get(server.name))
+        for server in content_module.load().mcp
+    )
+    return McpSelectionScreen(
+        cli=cli_option,
+        options=options,
+        # Read off `options` rather than off `recorded` directly: a server
+        # the journal still records but this release no longer ships has no
+        # row to be checked on, and naming it here would put an id in
+        # `chosen` that `mcp_selection` never finds an option for.
+        chosen=tuple(option.id for option in options if option.id in recorded),
+    )
 
 
 def _mcp_write(
@@ -291,10 +339,15 @@ def _mcp_write(
     this is where it actually happens. Returns `None` for every other
     action, which tells `step` to fall through to `navigator.handle`, the
     same as `_models_write` does for its own pure steps.
+
+    What is fetched is `navigator.mcp_selection(screen)`, never `screen.chosen`:
+    a checked row names a server, and only the row's own binding says which
+    of the two spellings `install` has to be given for it -- see that
+    function and `McpSelectionScreen`'s own docstring.
     """
     if action is not Action.CHOOSE or navigator.cursor != len(screen.options):
         return None
-    chosen = screen.chosen
+    chosen = mcp_selection(screen)
     _, report = cli.safe_report(
         "install", lambda: cli.install(screen.cli.id, runtime, dry_run=True, mcp=list(chosen))
     )

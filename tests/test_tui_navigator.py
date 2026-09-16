@@ -6,6 +6,7 @@ it touches a terminal, because :class:`Navigator` never touches one either.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from pegasus.tui import navigator as navigator_module
 from pegasus.tui.navigator import (
@@ -360,6 +361,42 @@ class McpSelectionScreenTest(unittest.TestCase):
         before = navigator
         navigator = navigator.handle(Action.TOGGLE)
         self.assertEqual(navigator, before)
+
+
+BOUND_MCP_OPTIONS = (
+    replace(MCP_OPTIONS[0], bound_to="codebase-memory-mcp"),
+    MCP_OPTIONS[1],
+)
+
+
+class McpSelectionSpellingTest(unittest.TestCase):
+    """What Continue re-emits for a checklist. `chosen` names ids and
+    nothing else, so the row's own `bound_to` is the only thing that can
+    tell "obtain and administer this server" from "grant the contract
+    against the one I already run under this key" -- the two spellings
+    `core.content.parse_mcp_choice` reads."""
+
+    def test_a_pegasus_administered_row_is_re_emitted_bare(self):
+        screen = _mcp_screen(chosen=("context7",))
+        self.assertEqual(navigator_module.mcp_selection(screen), ("context7",))
+
+    def test_a_bound_row_is_re_emitted_against_its_key(self):
+        screen = _mcp_screen(options=BOUND_MCP_OPTIONS, chosen=("cbm",))
+        self.assertEqual(navigator_module.mcp_selection(screen), ("cbm=codebase-memory-mcp",))
+
+    def test_an_unchecked_bound_row_is_left_out_entirely(self):
+        """Unchecking is the one way to ask for a removal, and it has to
+        work on a bound row exactly as it does on any other."""
+        screen = _mcp_screen(options=BOUND_MCP_OPTIONS, chosen=("context7",))
+        self.assertEqual(navigator_module.mcp_selection(screen), ("context7",))
+
+    def test_toggling_a_bound_row_off_and_on_again_keeps_its_binding(self):
+        """A toggle says whether the server is part of the installation, never
+        who administers it -- converting between the two is `GrantMcpScreen`'s
+        job, and must not be reachable by pressing enter twice here."""
+        navigator = Navigator.starting().opened(_mcp_screen(options=BOUND_MCP_OPTIONS, chosen=("cbm",)))
+        navigator = navigator.handle(Action.CHOOSE).handle(Action.CHOOSE)
+        self.assertEqual(navigator_module.mcp_selection(navigator.current), ("cbm=codebase-memory-mcp",))
 
 
 GRANT_OPTIONS = (

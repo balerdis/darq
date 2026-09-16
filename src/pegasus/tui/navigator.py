@@ -86,10 +86,22 @@ class McpOption:
     selection step below to toggle without ever touching `core.content`
     itself — the same reason `CliOption` exists apart from a real `Detection`.
     `description` is the descriptor's own `description` field, verbatim: the
-    one sentence a person needs to decide whether they want it."""
+    one sentence a person needs to decide whether they want it.
+
+    `bound_to` is the key this installation already runs this server under,
+    when it runs its own -- `core.content.Mcp.bound_to`, carried onto the row
+    rather than left behind in the journal. Pegasus reads two spellings for a
+    server (`core.content.parse_mcp_choice`): the bare `id` asks it to obtain
+    and administer the server, `id=key` asks only for the contract against a
+    server the installation already runs under `key`. A row that cannot say
+    which of the two it is can only ever re-emit the first, so the binding
+    travels here, beside the name, and :func:`mcp_selection` reads it back.
+    `None` -- the ordinary case -- means Pegasus administers this one itself.
+    """
 
     id: str
     description: str
+    bound_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,12 +109,32 @@ class McpSelectionScreen:
     """The step between choosing a CLI and seeing its plan: which of the
     servers this release ships should be part of it.
 
-    `chosen` starts as whatever this CLI's journal already records as
-    installed — the safe default, since leaving every row exactly as found
-    and moving straight to Continue then reproduces the machine's current
-    state rather than silently retiring everything, the same as calling
-    `install` with no `--mcp` at all when nothing was ever installed through
-    it. The row after the last server is Continue itself: reaching it and
+    `chosen` starts as every server this CLI's journal records as part of
+    the installation — a server Pegasus administers and a server it was only
+    given the contract for against a key of the installation's own
+    (`McpOption.bound_to`) alike, because both are equally installed. So
+    leaving every row exactly as found and moving straight to Continue
+    reproduces the machine's current state rather than retiring part of it:
+    :func:`mcp_selection` re-emits each checked row in the spelling it was
+    recorded under, `id=key` for a bound row and the bare `id` otherwise.
+    Unchecking a row is therefore the one way to ask for a removal, and
+    always a deliberate one.
+
+    A bound server used to be missing from `chosen` entirely — it is granted,
+    never installed, so it leaves no `mcp:<id>` entry for the old derivation
+    to find — and so rendered unchecked. Continuing without touching anything
+    then retired its convention file *and* stripped its instructions out of
+    every agent that reaches it, which is the opposite of what this screen
+    says it does; the binding travelling on the row is what closes that.
+
+    Changing *who administers* a server — turning a bound one into one
+    Pegasus obtains, or the reverse — is deliberately not reachable here: a
+    row only says whether the server is part of the installation, and a
+    toggle carries the binding through untouched. :class:`GrantMcpScreen` is
+    where an installation's relationship with a server it runs itself is
+    changed.
+
+    The row after the last server is Continue itself: reaching it and
     choosing it is real engine work — fetching the plan for exactly the
     servers checked so far — so `Navigator` leaves it a no-op, the same
     reasoning `_ENGINE_TARGETS` already follows for every other request only
@@ -113,6 +145,25 @@ class McpSelectionScreen:
     cli: CliOption
     options: tuple[McpOption, ...]
     chosen: tuple[str, ...]
+
+
+def mcp_selection(screen: McpSelectionScreen) -> tuple[str, ...]:
+    """The `--mcp` selection Continue re-emits for `screen`: `id=key` for
+    every checked row that carries a binding, the bare `id` for every other,
+    in the order the rows are offered.
+
+    The one place the checklist becomes a selection, so a bound row can
+    never be re-emitted as a request for Pegasus to obtain and administer
+    that server instead -- which is what naming it bare means, and what
+    `screen.chosen` alone (a list of ids and nothing more) could only ever
+    say. Pure, and public, because `session` runs the engine call it feeds
+    while `Navigator` is where the screen's meaning lives.
+    """
+    return tuple(
+        f"{option.id}={option.bound_to}" if option.bound_to else option.id
+        for option in screen.options
+        if option.id in screen.chosen
+    )
 
 
 @dataclass(frozen=True)

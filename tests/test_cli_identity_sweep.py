@@ -239,7 +239,7 @@ class McpBrandLeakTest(AcmeRuntimeTestCase):
         self.assertNoEngineBrand(report["error"])
 
     def test_unresolved_binding_blocks_list_with_no_engine_brand(self):
-        """Covers `install_command_for` and `_unresolved_bindings_message`,
+        """Covers `install_command_for` and `unresolved_bindings_message`,
         both of which used to hardcode the `pegasus install --cli ...`
         remedy command verbatim."""
         self.present()

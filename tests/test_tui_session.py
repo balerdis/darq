@@ -277,7 +277,7 @@ class McpSelectionDefaultsTest(SessionTestCase):
 
         self.assertEqual(navigator.current.report["status"], "installed")
         self.assertEqual(session.detect_installed(runtime)[0].id, CLI)
-        self.assertEqual(session._currently_chosen_mcp(CLI, runtime), ("context7",))
+        self.assertEqual(session._recorded_mcp(CLI, runtime), {"context7": None})
 
     def test_unchecking_a_previously_installed_server_retires_it_on_confirm(self):
         _present(self.home)
@@ -300,7 +300,90 @@ class McpSelectionDefaultsTest(SessionTestCase):
         navigator = session.step(navigator, runtime, Action.CHOOSE)  # confirms it
 
         self.assertEqual(navigator.current.report["status"], "installed")
-        self.assertEqual(session._currently_chosen_mcp(CLI, runtime), ())
+        self.assertEqual(session._recorded_mcp(CLI, runtime), {})
+
+
+class BoundServerSurvivesTheSelectionScreenTest(SessionTestCase):
+    """A bound server is part of the installation exactly as much as one
+    Pegasus administers itself, so opening the selection screen and moving
+    straight to Continue has to reproduce both of them.
+
+    What is asserted here is the resulting *plan*, never a checkbox: a row
+    rendered checked is a proxy for the selection Continue re-emits, and the
+    two are only the same thing when the row also carries the key its
+    binding resolves under. A plan that retires nothing, and rewrites no
+    agent body, is the fact -- the very facts that were false against a real
+    installation, where continuing untouched proposed 33 updates (every
+    agent stripped of two servers' instructions) instead of 3.
+    """
+
+    #: One server Pegasus obtains and administers (`context7`) and one it
+    #: only ships the contract for, against a key this installation already
+    #: runs it under (`cbm`) -- the two spellings `parse_mcp_choice` reads.
+    SELECTION = ["cbm=codebase-memory-mcp", "context7"]
+
+    def installed_runtime(self) -> cli.Runtime:
+        _present(self.home)
+        runtime = self.runtime()
+        cli.install(CLI, runtime, mcp=list(self.SELECTION))
+        return runtime
+
+    def to_selection(self, runtime: cli.Runtime) -> Navigator:
+        navigator = Navigator.starting(session.detect_clis(runtime)).handle(Action.CHOOSE)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)  # opens the mcp selection
+        self.assertIsInstance(navigator.current, McpSelectionScreen)
+        return navigator
+
+    def plan_untouched(self, runtime: cli.Runtime) -> dict:
+        navigator = self.to_continue(self.to_selection(runtime))  # touches no checkbox
+        navigator = session.step(navigator, runtime, Action.CHOOSE)  # fetches the plan
+        self.assertIsInstance(navigator.current, InstallPlanScreen)
+        return navigator.current.report
+
+    def test_continuing_untouched_retires_nothing(self):
+        self.assertEqual(self.plan_untouched(self.installed_runtime())["retired"], [])
+
+    def test_continuing_untouched_rewrites_no_agent_body(self):
+        self.assertEqual([item["id"] for item in self.plan_untouched(self.installed_runtime())["updated"]], [])
+
+    def plan_from_the_flags(self) -> dict:
+        """The same preview asked for through the flags instead, naming both
+        bindings the way a person would -- the invocation the TUI's own
+        Continue is supposed to be equivalent to."""
+        runtime = self.runtime()
+        flags = [flag for spelling in self.SELECTION for flag in ("--mcp", spelling)]
+        code = cli.main(["install", "--cli", CLI, "--dry-run", *flags, "--json"], runtime=runtime)
+        self.assertEqual(code, 0)
+        return json.loads(runtime.out.getvalue())
+
+    def test_the_plan_agrees_with_the_equivalent_cli_invocation(self):
+        """The CLI already gets this right, so the two surfaces previewing
+        the same installation must produce the same document -- not merely
+        one that also happens to retire nothing."""
+        self.assertEqual(self.plan_untouched(self.installed_runtime()), self.plan_from_the_flags())
+
+    def test_a_binding_whose_key_was_never_recorded_shows_the_specific_blocker(self):
+        """The one installation whose selection cannot be reconstructed at
+        all. A checklist here could only draw the bound row wrong -- retired
+        if left unchecked, silently converted into a server Pegasus obtains
+        if checked and re-emitted bare -- so this shows the same refusal
+        `update`, `mcp grant` and `mcp revoke` already give, naming the
+        one-time command that clears it."""
+        runtime = self.installed_runtime()
+        _drop_mcp_bindings(runtime)
+        navigator = Navigator.starting(session.detect_clis(runtime)).handle(Action.CHOOSE)
+        navigator = session.step(navigator, runtime, Action.CHOOSE)
+        self.assertIsInstance(navigator.current, Placeholder)
+        self.assertEqual(
+            navigator.current.note,
+            cli.unresolved_bindings_message(CLI, ["cbm"], program_name=runtime.identity.program_name),
+        )
+
+    def test_a_bound_row_carries_the_key_continue_re_emits(self):
+        screen = self.to_selection(self.installed_runtime()).current
+        self.assertEqual({option.id: option.bound_to for option in screen.options}["cbm"], "codebase-memory-mcp")
+        self.assertIsNone({option.id: option.bound_to for option in screen.options}["context7"])
+        self.assertEqual(set(screen.chosen), {"cbm", "context7"})
 
 
 class GrantMcpThroughTheTuiTest(SessionTestCase):
@@ -364,7 +447,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         self.assertIn("cbm", navigator.current.note)
         self.assertEqual(
             navigator.current.note,
-            cli._unresolved_bindings_message(CLI, ["cbm"], program_name=runtime.identity.program_name),
+            cli.unresolved_bindings_message(CLI, ["cbm"], program_name=runtime.identity.program_name),
         )
 
     def test_a_shipped_server_is_never_offered_on_this_screen(self):
@@ -410,7 +493,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         self.assertIsInstance(navigator.current, GrantMcpResultScreen)
         self.assertEqual(navigator.current.granted, ())
         self.assertEqual(navigator.current.revoked, ())
-        self.assertEqual(session._currently_chosen_mcp(CLI, runtime), ())
+        self.assertEqual(session._recorded_mcp(CLI, runtime), {})
         self.assertEqual(
             journal_module.install_for(cli.journal_store(runtime).load(), CLI).granted_mcp, ()
         )

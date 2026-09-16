@@ -4,6 +4,7 @@ lines onto a window."""
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from pegasus import cli
 from pegasus.tui.navigator import (
@@ -241,6 +242,18 @@ class McpSelectionRenderingTest(unittest.TestCase):
     def test_the_footer_names_both_ways_to_toggle(self):
         lines = [line.text for line in render(self.screen(), cursor=0)]
         self.assertIn("enter/space: toggle a server, or continue · esc: back", lines)
+
+    def test_a_bound_server_names_the_key_it_is_bound_to(self):
+        """Two checkboxes that look identical mean different things when one
+        of the servers is the installation's own: the key is what tells a
+        person which row is which, and unchecking either has a different
+        consequence."""
+        options = (replace(MCP_OPTIONS[0], bound_to="codebase-memory-mcp"), MCP_OPTIONS[1])
+        lines = [line.text for line in render(self.screen(options=options, chosen=("cbm",)), cursor=0)]
+        cbm_line = next(text for text in lines if "cbm" in text)
+        self.assertIn("codebase-memory-mcp", cbm_line)
+        self.assertIn("Knowledge graph", cbm_line)
+        self.assertNotIn("bound to", next(text for text in lines if "context7" in text))
 
 
 GRANT_OPTIONS = (
