@@ -109,19 +109,34 @@ class ParallelIssuanceMechanicTest(unittest.TestCase):
 
     def setUp(self):
         self.text = CRITERION.read_text(encoding="utf-8")
+        # Collapsed, so a harmless rewrap of the paragraph cannot fail these
+        # and no phrase depends on where a line happens to break today.
+        self.collapsed = " ".join(self.text.split())
 
     def test_states_same_reply_before_any_result_returns(self):
-        self.assertIn("in the same reply", self.text)
-        self.assertIn("before any of their results has come back", self.text)
+        self.assertIn("in the same reply", self.collapsed)
+        self.assertIn("before any of their results has come back", self.collapsed)
 
     def test_names_issue_one_then_next_as_sequential_regardless_of_gates(self):
         """A bare keyword like "parallel" proves nothing — this pins the
         actual claim: issuing calls one at a time IS sequential execution,
         even when the gates concluded the parts were independent."""
         self.assertIn(
-            "you have picked sequential execution regardless of what the gates\nconcluded",
-            self.text,
+            "you have picked sequential execution regardless of what the gates concluded",
+            self.collapsed,
         )
+
+    def test_the_order_itself_is_pinned_not_only_its_diagnosis(self):
+        """The two tests above pin DESCRIPTION — what sequential execution
+        looks like, and what an agent with no instruction defaults to. The
+        section's only IMPERATIVE is a separate sentence, and a description
+        is not an instruction: an agent obeys the order, not the diagnosis.
+
+        Proven before this test existed: deleting that one sentence and
+        nothing else left every assertion above still passing, so the file's
+        only actual command had no coverage at all. This pins the command."""
+        self.assertIn("emit every independent call in the same turn", self.collapsed)
+        self.assertIn("then wait for all of them", self.collapsed)
 
 
 if __name__ == "__main__":

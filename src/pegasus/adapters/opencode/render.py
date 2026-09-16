@@ -169,6 +169,23 @@ def _wildcard_match(candidate: str, pattern: str) -> bool:
     what has bitten this codebase before -- it would flag a directory merely
     named `sshfoo`, or miss a pattern this project never anticipated, while
     this function only ever answers what the runtime's own regex would.
+
+    Two behaviours of the original are deliberately NOT reproduced, named
+    here rather than left for someone to discover the day they matter:
+
+    - `wildcard.ts` rewrites a pattern ending in `" .*"` (after the `*`
+      substitution) into `"( .*)?"`, so a trailing `" *"` matches nothing as
+      well as something -- `match("foo", "foo *")` is true there and false
+      here. No `EXTERNAL_DIRECTORY_DENY_FLOOR` pattern ends in `" *"`, and
+      none can while the floor stays directory-shaped, so the divergence is
+      unreachable from the one caller this function has.
+    - The original compiles case-insensitively on Windows only. This one is
+      always case-sensitive, i.e. it hardcodes the POSIX side of that split.
+
+    Both are safe for the five static patterns this serves and for no more
+    than that. Widening the floor, or calling this from anywhere else, means
+    re-reading `wildcard.ts` first -- this is a faithful port of the part
+    that is reachable from here, not of the whole function.
     """
     escaped = _WILDCARD_METACHARACTERS.sub(lambda match: "\\" + match.group(0), pattern.replace("\\", "/"))
     escaped = escaped.replace("*", ".*").replace("?", ".")
