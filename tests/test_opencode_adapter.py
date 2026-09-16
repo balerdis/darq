@@ -58,6 +58,7 @@ def only(artifacts, kind):
 #: `ApplyPatchScopeHookTest` proves that reconstruction is the real thing by
 #: running the real hook under `node` and comparing.
 SCOPE_MARKER_CONST = re.compile(r'const SCOPE_MARKER = "([^"]*)"')
+IMPERATIVE_ANCHOR_CONST = re.compile(r'const IMPERATIVE_ANCHOR = "([^"]*)"')
 SCOPE_NOTE_ARRAY = re.compile(r"const SCOPE_NOTE = \[(.*?)\n\]\.join\(\"\"\)", re.DOTALL)
 SCOPE_NOTE_FRAGMENT = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,|`((?:[^`\\]|\\.)*)`\s*,')
 
@@ -1531,7 +1532,33 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
         const missing = { parameters: {} };
         await hook({ toolID: "apply_patch" }, missing);
 
-        console.log(JSON.stringify({ once, thrice, other: other.description, missing }));
+        // The premise alarm, exercised separately from the append behaviour
+        // above: each scenario gets its own plugin instance, because the
+        // "fires once" flag is scoped to one instance and reusing `hook`
+        // above would prove nothing about a fresh session.
+        function client(toasts) {
+          return { tui: { showToast: async (input) => { toasts.push(input); } } };
+        }
+
+        const holdingToasts = [];
+        const holdingHooks = await plugin({ client: client(holdingToasts) });
+        const holdingHook = holdingHooks["tool.definition"];
+        const holding = { description: "Use the `apply_patch` tool to edit files. Rest of it.", parameters: {} };
+        await holdingHook({ toolID: "apply_patch" }, holding);
+        await holdingHook({ toolID: "apply_patch" }, holding);
+
+        const brokenToasts = [];
+        const brokenHooks = await plugin({ client: client(brokenToasts) });
+        const brokenHook = brokenHooks["tool.definition"];
+        const broken = { description: "RUNTIME DESCRIPTION.", parameters: {} };
+        await brokenHook({ toolID: "apply_patch" }, broken);
+        await brokenHook({ toolID: "apply_patch" }, broken);
+        await brokenHook({ toolID: "apply_patch" }, broken);
+
+        console.log(JSON.stringify({
+          once, thrice, other: other.description, missing,
+          holdingToasts, brokenToasts, brokenDescription: broken.description,
+        }));
         """
     )
 
@@ -1632,6 +1659,39 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
         """The runtime owns that object; inventing a field on it is not this
         plugin's business."""
         self.assertNotIn("description", self.result["missing"])
+
+    def test_the_alarm_stays_silent_when_the_imperative_is_present(self):
+        """The premise still holds -- the exact sentence this plugin exists to
+        correct is still in the description -- so nothing is shown. An alarm
+        that fires when its premise holds is noise, not a signal."""
+        self.assertEqual(self.result["holdingToasts"], [])
+
+    def test_the_alarm_fires_when_the_imperative_is_absent(self):
+        """The premise is gone -- upstream no longer says what this plugin was
+        written to correct -- and that has to become visible somewhere a
+        person actually looks."""
+        self.assertEqual(len(self.result["brokenToasts"]), 1)
+
+    def test_the_alarm_fires_at_most_once_per_session(self):
+        """The hook ran three times for the same broken premise; the alarm is
+        scoped to the session, not the call, so a second and third toast would
+        be exactly the noise this design was chosen to avoid."""
+        self.assertEqual(len(self.result["brokenToasts"]), 1)
+
+    def test_the_alarm_names_the_sentence_it_no_longer_finds(self):
+        """A person reading the toast has to be able to check the claim
+        themselves, not just be told something moved."""
+        anchor = IMPERATIVE_ANCHOR_CONST.search(self.source).group(1)
+        toast = self.result["brokenToasts"][0]
+        self.assertIn(anchor, toast["body"]["message"])
+
+    def test_the_alarm_never_replaces_the_scope_note_itself(self):
+        """Notifying about the premise and appending the note are two
+        different jobs; the alarm firing must not change what the model
+        receives."""
+        marker = SCOPE_MARKER_CONST.search(self.source).group(1)
+        self.assertTrue(self.result["brokenDescription"].startswith("RUNTIME DESCRIPTION."))
+        self.assertIn(marker, self.result["brokenDescription"])
 
 
 class MissingAssetGroupTest(unittest.TestCase):
