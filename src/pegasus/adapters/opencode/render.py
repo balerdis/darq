@@ -94,6 +94,56 @@ TOOL_NAME: dict[str, str] = {
 # neither runtime counterpart has a target to ask `external_directory` about.
 EXTERNAL_DIRECTORY_TOOLS = frozenset({"read", "grep", "glob", "edit", "write", "bash"})
 
+# The deny floor `_permission` writes last under `external_directory`, once the
+# baseline for that permission flipped from `"ask"` to `"allow"` (see that
+# function's docstring for the upstream bug this works around). Every entry
+# here is directory-granular -- `*/<name>/*`, never a bare `*/<name>` and
+# never a file-shaped pattern like `*.pem` -- because the runtime never asks
+# `external_directory` about a file. `packages/opencode/src/tool
+# /external-directory.ts` always evaluates `path.join(dir, "*")`, where `dir`
+# is already `path.dirname(target)` for anything that is not itself a
+# directory: the filename is discarded before the ask ever happens, and the
+# glob it builds always ends in `/*`, never in the bare directory name. A
+# pattern here that named a file (`*.pem`, `*.key`, `.env`) could therefore
+# never match anything this permission is ever asked to evaluate, and a bare
+# `*/<name>` (no trailing `/*`) is equally dead: `Wildcard.match` anchors both
+# ends, so `^.*/<name>$` cannot match an input that always ends in `/*`. Do
+# not add either shape here -- it would be a guard that protects nothing,
+# which is exactly the defect this project hunts for elsewhere. This list is
+# the directory-shaped subset of the user's own standing security rule
+# (`.ssh/`, `.credentials/`, `.aws/credentials`, `.config/gh/hosts.yml`,
+# `secrets/`); the file-shaped members of that rule (`.env`, `.env.*`,
+# `*.pem`, `*.key`) are inexpressible through this permission and are not
+# listed for the same reason -- and are consequently reachable, not merely
+# unguarded in the abstract, the moment they live anywhere outside these five
+# directories, which is most places a file can live.
+#
+# What this floor actually is, said without overclaiming: a guard against an
+# agent that wanders into one of these five directories BY ACCIDENT, not a
+# boundary against one that means to get there. Matching here is on the
+# LITERAL path string -- `Wildcard.match` builds a regex from the pattern and
+# tests it against the exact bytes of `path.dirname(target) + "/*"`; neither
+# it nor `packages/opencode/src/tool/external-directory.ts` ever calls
+# `realpath`. Any spelling of the same underlying location that does not
+# literally contain, say, `/.ssh/` walks straight past this floor to the
+# `"*": "allow"` baseline: a symlink, a bind mount, a hard link, or an
+# environment variable the runtime or a program it shells out to honours
+# (`GH_CONFIG_DIR`, `AWS_SHARED_CREDENTIALS_FILE`) pointing the real read
+# somewhere this floor never named. And an agent that already holds `bash`
+# under this same `"allow"` baseline can construct that indirection itself --
+# nothing below stops an agent from symlinking its way around its own floor.
+# This is not a defect in this dict; it is what the runtime's own matching
+# strategy makes possible for anyone to build, and this comment exists so
+# nobody reads five denied strings as a boundary that holds against an agent
+# that is trying to get past it.
+EXTERNAL_DIRECTORY_DENY_FLOOR: dict[str, str] = {
+    "*/.ssh/*": "deny",
+    "*/.aws/*": "deny",
+    "*/.credentials/*": "deny",
+    "*/secrets/*": "deny",
+    "*/.config/gh/*": "deny",
+}
+
 PERMISSION_NAME: dict[str, str] = {
     "read": "read",
     # The runtime's own config loader folds `write`, `edit` and `patch` onto a
@@ -625,6 +675,112 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     Writing `"ask"` where the exception lives makes the boundary a property
     of this entry rather than an inference across two, which is what lets a
     test assert it directly.
+
+    That inner baseline has since moved again, from `"ask"` to `"allow"`, and
+    this second move is a workaround for a named upstream bug, not a second
+    round of the same reasoning as the paragraph above -- that reasoning is
+    not repudiated, it is superseded at one depth and left standing at two
+    others. The bug is upstream issue #39112 ("Sub-sub-agents (depth: 2)
+    'ask' permission doesn't surface to user and stalls"), still open, plus
+    the same-shaped #43996 and #44747, and one predecessor, #30635, that
+    OpenCode closed by fixing only one level of the problem. The cause lives
+    in `packages/tui/src/routes/session/index.tsx`: the view that lists
+    pending permissions only ever walks one level of the session tree --
+
+        const children = createMemo(() => {
+          const parentID = session()?.parentID ?? session()?.id
+          return sync.data.session.filter((x) => x.parentID === parentID || x.id === parentID)
+        })
+        const permissions = createMemo(() => {
+          if (session()?.parentID) return []
+          return children().flatMap((x) => sync.data.permission[x.id] ?? [])
+        })
+
+    -- so a permission raised by a session two levels below the root (a
+    sub-agent's own sub-agent) is never in `children()`, never reaches
+    `permissions()`, and is never rendered in any view, root or otherwise.
+    Nothing times the wait out on the other side: the tool call that
+    triggered the ask just hangs forever, because the runtime is correctly
+    waiting for an approval that no surface will ever let a person give.
+    Pegasus ships `subagent_depth: 10` (since 5.39.0), which is what turns a
+    depth-two chain from an edge case into an ordinary shape -- the failure
+    was hit live through exactly that chain, `pegasus-orchestrator` ->
+    `pegasus-general` -> `pegasus-explorer`, where the explorer's own
+    `external_directory` ask simply never appeared anywhere and the run sat
+    stuck. Pegasus created the exposure by shipping a depth deep enough to
+    reach the bug on every ordinary run; it did not create the bug itself,
+    which is OpenCode's to fix.
+
+    The paragraph above about `"ask"` beating a bare config `"deny"` is still
+    true and still the reason this map never goes back to `"deny"` -- at
+    depth zero and depth one, `"ask"` still renders a real prompt a person can
+    answer, exactly as argued there. What changes here is narrower: at depth
+    two or deeper, `"ask"` is not a slower `"deny"`, it is a hang with no
+    floor under it at all, and that is strictly worse than either alternative
+    this function has ever written for this key. `"allow"` is the one value
+    available that fails safe under the bug instead of failing stuck, so the
+    baseline moves to it, with `EXTERNAL_DIRECTORY_DENY_FLOOR` (module level,
+    above) written last -- after the skills exception and after
+    `item.granted_directories` -- so that resolution's last-match rule always
+    lands on the floor for the handful of paths it names, regardless of what
+    a grant written earlier in this same dict claims. This is a deliberate,
+    reaffirmed choice, made after the depth-two hang was reproduced and the
+    tradeoff was shown plainly: it removes the `external_directory` gate at
+    every depth, including zero and one, where the gate used to work, in
+    exchange for never hanging at depth two or deeper. The floor does not
+    restore what is given up, and it is worth being exact about how little it
+    does restore (see `EXTERNAL_DIRECTORY_DENY_FLOOR`'s own comment above for
+    the full account): it denies the CANONICAL spelling of five directory
+    names, by literal string match, with no `realpath` anywhere in the
+    runtime's own check -- so it is a guard against an agent that wanders
+    into one of them by accident, never a boundary against one that means to
+    get there, since a symlink, bind mount, or an environment variable
+    (`GH_CONFIG_DIR`, `AWS_SHARED_CREDENTIALS_FILE`) walks straight past it,
+    and an agent already holding `bash` under this same `"allow"` baseline
+    can build that indirection itself. It is also worth being honest about
+    what this permission was already not doing before this change: it only
+    ever fires for a path outside the project worktree, so it never guarded
+    an in-worktree `.env` either before this flip or after it -- nothing that
+    was actually protected by this permission is being unprotected by this
+    flip. What the flip does add to the exposure is everything the floor
+    cannot reach by construction: a `*.pem`, `*.key`, or `.env` living
+    anywhere outside these five directory names -- which is most places a
+    file can live -- is now reachable by any agent this map grants a file
+    tool to, not merely unguarded in the abstract.
+
+    One more consequence worth stating plainly, verified by re-reading this
+    function rather than assumed: before this change, `external_directory`'s
+    `"*": "ask"` was the only place anywhere in the map this function returns
+    that ever wrote the permission value `"ask"` -- `task`'s own baseline is
+    `"deny"`, and every tool and MCP entry above resolves to `"allow"` or
+    `"deny"`. With that one site now `"allow"`, no Pegasus agent's rendered
+    `permission` block contains the value `"ask"` anywhere, for any key. That
+    means no Pegasus-shipped agent, at any depth, can still cause the runtime
+    to raise a permission prompt at all -- every tool call this map governs
+    now either proceeds or is refused outright, and there is nothing left in
+    this configuration for a person to be asked to approve.
+
+    To revert once #39112 (and its siblings) are fixed upstream: restore
+    `"*": "ask"` as the baseline below. Whether `EXTERNAL_DIRECTORY_DENY_FLOOR`
+    stays or goes is a separate call -- the floor was written to survive the
+    baseline that fails open, but a project may still want it kept as
+    defense in depth once `"ask"` (which already denies-by-hang, never
+    allows, when nobody answers) is safe to restore; nothing about the fix
+    upstream forces the floor's removal, only the baseline's.
+
+    One more thing that revert has to get right: `item.granted_directories`
+    keeps being written into this dict for the whole life of this workaround,
+    even though its own entry is now a no-op everywhere the baseline already
+    says `"allow"`. That is deliberate, not an oversight to clean up while
+    the baseline is flipped -- a directory a person granted through `pegasus
+    directory grant` stays recorded in the journal and keeps being rendered
+    here, dormant rather than useless, so that the instant the baseline goes
+    back to `"ask"` every existing grant regains its full meaning without
+    anyone having to run `directory grant` again. Removing `granted_directories`
+    from this map while the baseline is `"allow"` would look like a harmless
+    simplification -- it changes nothing observable today -- and would
+    silently discard every grant on file, which nobody would notice until the
+    day of the revert, when it would be too late to notice why access broke.
     """
     names = (*item.requires_tools, *item.optional_tools)
     unknown = [name for name in names if name not in PERMISSION_NAME]
@@ -648,9 +804,10 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     granted.update({name: "deny" for name in item.denied_mcp_tools})
     if any(name in EXTERNAL_DIRECTORY_TOOLS for name in names) or item.granted_directories:
         granted["external_directory"] = {
-            "*": "ask",
+            "*": "allow",
             f"{layout.skills_dir.as_posix()}/*": "allow",
             **{f"{path}/*": "allow" for path in item.granted_directories},
+            **EXTERNAL_DIRECTORY_DENY_FLOOR,
         }
     granted["task"] = {"*": "deny", **{name: "allow" for name in item.may_delegate_to}}
     return {"*": "deny", **granted}

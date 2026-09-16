@@ -521,7 +521,11 @@ class AgentRenderTest(unittest.TestCase):
                 "read": "allow",
                 "edit": "allow",
                 "context7*": "allow",
-                "external_directory": {"*": "ask", f"{CONFIG.as_posix()}/skills/*": "allow"},
+                "external_directory": {
+                    "*": "allow",
+                    f"{CONFIG.as_posix()}/skills/*": "allow",
+                    **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
+                },
                 "task": {"*": "deny", "explore": "allow"},
             },
         )
@@ -543,9 +547,16 @@ class AgentRenderTest(unittest.TestCase):
         """
         agent = self.agent(requires_tools=("read",))
         rule = self.value(agent)["permission"]["external_directory"]
-        self.assertEqual(rule, {"*": "ask", f"{CONFIG.as_posix()}/skills/*": "allow"})
+        self.assertEqual(
+            rule,
+            {
+                "*": "allow",
+                f"{CONFIG.as_posix()}/skills/*": "allow",
+                **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
+            },
+        )
 
-    def test_a_subagents_external_directory_baseline_is_ask_not_deny(self):
+    def test_a_subagents_external_directory_baseline_is_allow_not_ask(self):
         """Reported from real use: a sub-agent (`sdd-verify`) pointed a `bash`
         working directory outside its worktree and was refused outright, with
         no prompt, even though its own `bash` permission was `allow`.
@@ -560,32 +571,52 @@ class AgentRenderTest(unittest.TestCase):
         ever touches, no earlier approval exists to out-rank that `"deny"`,
         and the refusal becomes permanent for the life of the runtime, not a
         one-time no. `"ask"` for every agent, sub-agent included, is what
-        keeps the door open for a person to approve it instead.
+        keeps the door open for a person to approve it instead. That baseline
+        has since moved a second time, from `"ask"` to `"allow"`, as a
+        workaround for upstream issue #39112: a depth-two sub-agent's
+        `"ask"` never renders in any TUI view and hangs forever, which is
+        worse than either alternative this entry has ever held. See
+        `_permission`'s own docstring for the full account.
         """
         agent = self.agent(requires_tools=("read",), mode=AgentMode.SUBAGENT)
         rule = self.value(agent)["permission"]["external_directory"]
-        self.assertEqual(rule, {"*": "ask", f"{CONFIG.as_posix()}/skills/*": "allow"})
+        self.assertEqual(
+            rule,
+            {
+                "*": "allow",
+                f"{CONFIG.as_posix()}/skills/*": "allow",
+                **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
+            },
+        )
 
-    def test_a_primary_readers_external_directory_baseline_is_ask_not_deny(self):
+    def test_a_primary_readers_external_directory_baseline_is_allow_not_ask(self):
         """A primary agent has a person present to answer a prompt, and even
-        carries the `ask` tool itself. Leaving the baseline unset here would
-        work too, since the runtime's own default for this name is `ask`, but
-        writing it explicitly keeps the boundary a property of this entry.
+        carries the `ask` tool itself -- but the baseline no longer relies on
+        that: it is `"allow"` for every agent regardless of depth, as a
+        workaround for upstream issue #39112 (see `_permission`'s docstring).
         """
         agent = self.agent(requires_tools=("read",), mode=AgentMode.PRIMARY)
         rule = self.value(agent)["permission"]["external_directory"]
-        self.assertEqual(rule, {"*": "ask", f"{CONFIG.as_posix()}/skills/*": "allow"})
+        self.assertEqual(
+            rule,
+            {
+                "*": "allow",
+                f"{CONFIG.as_posix()}/skills/*": "allow",
+                **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
+            },
+        )
 
     def test_the_grant_refuses_every_other_path_outside_the_worktree(self):
         """The exception carries its own baseline.
 
-        Not `"deny"` any more (see `test_a_subagents_external_directory_baseline_is_ask_not_deny`),
-        but the boundary this entry exists to draw should still be readable
-        in the entry itself, not inferred from the absence of a rule two keys
+        Now `"allow"` rather than `"ask"` (see
+        `test_a_subagents_external_directory_baseline_is_allow_not_ask`), but
+        the boundary this entry exists to draw should still be readable in
+        the entry itself, not inferred from the absence of a rule two keys
         above.
         """
         rule = self.value(self.agent(requires_tools=("read",)))["permission"]["external_directory"]
-        self.assertEqual(rule["*"], "ask")
+        self.assertEqual(rule["*"], "allow")
         self.assertEqual(next(iter(rule)), "*", "the baseline must precede the one path it excepts")
 
     def test_the_settings_file_is_not_something_a_shipped_agent_may_read(self):
@@ -621,7 +652,7 @@ class AgentRenderTest(unittest.TestCase):
             self.agent(requires_tools=("bash", "write"), mode=AgentMode.SUBAGENT)
         )["permission"]
         self.assertIn("external_directory", permission)
-        self.assertEqual(permission["external_directory"]["*"], "ask")
+        self.assertEqual(permission["external_directory"]["*"], "allow")
 
     def test_a_granted_directory_is_allowed_after_the_baseline_and_the_skills_exception(self):
         agent = self.agent(requires_tools=("read",), granted_directories=("/home/probe/worktrees/extra",))
@@ -629,14 +660,24 @@ class AgentRenderTest(unittest.TestCase):
         self.assertEqual(
             rule,
             {
-                "*": "ask",
+                "*": "allow",
                 f"{CONFIG.as_posix()}/skills/*": "allow",
                 "/home/probe/worktrees/extra/*": "allow",
+                **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
             },
         )
         keys = list(rule)
         self.assertEqual(keys[0], "*")
-        self.assertEqual(keys[-1], "/home/probe/worktrees/extra/*", "order is what makes a grant win")
+        self.assertEqual(
+            keys[-len(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR) - 1],
+            "/home/probe/worktrees/extra/*",
+            "order is what makes a grant win",
+        )
+        self.assertEqual(
+            keys[-len(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR) :],
+            list(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR),
+            "the deny floor must be written last so nothing can out-rank it",
+        )
 
     def test_a_granted_directory_reaches_a_subagent_too(self):
         """A working directory a sub-agent needs is exactly the case this
@@ -654,13 +695,73 @@ class AgentRenderTest(unittest.TestCase):
         agent = self.agent(requires_tools=("skill",), granted_directories=("/home/probe/worktrees/extra",))
         permission = self.value(agent)["permission"]
         self.assertIn("external_directory", permission)
-        self.assertEqual(permission["external_directory"]["*"], "ask")
+        self.assertEqual(permission["external_directory"]["*"], "allow")
         self.assertEqual(permission["external_directory"]["/home/probe/worktrees/extra/*"], "allow")
 
     def test_no_granted_directories_means_no_extra_entries(self):
         agent = self.agent(requires_tools=("read",))
         rule = self.value(agent)["permission"]["external_directory"]
-        self.assertEqual(rule, {"*": "ask", f"{CONFIG.as_posix()}/skills/*": "allow"})
+        self.assertEqual(
+            rule,
+            {
+                "*": "allow",
+                f"{CONFIG.as_posix()}/skills/*": "allow",
+                **render_module.EXTERNAL_DIRECTORY_DENY_FLOOR,
+            },
+        )
+
+    def test_the_external_directory_deny_floor_has_no_file_shaped_pattern(self):
+        """The runtime always evaluates `path.dirname(target) + "/*"` for this
+        permission (`packages/opencode/src/tool/external-directory.ts`), never
+        the file path itself, so a file-shaped pattern such as `*.pem`,
+        `*.key`, or an entry ending in `.env` can never match anything this
+        permission is ever asked to evaluate. Such a pattern would be a guard
+        that protects nothing, so the floor must not contain one.
+        """
+        for pattern in render_module.EXTERNAL_DIRECTORY_DENY_FLOOR:
+            self.assertFalse(pattern.endswith(".pem"), pattern)
+            self.assertFalse(pattern.endswith(".key"), pattern)
+            self.assertFalse(pattern.endswith(".env"), pattern)
+            self.assertNotIn(".env.", pattern)
+            self.assertTrue(pattern.endswith("/*"), f"{pattern}: only a directory-shaped pattern can ever match")
+
+    def test_every_deny_floor_entry_is_deny(self):
+        for pattern, value in render_module.EXTERNAL_DIRECTORY_DENY_FLOOR.items():
+            self.assertEqual(value, "deny", pattern)
+
+    def test_a_granted_directory_overlapping_the_deny_floor_still_resolves_to_the_floor(self):
+        """`findLast` resolution means order, not presence, decides the
+        winner: the runtime evaluates the target path against every rule
+        pattern that matches it and keeps the *last* one written, so a grant
+        and a floor entry that are two distinct strings can still both match
+        the identical runtime target. Proving the floor wins needs the
+        *order* of the rendered keys, not merely that both are present --
+        presence alone says nothing about which one `findLast` would pick.
+
+        `/home/probe/.ssh` is a directory a person could plausibly grant
+        (`pegasus directory grant`) that a real ask target inside it,
+        `/home/probe/.ssh/*`, would match under *both* the grant's own key
+        (`/home/probe/.ssh/*`, exact) and the floor's key (`*/.ssh/*`,
+        wildcard) -- two different pattern strings, same target.
+        """
+        agent = self.agent(requires_tools=("read",), granted_directories=("/home/probe/.ssh",))
+        rule = self.value(agent)["permission"]["external_directory"]
+        grant_pattern = "/home/probe/.ssh/*"
+        floor_pattern = "*/.ssh/*"
+        self.assertEqual(rule[grant_pattern], "allow", "the grant is rendered as its own, more specific pattern")
+        self.assertEqual(rule[floor_pattern], "deny")
+        keys = list(rule)
+        self.assertGreater(
+            keys.index(floor_pattern),
+            keys.index(grant_pattern),
+            "the floor must be written after the grant so findLast resolves the target to deny",
+        )
+        floor_size = len(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR)
+        self.assertEqual(
+            keys[-floor_size:],
+            list(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR),
+            "the whole floor, in its own order, must be the trailing block -- after every grant",
+        )
 
     def test_the_permission_deny_baseline_is_written_before_anything_it_would_lose_to(self):
         """Same resolution rule as `_tools`: the runtime keeps the *last*
@@ -1806,12 +1907,16 @@ class ShippedContentRenderTest(unittest.TestCase):
             for path in (self.layout.settings_file, self.layout.config_dir / "prompts"):
                 self.assertNotIn(f"{path.as_posix()}/*", rule, agent.name)
 
-    def test_every_shipped_agent_that_touches_a_path_is_asked_not_denied(self):
-        """Every agent, primary or sub-agent alike, gets `"ask"` for a path
-        outside its worktree -- never `"deny"`, which the runtime resolves as
-        an irreversible refusal rather than a one-time no (see
-        `test_a_subagents_external_directory_baseline_is_ask_not_deny` in
-        `AgentRenderTest`, and `_permission`'s own docstring).
+    def test_every_shipped_agent_that_touches_a_path_is_allowed_out_with_a_deny_floor(self):
+        """Every agent, primary or sub-agent alike, gets `"allow"` for a path
+        outside its worktree -- a workaround for upstream issue #39112, where
+        a depth-two sub-agent's `"ask"` never renders in any TUI view and
+        hangs forever (see `test_a_subagents_external_directory_baseline_is_allow_not_ask`
+        in `AgentRenderTest`, and `_permission`'s own docstring). The fixed,
+        small deny floor in `EXTERNAL_DIRECTORY_DENY_FLOOR` must still resolve
+        last for every one of them, since it is the only thing standing
+        between this baseline and a shipped agent reading, say, another
+        person's `~/.ssh`.
         """
         readers = [
             agent
@@ -1823,14 +1928,23 @@ class ShippedContentRenderTest(unittest.TestCase):
         subagents = [agent for agent in readers if agent.mode is AgentMode.SUBAGENT]
         self.assertTrue(primaries, "fixture drifted: no shipped primary agent touches a path outside the worktree")
         self.assertTrue(subagents, "fixture drifted: no shipped subagent touches a path outside the worktree")
+        floor_size = len(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR)
         for agent in readers:
             value = only(render_module.agent(self.layout, agent), ConfigKeyArtifact)[0].value
             rule = value["permission"]["external_directory"]
-            self.assertEqual(rule["*"], "ask", agent.name)
+            self.assertEqual(rule["*"], "allow", agent.name)
             self.assertEqual(rule[f"{self.layout.skills_dir.as_posix()}/*"], "allow", agent.name)
             self.assertEqual(value["permission"]["*"], "deny", agent.name)
             for path in (self.layout.settings_file, self.layout.config_dir / "prompts"):
                 self.assertNotIn(f"{path.as_posix()}/*", rule, agent.name)
+            keys = list(rule)
+            self.assertEqual(
+                keys[-floor_size:],
+                list(render_module.EXTERNAL_DIRECTORY_DENY_FLOOR),
+                f"the deny floor must resolve last for {agent.name}",
+            )
+            for pattern, value_ in render_module.EXTERNAL_DIRECTORY_DENY_FLOOR.items():
+                self.assertEqual(rule[pattern], value_, agent.name)
 
     def test_no_shipped_agent_that_declares_write_renders_an_orphaned_write_permission(self):
         """`write` has no permission of its own in the runtime's schema -- an agent
