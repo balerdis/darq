@@ -25,6 +25,17 @@ of the document are a bolded figure and a fenced command -- both machine-shaped
 tokens somebody has to edit on purpose -- plus one negative check that the count
 has not crawled back into the sentence as a Spanish number word, which is the
 exact form the stale claim took.
+
+The same row now also names a MECHANISM: the bundled OpenCode plugin that
+appends a scope paragraph to `apply_patch`'s own description, which is the
+strongest mitigation this debt has because it corrects the misreading on the
+channel the misread sentence travels on. A named mechanism goes stale the same
+way a figure does, so it gets the same treatment:
+`ApplyPatchScopeIsCorrectedOnTheToolChannelTest` finds that plugin in the tree
+BY WHAT IT DOES -- the one bundled plugin that registers the hook writing a tool
+definition's description and narrows itself to `apply_patch` -- and requires the
+row to name that file. Rename it and this says which document has to follow;
+delete it and the row's claim fails the day it stops being true.
 """
 from __future__ import annotations
 
@@ -32,12 +43,24 @@ import re
 import unittest
 from pathlib import Path
 
+from pegasus.adapters.opencode import adapter as adapter_module
 from pegasus.adapters.opencode import render as render_module
 from pegasus.core import content as content_module
 
-ARCHITECTURE = (
-    Path(__file__).resolve().parents[1] / "docs" / "arquitectura" / "arquitectura.md"
-)
+REPOSITORY = Path(__file__).resolve().parents[1]
+ARCHITECTURE = REPOSITORY / "docs" / "arquitectura" / "arquitectura.md"
+
+#: Where the bundled OpenCode plugins live, derived from the adapter module's
+#: own location rather than retyped as a path this file would have to be told
+#: about twice.
+PLUGIN_ASSETS = Path(adapter_module.__file__).resolve().parent / "assets" / "plugins"
+
+#: What makes a plugin the one this row is about: it registers the single hook
+#: that writes the description shipped with a tool definition, and it narrows
+#: itself to `apply_patch`. Both are the plugin's own load-bearing literals,
+#: already fixed by `test_the_apply_patch_scope_plugin_declares_its_hook_and_
+#: guards_the_tool_id` in `tests/test_opencode_adapter.py`.
+CORRECTS_THE_TOOL_DESCRIPTION = ('"tool.definition"', 'input.toolID !== "apply_patch"')
 
 #: The debt row, found by a literal it quotes from the runtime's own source.
 #: Technical, unique, and not something a rewording of the Spanish moves.
@@ -71,6 +94,20 @@ def the_debt_row() -> str:
         if ROW_ANCHOR in line
     ]
     return rows[0] if len(rows) == 1 else ""
+
+
+def plugins_correcting_the_apply_patch_description() -> list[str]:
+    """Every bundled plugin that amends what `apply_patch` tells the model.
+
+    Found by behaviour, never by filename: the day somebody renames the file the
+    set follows it and the document is told, and the day somebody deletes the
+    mechanism the set empties and the row stops being able to claim it.
+    """
+    return sorted(
+        candidate.relative_to(REPOSITORY).as_posix()
+        for candidate in PLUGIN_ASSETS.glob("*.ts")
+        if all(token in candidate.read_text(encoding="utf-8") for token in CORRECTS_THE_TOOL_DESCRIPTION)
+    )
 
 
 def agents_granted_editing() -> set[str]:
@@ -137,6 +174,49 @@ class ApplyPatchReachesEveryEditingAgentTest(unittest.TestCase):
         A spelled-out count is that defect coming back."""
         found = COUNTED_IN_PROSE.findall(self.row)
         self.assertEqual(found, [], f"the row counts agents in prose again: {found}")
+
+
+class ApplyPatchScopeIsCorrectedOnTheToolChannelTest(unittest.TestCase):
+    """The row names a mechanism, so the mechanism has to be there.
+
+    The row's own reason for naming it: text that ships with the tool
+    definitions outweighs text that ships as a prompt, which is why two
+    prompt-side attempts did not stop the refusal and a `tool.definition` hook
+    did. A row that kept claiming that after the plugin was renamed or dropped
+    would be the same defect as the stale count, in prose instead of digits.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.row = the_debt_row()
+        cls.correcting = plugins_correcting_the_apply_patch_description()
+        cls.bundled = sorted(path.name for path in PLUGIN_ASSETS.glob("*.ts"))
+
+    def test_the_derivation_is_not_vacuous(self):
+        """Exactly one plugin may answer to this, and it must not be every
+        plugin: a filter that matched the whole directory would be naming the
+        directory, not the mechanism."""
+        self.assertTrue(self.bundled, f"no bundled plugin found under {PLUGIN_ASSETS}")
+        self.assertEqual(
+            len(self.correcting),
+            1,
+            f"exactly one bundled plugin writes `apply_patch`'s description: {self.correcting}",
+        )
+        self.assertLess(len(self.correcting), len(self.bundled))
+
+    def test_the_row_names_the_plugin_that_carries_the_correction(self):
+        """The claim and its mechanism, kept in the same place."""
+        self.assertIn(
+            self.correcting[0],
+            self.row,
+            f"the row must name the plugin that makes its claim true: {self.correcting[0]}",
+        )
+
+    def test_the_row_says_where_that_claim_is_held_honest(self):
+        """Same shape as the figure two tests up: the row names its guard, and
+        the name comes from this module rather than a literal typed twice."""
+        self.assertIn(f"`{type(self).__name__}`", self.row)
+        self.assertIn(f"`{GUARD_MODULE}`", self.row)
 
 
 if __name__ == "__main__":  # pragma: no cover
