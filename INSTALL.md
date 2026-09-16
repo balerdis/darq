@@ -12,9 +12,9 @@ si instaló algo nuevo, todavía hay que elegir MCPs y confirmar dentro de OpenC
 estaba completo, se abre igual para avisarte si hay una versión más nueva de pegasus publicada. No
 hace falta elegir una versión ni copiar un tag a mano: siempre baja el último release publicado.
 
-El resto de esta guía explica, en orden, qué hace exactamente ese script, qué significa usar la
-interfaz interactiva de Pegasus una vez instalado, y qué significa usarlo por línea de comandos —
-para cuando alguna de esas dos formas de operarlo te convenga más que la que uses por default.
+El resto de esta guía explica, en orden, qué hace exactamente ese script, y qué hace falta para
+mantener la instalación al día o deshacerla. Para usar Pegasus una vez instalado — la interfaz
+interactiva (TUI) y la línea de comandos completa — consultá [MANUAL.md](MANUAL.md).
 
 *(`install.sh` sólo está pensado para Linux: sus pistas de Python son `apt`/`dnf`, propias de esa
 familia de sistemas. No decimos nada sobre macOS acá — ni que funciona ni que falla — porque no lo
@@ -64,7 +64,7 @@ checksum antes de instalarse — si el checksum no coincide, el script se detien
 también puede pasar si se publicó un release nuevo entre las dos descargas, así que lo primero que
 vale la pena probar es correr el script de nuevo. Si ya había un `pegasus` instalado, no lo pisa: te
 dice qué versión encontró y que `pegasus upgrade` es el comando que reemplaza el binario (se explica
-en la sección 3).
+en [MANUAL.md](MANUAL.md#mantener-pegasus-al-día)).
 
 **Flags:**
 
@@ -91,62 +91,19 @@ te muestra la línea exacta para que la agregues vos a mano, además del `export
 terminal actual. Al final igual te muestra, explícito, el comando `source` que necesitás correr en
 la terminal actual para no tener que abrir una nueva.
 
-**Qué queda corriendo al final:** siempre la interfaz de Pegasus (sección 2). Si instaló algo nuevo,
+**Qué queda corriendo al final:** siempre la interfaz de Pegasus (ver
+[Usar la interfaz interactiva de Pegasus](MANUAL.md#usar-la-interfaz-interactiva-de-pegasus-la-tui) en
+el manual). Si instaló algo nuevo,
 porque todavía falta elegir qué MCPs instalar y confirmar esa instalación en OpenCode. Si no hacía
 falta instalar nada, porque `install.sh` no compara versiones — sólo dice si algo está o no está — y
 es la TUI, al arrancar, la que revisa si hay un release de pegasus más nuevo publicado y te ofrece
 `Upgrade`. Bajo `--verify` o `--no-run` no lanza nada: dice qué habría lanzado.
 
-## 2. Usar la interfaz interactiva de Pegasus (la TUI)
+## 2. Mantener la instalación al día
 
-Correr `pegasus` sin ningún subcomando, en una terminal, abre un menú — no imprime ayuda ni corre
-nada por sí solo. Es el camino pensado para una persona que está preparando su propia máquina y quiere
-ver qué va a pasar antes de que pase: cada pantalla de selección va seguida de una vista previa del
-plan, y recién al confirmar esa vista previa se escribe algo de verdad. Nada se instala por elegirlo
-en el menú; se instala al confirmar la pantalla de resultado de esa elección.
-
-El menú principal agrupa sus ocho entradas por intención, y el orden es a propósito: `Install`,
-`Update` y `Upgrade` primero (instalar y mantenerse al día), después `Configure models` y
-`Grant MCP servers`, después `Status and diagnostics`, y por último `Uninstall` antes de `Exit`
-— la entrada destructiva queda lejos de donde la navegación con flechas la podría tocar por
-accidente.
-
-Se maneja enteramente con el teclado: flechas o `j`/`k` para moverte, `enter` o `espacio` para elegir
-(en la pantalla de selección de MCPs, cualquiera de los dos tilda o destilda un servidor), `d` para
-borrar donde aplica, `esc` para volver a la pantalla anterior, `q` para salir. Si corrés `pegasus` sin
-una terminal atrás (salida redirigida a un archivo o a una tubería), no hay menú que mostrar: imprime
-la misma línea de uso que `pegasus --help` y termina con código de salida distinto de cero — por eso
-un agente nunca debería invocarlo así (ver [INSTALL_BY_AGENT.md](INSTALL_BY_AGENT.md)).
-
-Al abrir el menú pueden aparecer, arriba de todo, hasta dos avisos independientes — separados a
-propósito, porque cada uno se arregla distinto: uno local (esta instalación se hizo con una versión de
-Pegasus más vieja que la que estás corriendo ahora → `Update`), y uno remoto (hay un release más nuevo
-publicado que el binario que estás corriendo → `Upgrade`). El chequeo remoto corre en segundo plano,
-no bloquea el menú, y falla en silencio ante cualquier problema de red.
-
-Durante una instalación, la TUI muestra una barra de progreso con la unidad que se está procesando; al
-terminar con éxito, la pantalla de resultado remata con un banner "PEGASUS HARNESS". Por debajo es la
-misma instalación de siempre — llama al mismo motor que la sección siguiente — así que nada de lo que
-sigue deja de aplicar si preferís este camino.
-
-## 3. Usar `pegasus` por línea de comandos
-
-Esta es la vía no interactiva: cada comando toma flags explícitas, no hay menú ni pantalla de espera,
-`--dry-run` te muestra el plan sin escribir nada, `--json` te da un reporte que podés parsear en vez de
-prosa, y el código de salida es el contrato — `0` para éxito, distinto de cero para cualquier otra
-cosa. Es la forma pensada para scripts, para reproducir la misma instalación en varias máquinas, y para
-cualquiera que prefiera no abrir un menú.
-
-**Instalar y elegir MCPs.** Un servidor no nombrado no se instala; no hay `--confirm`/`--decline`:
-
-```sh
-pegasus install --cli opencode --dry-run --mcp context7
-pegasus install --cli opencode --mcp context7
-```
-
-Si ya administrás vos mismo alguno de esos servidores bajo una clave propia, `--mcp <id>=<clave>` ata
-la convención y los permisos a esa clave existente, sin descargar ni configurar nada para ese id (por
-ejemplo `--mcp cbm=codebase-memory-mcp`).
+Una vez instalado, usar Pegasus día a día — la TUI o la línea de comandos completa, con todos sus
+flags — está en [MANUAL.md](MANUAL.md). Esta sección cubre sólo lo que hace falta para no perder una
+selección ya registrada al reinstalar, y dónde seguir para actualizar el binario o revisar el estado.
 
 **Actualizar una instalación ya hecha.** `pegasus update --cli <id>` reaplica la selección que esa
 instalación ya tiene registrada — MCPs atados incluidos — sin que haga falta repetir ningún flag. Esto
@@ -163,27 +120,10 @@ pegasus update --cli opencode --dry-run
 pegasus update --cli opencode
 ```
 
-**Actualizar el programa en sí.** `pegasus upgrade` descarga el `pegasus` más nuevo publicado, lo
-verifica contra su `pegasus.sha256`, y reemplaza el binario en ejecución con un único rename atómico.
-No lleva `--cli`: no se trata de ninguna instalación puntual.
-
-```sh
-pegasus upgrade --dry-run
-pegasus upgrade
-```
-
-Después hace falta reiniciar Pegasus: el proceso que acaba de hacer el upgrade sigue siendo, en
-memoria, la versión vieja — conserva el inode del archivo con el que arrancó.
-
-**Ver el estado.** `pegasus doctor` (con `--json` para la forma parseable) reporta qué CLIs anfitrionas
-detecta y qué tiene instalado cada una.
-
-```sh
-pegasus doctor --json
-```
-
-Para el detalle completo de cada comando — mensajes de error exactos, la lógica de `restore` y
-`uninstall`, el preflight de Node para servidores npm — consultá [MANUAL.md](MANUAL.md).
+Para actualizar el binario en sí (`pegasus upgrade`, que no toca ninguna instalación puntual) y para
+verificar el estado (`pegasus doctor`), ver
+[Mantener Pegasus al día](MANUAL.md#mantener-pegasus-al-día) y
+[Verificar el estado](MANUAL.md#verificar-el-estado) en el manual.
 
 ## Instalación manual (sin el script)
 
@@ -274,7 +214,7 @@ python "$BIN_DIR/pegasus" doctor
 | MCPs opcionales | `pegasus install --cli opencode --mcp <id>` decide qué servidores se instalan; uno no nombrado no se descarga, configura ni registra. También acepta `--mcp <id>=<clave>`. |
 | Credenciales, proveedores y modelos | Nunca se distribuyen ni se imponen acá. La persona configura las credenciales del proveedor con `/connect` y selecciona el modelo con `/models`, dentro de OpenCode. |
 | Rollback | `pegasus restore` devuelve el estado exacto anterior al último comando; `pegasus uninstall --cli opencode` retira sólo lo que el journal reclama como propio. |
-| Actualizaciones | `pegasus update --cli opencode` reaplica la selección ya instalada. `pegasus upgrade` reemplaza el binario de `pegasus`. Son cosas distintas — ver la sección 3 más arriba. |
+| Actualizaciones | `pegasus update --cli opencode` reaplica la selección ya instalada. `pegasus upgrade` reemplaza el binario de `pegasus`. Son cosas distintas — ver [Mantener Pegasus al día](MANUAL.md#mantener-pegasus-al-día) en el manual. |
 
 Si alguno de los servidores elegidos se distribuye por npm (hoy, sólo `playwright`) y no hay `node` en
 el PATH, `install` se niega antes de escribir nada — también en `--dry-run` — con:

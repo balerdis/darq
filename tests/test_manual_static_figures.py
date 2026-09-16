@@ -12,7 +12,7 @@ fifth does not, on purpose.
 2. MANUAL.md's "con cinco generaciones de historial y no más", checked
    against `pegasus.cli.RETAIN_GENERATIONS`.
 
-3. INSTALL.md's "El menú principal agrupa sus ocho entradas por intención"
+3. MANUAL.md's "El menú principal agrupa sus ocho entradas por intención"
    and the enumeration that follows it, checked against
    `pegasus.tui.navigator.main_menu()` -- both the count and, in the exact
    order the prose claims is deliberate, the entries themselves. This is the
@@ -60,7 +60,6 @@ from pegasus.tui import navigator
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANUAL = REPOSITORY / "MANUAL.md"
-INSTALL = REPOSITORY / "INSTALL.md"
 
 #: Spanish words for the small counts these guards may need to state. Extend
 #: this, rather than hand-typing a word past it, if a count this file checks
@@ -149,7 +148,7 @@ class RestoreGenerationsFigureTest(unittest.TestCase):
 
 
 class MainMenuEntriesTest(unittest.TestCase):
-    """INSTALL.md's "El menú principal agrupa sus ocho entradas por intención"
+    """MANUAL.md's "El menú principal agrupa sus ocho entradas por intención"
     and the enumeration that follows it -- count AND list, in order.
     """
 
@@ -158,7 +157,7 @@ class MainMenuEntriesTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.install = INSTALL.read_text(encoding="utf-8")
+        cls.install = MANUAL.read_text(encoding="utf-8")
         cls.entries = [entry.label for entry in navigator.main_menu().entries]
 
     def _paragraph(self) -> str:

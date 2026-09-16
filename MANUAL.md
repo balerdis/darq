@@ -8,6 +8,47 @@ Pegasus 5 es un solo archivo ejecutable: un `zipapp` de Python con shebang y bit
 
 Antes de usarlo necesitás OpenCode ya instalado en la cuenta: el binario `pegasus` no lo instala, actualiza ni desinstala — sólo se integra con una instalación existente, y si no la encuentra se niega antes de escribir nada. Quien sí lo instala es `install.sh`, el script que corre el comando de una sola línea con el que empieza [INSTALL.md](INSTALL.md): trae Node y OpenCode antes de llegar al binario, así que si instalaste por ahí eso ya está resuelto, y qué hace exactamente está en [su propia sección](INSTALL.md#1-qué-hace-installsh). También hace falta una cuenta Linux no-root, porque Pegasus escribe únicamente en tu propio `~/.config` y `~/.local`. Las dos mitades se corren en vez de afirmarse: `ManualSaysWhoInstallsOpenCodeTest` (`tests/test_manual_prerequisites.py`) le pide un `install` a una máquina sin OpenCode y le pide su plan al script contra un home descartable, y exige que esta línea nombre todo lo que ese plan trae.
 
+## Usar la interfaz interactiva de Pegasus (la TUI)
+
+Correr `pegasus` sin ningún subcomando, en una terminal, abre un menú — no imprime ayuda ni corre
+nada por sí solo. Es el camino pensado para una persona que está preparando su propia máquina y quiere
+ver qué va a pasar antes de que pase: cada pantalla de selección va seguida de una vista previa del
+plan, y recién al confirmar esa vista previa se escribe algo de verdad. Nada se instala por elegirlo
+en el menú; se instala al confirmar la pantalla de resultado de esa elección.
+
+El menú principal agrupa sus ocho entradas por intención, y el orden es a propósito: `Install`,
+`Update` y `Upgrade` primero (instalar y mantenerse al día), después `Configure models` y
+`Grant MCP servers`, después `Status and diagnostics`, y por último `Uninstall` antes de `Exit`
+— la entrada destructiva queda lejos de donde la navegación con flechas la podría tocar por
+accidente.
+
+Se maneja enteramente con el teclado: flechas o `j`/`k` para moverte, `enter` o `espacio` para elegir
+(en la pantalla de selección de MCPs, cualquiera de los dos tilda o destilda un servidor), `d` para
+borrar donde aplica, `esc` para volver a la pantalla anterior, `q` para salir. Si corrés `pegasus` sin
+una terminal atrás (salida redirigida a un archivo o a una tubería), no hay menú que mostrar: imprime
+la misma línea de uso que `pegasus --help` y termina con código de salida distinto de cero — por eso
+un agente nunca debería invocarlo así (ver [INSTALL_BY_AGENT.md](INSTALL_BY_AGENT.md)).
+
+Al abrir el menú pueden aparecer, arriba de todo, hasta dos avisos independientes — separados a
+propósito, porque cada uno se arregla distinto: uno local (esta instalación se hizo con una versión de
+Pegasus más vieja que la que estás corriendo ahora → `Update`), y uno remoto (hay un release más nuevo
+publicado que el binario que estás corriendo → `Upgrade`). El chequeo remoto corre en segundo plano,
+no bloquea el menú, y falla en silencio ante cualquier problema de red.
+
+Durante una instalación, la TUI muestra una barra de progreso con la unidad que se está procesando; al
+terminar con éxito, la pantalla de resultado remata con un banner "PEGASUS HARNESS". Por debajo es la
+misma instalación de siempre — llama al mismo motor que usar `pegasus` por línea de comandos — así que
+nada de lo que sigue deja de aplicar si preferís este camino.
+
+## Usar `pegasus` por línea de comandos
+
+Además de la TUI, `pegasus` se usa por línea de comandos: cada comando toma flags explícitas, no hay
+menú ni pantalla de espera, `--dry-run` te muestra el plan sin escribir nada, `--json` te da un reporte
+que podés parsear en vez de prosa, y el código de salida es el contrato — `0` para éxito, distinto de
+cero para cualquier otra cosa. Es la forma pensada para scripts, para reproducir la misma instalación
+en varias máquinas, y para cualquiera que prefiera no abrir un menú. El resto de este manual describe,
+comando por comando, lo que sigue.
+
 ## Instalar el payload en OpenCode
 
 Con `pegasus` en el PATH, el comando que aplica el payload es:
