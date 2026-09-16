@@ -74,7 +74,7 @@ FAILED = 1
 # How many generations the retention pass keeps. Not a disk argument — the
 # blobs are small — but a decision about how far back the recovery promise
 # reaches.
-RETAIN_GENERATIONS = 5
+RETAIN_GENERATIONS = 20
 
 
 class CommandError(Exception):
@@ -317,6 +317,11 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
         "generation", type=int, nargs="?", default=None,
         help="the generation to restore; defaults to the most recent one that can be read back",
     )
+    restore.add_argument(
+        "--list",
+        action="store_true",
+        help="show every generation that can still be restored, without restoring anything",
+    )
     restore.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
 
     models = commands.add_parser("models", help="assign, remove, or list per-agent model preferences")
@@ -406,7 +411,7 @@ def _parser(identity: Identity) -> argparse.ArgumentParser:
 
 
 def _install(arguments, runtime: Runtime) -> dict[str, Any]:
-    return install(arguments.cli, runtime, dry_run=arguments.dry_run, mcp=arguments.mcp)
+    return install(arguments.cli, runtime, dry_run=arguments.dry_run, mcp=arguments.mcp, label="install")
 
 
 @dataclass(frozen=True)
@@ -485,6 +490,7 @@ def install(
     granted_directories: list[str] | None = None,
     model_assignments: list[ModelAssignmentSpec] | None = None,
     model_removals: list[str] | None = None,
+    label: str = "install",
     on_progress: Callable[["Progress"], None] | None = None,
 ) -> dict[str, Any]:
     """Place Pegasus into one CLI's configuration, and report what happened.
@@ -540,6 +546,18 @@ def install(
     never set is a no-op, the same as `models_unset`), so it cannot be the
     offending item an all-or-nothing refusal names -- only `model_assignments`
     can.
+
+    `label` names the intention this call is carrying out, recorded on the
+    snapshot generation this run takes (see `core.snapshot.Manifest.label`).
+    It defaults to `"install"` because that default is correct for both of
+    the callers who ever leave it unnamed -- a bare `pegasus install` and the
+    TUI's own Install screen, which really are the plain install this
+    default claims to be. Every other caller of this function is doing
+    something else in the person's own words -- `"update"`, `"mcp grant"`,
+    `"models set"`, and so on -- and passes that word explicitly rather than
+    letting this default stand in for it; nothing here reads `sys.argv` or
+    the call stack to guess which one applies, because the TUI never goes
+    through `argv` at all and would get the wrong answer from either.
     """
     adapter = _adapter(cli_id)
     environment = runtime.environment
@@ -827,6 +845,7 @@ def install(
         snapshot.save(
             capture_paths(runtime.filesystem, touched, directories=frozenset(dependency_targets)),
             taken_at=runtime.now,
+            label=label,
         )
     except SnapshotStoreError as error:
         raise CommandError(
@@ -1077,6 +1096,7 @@ def update(
         mcp=selection,
         granted=list(installed.granted_mcp),
         granted_directories=list(installed.granted_directories),
+        label="update",
         on_progress=on_progress,
     )
 
@@ -1948,7 +1968,7 @@ def uninstall(cli_id: str, runtime: Runtime) -> dict[str, Any]:
         {entry.target for entry in install.entries if entry.kind != "dependency-tree"} | {store.path}, key=str
     )
     try:
-        snapshot.save(capture_paths(runtime.filesystem, touched), taken_at=runtime.now)
+        snapshot.save(capture_paths(runtime.filesystem, touched), taken_at=runtime.now, label="uninstall")
     except SnapshotStoreError as error:
         raise CommandError(
             f"a snapshot of what this uninstall is about to remove could not be taken, "
@@ -2085,7 +2105,7 @@ def models_set(
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    report = install(cli_id, runtime, mcp=selection, model_assignments=list(assignments))
+    report = install(cli_id, runtime, mcp=selection, model_assignments=list(assignments), label="models set")
     return {
         **report,
         "action": "set",
@@ -2138,7 +2158,7 @@ def models_unset(cli_id: str, agents: list[str], runtime: Runtime) -> dict[str, 
     for agent in to_remove:
         assignments = model_assignments_module.without_assignment(assignments, cli_id, agent)
     store.save(assignments)
-    report = install(cli_id, runtime, mcp=selection)
+    report = install(cli_id, runtime, mcp=selection, label="models unset")
     return {**report, "action": "unset", "agents": list(agents), "removed": to_remove, "status": "unset"}
 
 
@@ -2211,6 +2231,7 @@ def models_apply(
         mcp=selection,
         model_assignments=list(assignments) or None,
         model_removals=list(removals) or None,
+        label="models apply",
     )
     return {
         **report,
@@ -2297,7 +2318,7 @@ def mcp_grant(cli_id: str, keys: list[str], runtime: Runtime) -> dict[str, Any]:
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    report = install(cli_id, runtime, mcp=selection, granted=list(granted))
+    report = install(cli_id, runtime, mcp=selection, granted=list(granted), label="mcp grant")
     return {**report, "action": "grant", "keys": list(keys), "granted": list(granted), "status": "granted"}
 
 
@@ -2324,7 +2345,7 @@ def mcp_revoke(cli_id: str, keys: list[str], runtime: Runtime) -> dict[str, Any]
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    report = install(cli_id, runtime, mcp=selection, granted=list(granted))
+    report = install(cli_id, runtime, mcp=selection, granted=list(granted), label="mcp revoke")
     return {**report, "action": "revoke", "keys": list(keys), "granted": list(granted), "status": "revoked"}
 
 
@@ -2470,7 +2491,12 @@ def directory_grant(cli_id: str, paths: list[str], runtime: Runtime) -> dict[str
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(
-        cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
+        cli_id,
+        runtime,
+        mcp=selection,
+        granted=list(installed.granted_mcp),
+        granted_directories=list(granted),
+        label="directory grant",
     )
     result = {
         **report,
@@ -2533,7 +2559,12 @@ def directory_revoke(cli_id: str, paths: list[str], runtime: Runtime) -> dict[st
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
     report = install(
-        cli_id, runtime, mcp=selection, granted=list(installed.granted_mcp), granted_directories=list(granted)
+        cli_id,
+        runtime,
+        mcp=selection,
+        granted=list(installed.granted_mcp),
+        granted_directories=list(granted),
+        label="directory revoke",
     )
     return {
         **report,
@@ -2622,7 +2653,7 @@ def repair(cli_id: str, runtime: Runtime, *, dry_run: bool = False) -> dict[str,
     snapshot = snapshot_store(runtime)
     snapshot.ensure_writable()
     try:
-        snapshot.save(capture_paths(runtime.filesystem, [store.path]), taken_at=runtime.now)
+        snapshot.save(capture_paths(runtime.filesystem, [store.path]), taken_at=runtime.now, label="repair")
     except SnapshotStoreError as error:
         raise CommandError(
             f"a snapshot of the journal could not be taken, so nothing was repaired: {error}"
@@ -2702,7 +2733,64 @@ def _require_configurable_agent(agent: str) -> None:
 
 
 def _restore(arguments, runtime: Runtime) -> dict[str, Any]:
+    if getattr(arguments, "list", False):
+        if arguments.generation is not None:
+            raise CommandError(
+                "--list shows what is available to restore; it takes no generation of its own -- "
+                "drop --list to restore one"
+            )
+        return restore_list(runtime)
     return restore(runtime, arguments.generation)
+
+
+def restore_list(runtime: Runtime) -> dict[str, Any]:
+    """Every generation `restore` could still open, most recent first, with
+    enough about each to choose one without guessing first.
+
+    `models set`/`unset` picked "a subparser" for their own two verbs because
+    `models` is a noun with several actions; `restore` is already a verb, so
+    a `restore list` subcommand would read as two verbs stacked on top of
+    each other for no gain -- `--list` says the same thing without inventing
+    a subparser `restore` has never needed otherwise, and reads the way `git
+    stash list` or `docker ps -a` already do for a single-purpose command
+    with a listing mode.
+
+    Each row carries: the generation's own number: `taken_at`, exactly as
+    the manifest recorded it (this module's other reports are not localized
+    either -- only the TUI, which has no `--json` twin to keep in step,
+    converts to a wall clock); `label` (see `core.snapshot.Manifest.label`),
+    `None` for a generation that predates it; and the same two counts
+    `restore`'s own report already uses for what it changed --
+    `files_restored`/`paths_cleared` -- so a person sees a generation's size
+    in the same units they would see once they actually restored it, rather
+    than a raw path list that grows unreadable past a handful of entries.
+
+    A generation `readable_generations` claims but whose manifest fails to
+    parse is named under `unreadable` rather than silently dropped -- the
+    same asymmetry the TUI's own `_generation_summaries` already draws for
+    the identical reason: one bad generation must not make every good one
+    next to it disappear without a trace.
+    """
+    snapshot = snapshot_store(runtime)
+    numbers = list(reversed(snapshot.readable_generations()))
+    generations: list[dict[str, Any]] = []
+    unreadable: list[int] = []
+    for generation in numbers:
+        try:
+            manifest = snapshot.read(generation)
+        except SnapshotStoreError:
+            unreadable.append(generation)
+            continue
+        generations.append(
+            {
+                "generation": generation,
+                "taken_at": manifest.taken_at,
+                "label": manifest.label,
+                "files_restored": sum(1 for entry in manifest.entries if entry.existed),
+                "paths_cleared": sum(1 for entry in manifest.entries if not entry.existed),
+            }
+        )
+    return {"action": "list", "generations": generations, "unreadable": unreadable}
 
 
 def restore(runtime: Runtime, generation: int | None = None) -> dict[str, Any]:
@@ -2741,7 +2829,9 @@ def restore(runtime: Runtime, generation: int | None = None) -> dict[str, Any]:
     touched = sorted({entry.path for entry in manifest.entries} | {store.path}, key=str)
     try:
         snapshot.save(
-            capture_paths(runtime.filesystem, touched, directories=directories), taken_at=runtime.now
+            capture_paths(runtime.filesystem, touched, directories=directories),
+            taken_at=runtime.now,
+            label="restore",
         )
     except SnapshotStoreError as error:
         raise CommandError(
@@ -3550,6 +3640,8 @@ def _prose(report: dict[str, Any], *, identity: Identity | None = None) -> str:
                 f"That earlier generation is what `{identity.program_name} restore` reads back."
             )
         return "\n".join(lines)
+    if command == "restore" and report.get("action") == "list":
+        return _restore_list_prose(report)
     if command == "restore":
         lines = [
             f"generation {report['generation']}: wrote back {len(report['written'])}, "
@@ -3707,6 +3799,21 @@ def _directory_prose(report: dict[str, Any]) -> str:
         line = f"{report['cli']}: revoked {paths}."
         return "\n".join(_and_activation([line], report))
     return "directory: nothing to report."
+
+
+def _restore_list_prose(report: dict[str, Any]) -> str:
+    if not report["generations"] and not report["unreadable"]:
+        return "there is no snapshot generation to restore."
+    lines = [
+        f"generation {entry['generation']}: {entry['taken_at']}"
+        + (f" ({entry['label']})" if entry["label"] else "")
+        + f" -- {entry['files_restored']} to write back, {entry['paths_cleared']} to clear"
+        for entry in report["generations"]
+    ]
+    if report["unreadable"]:
+        numbers = ", ".join(str(number) for number in report["unreadable"])
+        lines.append(f"could not be read, and left out: {numbers}")
+    return "\n".join(lines)
 
 
 def _repair_prose(report: dict[str, Any]) -> str:

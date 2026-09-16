@@ -76,6 +76,7 @@ SPANISH_ONES = {
     8: "ocho",
     9: "nueve",
     10: "diez",
+    20: "veinte",
 }
 
 

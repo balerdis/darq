@@ -203,6 +203,18 @@ class FileSnapshotStoreTest(unittest.TestCase):
         self.assertTrue(paths[TARGET].existed)
         self.assertFalse(paths[OTHER].existed)
 
+    def test_saving_with_a_label_writes_it_to_the_manifest(self):
+        filesystem = FakeFileSystem()
+        subject = store(filesystem)
+        generation = subject.save([one_capture()], taken_at=AT, label="mcp grant")
+        self.assertEqual(subject.read(generation).label, "mcp grant")
+
+    def test_saving_with_no_label_reads_back_with_none(self):
+        filesystem = FakeFileSystem()
+        subject = store(filesystem)
+        generation = subject.save([one_capture()], taken_at=AT)
+        self.assertIsNone(subject.read(generation).label)
+
     def test_reading_a_generation_that_does_not_exist_raises(self):
         with self.assertRaises(SnapshotStoreError):
             store(FakeFileSystem()).read(1)
@@ -445,6 +457,26 @@ class FileSnapshotStoreTest(unittest.TestCase):
 
         self.assertEqual(second.removed, ())
         self.assertEqual(second.failed, ())
+
+    def test_retain_against_the_real_production_constant_keeps_twenty(self):
+        """Not a restatement of `RETAIN_GENERATIONS`'s own value: this drives
+        `retain` with the real production constant, one generation past its
+        capacity, and checks the actual surviving set by number -- proving
+        the constant this store is called with, not merely quoting it back.
+        """
+        from pegasus import cli as cli_module
+
+        filesystem = FakeFileSystem()
+        subject = store(filesystem)
+        total = cli_module.RETAIN_GENERATIONS + 1
+        for _ in range(total):
+            subject.save([one_capture()], taken_at=AT)
+
+        outcome = subject.retain(keep=cli_module.RETAIN_GENERATIONS)
+
+        self.assertEqual(outcome.removed, (1,))
+        self.assertEqual(subject.readable_generations(), list(range(2, total + 1)))
+        self.assertEqual(len(subject.readable_generations()), cli_module.RETAIN_GENERATIONS)
 
     def test_a_retention_failure_is_reported_rather_than_raised(self):
         filesystem = FakeFileSystem()

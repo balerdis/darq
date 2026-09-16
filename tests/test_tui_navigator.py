@@ -564,9 +564,20 @@ class UninstallMenuTest(unittest.TestCase):
         self.assertEqual(navigator, before)
 
 
-def _summary(generation: int, *, taken_at: str = "2026-08-14T00:00:00+00:00", files_restored: int = 1, paths_cleared: int = 0) -> GenerationSummary:
+def _summary(
+    generation: int,
+    *,
+    taken_at: str = "2026-08-14T00:00:00+00:00",
+    files_restored: int = 1,
+    paths_cleared: int = 0,
+    label: str | None = None,
+) -> GenerationSummary:
     return GenerationSummary(
-        generation=generation, taken_at=taken_at, files_restored=files_restored, paths_cleared=paths_cleared
+        generation=generation,
+        taken_at=taken_at,
+        files_restored=files_restored,
+        paths_cleared=paths_cleared,
+        label=label,
     )
 
 
@@ -600,6 +611,16 @@ class RestoreMenuTest(unittest.TestCase):
         """
         menu = restore_menu((_summary(4, taken_at="2026-09-02T04:12:00+00:00", files_restored=101, paths_cleared=0),))
         self.assertEqual(menu.entries[0].label, "Generation 4 — 2 Sep 2026, 04:12 (most recent) · 101 files to put back")
+
+    def test_a_labelled_generation_names_the_command_that_produced_it(self):
+        menu = restore_menu((_summary(4, label="mcp grant"),))
+        self.assertIn("mcp grant", menu.entries[0].label)
+
+    def test_an_unlabelled_generation_shows_no_label_segment(self):
+        """A generation predating this field (`label=None`) must render fine
+        -- no ` — None` leaking into the row a person reads."""
+        menu = restore_menu((_summary(4, label=None),))
+        self.assertNotIn("None", menu.entries[0].label)
 
     def test_only_the_first_entry_is_marked_most_recent(self):
         menu = restore_menu((_summary(3), _summary(2)))

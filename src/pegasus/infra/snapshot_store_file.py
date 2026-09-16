@@ -125,7 +125,7 @@ class FileSnapshotStore:
     def ensure_writable(self) -> None:
         self._refuse_wrong_writer()
 
-    def save(self, captures: Sequence[Capture], *, taken_at: str) -> int:
+    def save(self, captures: Sequence[Capture], *, taken_at: str, label: str | None = None) -> int:
         self._refuse_wrong_writer()
         for capture in captures:
             if capture.existed and capture.content is None:
@@ -156,7 +156,7 @@ class FileSnapshotStore:
                 )
             except SnapshotError as error:
                 raise SnapshotStoreError(f"cannot capture {capture.path}: {error}") from error
-        manifest = Manifest(taken_at=taken_at, entries=tuple(entries))
+        manifest = Manifest(taken_at=taken_at, entries=tuple(entries), label=label)
         self._write_manifest(folder, manifest)
         return generation
 

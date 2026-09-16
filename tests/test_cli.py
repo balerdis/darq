@@ -2182,19 +2182,136 @@ class RestoreTest(RealHomeTestCase):
         self.assertEqual(report["status"], "failed")
 
 
+class RestoreListTest(RealHomeTestCase):
+    """`pegasus restore --list`: a person is asked for a generation number
+    they had no way to discover before this existed."""
+
+    def test_listing_with_nothing_ever_installed_is_empty_not_a_failure(self):
+        self.present()
+        code, report = self.run_cli("restore", "--list")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["generations"], [])
+
+    def test_listing_names_every_readable_generation_most_recent_first(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+        self.run_cli("install", "--cli", CLI)
+
+        code, report = self.run_cli("restore", "--list")
+
+        self.assertEqual(code, 0)
+        self.assertEqual([entry["generation"] for entry in report["generations"]], [2, 1])
+
+    def test_each_entry_carries_when_it_was_taken_and_what_it_touched(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+
+        code, report = self.run_cli("restore", "--list")
+
+        self.assertEqual(code, 0)
+        entry = report["generations"][0]
+        self.assertIn("taken_at", entry)
+        self.assertIn("files_restored", entry)
+        self.assertIn("paths_cleared", entry)
+
+    def test_an_unlabelled_generation_lists_with_no_label(self):
+        """A generation predating this field carries no `label` key at all --
+        every live command now supplies one (item B), so this hand-edits a
+        real manifest on disk to look like one written before this field
+        existed, the same way `ManifestLabelTest` does at the core level.
+        """
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+        manifest_path = snapshots_root(self.filesystem, self.home) / "000001" / "manifest.json"
+        payload = json.loads(manifest_path.read_bytes())
+        self.assertEqual(payload.pop("label"), "install")
+        manifest_path.write_bytes(json.dumps(payload).encode("utf-8"))
+
+        code, report = self.run_cli("restore", "--list")
+
+        self.assertEqual(code, 0)
+        self.assertIsNone(report["generations"][0]["label"])
+
+    def test_a_labelled_generation_lists_its_label(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+        self.run_cli("update", "--cli", CLI)
+
+        code, report = self.run_cli("restore", "--list")
+
+        self.assertEqual(code, 0)
+        by_generation = {entry["generation"]: entry["label"] for entry in report["generations"]}
+        self.assertEqual(by_generation[1], "install")
+        self.assertEqual(by_generation[2], "update")
+
+    def test_listing_writes_nothing_and_restores_nothing(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+        before = self.snapshot()
+
+        self.run_cli("restore", "--list")
+
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(cli.snapshot_store(self.runtime()).readable_generations(), [1])
+
+    def test_list_together_with_a_generation_number_is_refused(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+
+        code, report = self.run_cli("restore", "1", "--list")
+
+        self.assertNotEqual(code, 0)
+        self.assertEqual(report["status"], "failed")
+
+    def test_prose_names_the_generation_the_taken_at_and_the_label(self):
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+
+        code, printed = self.run_prose("restore", "--list")
+
+        self.assertEqual(code, 0)
+        self.assertIn("generation 1", printed)
+        self.assertIn("install", printed)
+
+    def test_prose_with_nothing_to_restore_says_so(self):
+        self.present()
+        _, printed = self.run_prose("restore", "--list")
+        self.assertIn("no snapshot generation", printed)
+
+    def test_an_unreadable_generation_is_named_apart_rather_than_hidden(self):
+        """A generation whose folder holds a manifest that exists but will
+        not parse -- `readable_generations` only checks presence, so this is
+        the one case `restore --list`'s own read of the manifest still has
+        to catch, the same asymmetry `session._generation_summaries`
+        documents for the TUI's identical screen.
+        """
+        self.present()
+        self.run_cli("install", "--cli", CLI)
+        self.run_cli("install", "--cli", CLI)
+        broken = snapshots_root(self.filesystem, self.home) / "000002" / "manifest.json"
+        self.filesystem.write_atomic(broken, b"not json", mode=0o600)
+
+        code, report = self.run_cli("restore", "--list")
+
+        self.assertEqual(code, 0)
+        self.assertEqual([entry["generation"] for entry in report["generations"]], [1])
+        self.assertEqual(report["unreadable"], [2])
+
+
 class RetentionTest(RealHomeTestCase):
     def snapshots(self):
         return cli.snapshot_store(self.runtime())
 
-    def test_a_sixth_generation_deletes_the_first_and_five_remain(self):
+    def test_one_generation_past_the_kept_count_deletes_the_first_and_the_rest_remain(self):
         self.present()
-        for _ in range(6):
+        total = cli.RETAIN_GENERATIONS + 1
+        for _ in range(total):
             self.run_cli("install", "--cli", CLI)
-        self.assertEqual(self.snapshots().readable_generations(), [2, 3, 4, 5, 6])
+        self.assertEqual(self.snapshots().readable_generations(), list(range(2, total + 1)))
 
     def test_retention_run_twice_does_not_fail(self):
         self.present()
-        for _ in range(6):
+        for _ in range(cli.RETAIN_GENERATIONS + 1):
             self.run_cli("install", "--cli", CLI)
         code, report = self.run_cli("uninstall", "--cli", CLI)
         self.assertEqual(code, 0)
@@ -2220,7 +2337,7 @@ class RetentionOnTheDoubleTest(FakeHomeTestCase):
 
     def test_a_retention_failure_leaves_the_command_successful_and_is_still_reported(self):
         self.present()
-        for _ in range(5):
+        for _ in range(cli.RETAIN_GENERATIONS):
             self.run_cli("install", "--cli", CLI)
         self.filesystem.fail_remove_dir.add(snapshots_root(self.filesystem, self.home) / "000001")
 

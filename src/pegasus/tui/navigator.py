@@ -432,12 +432,20 @@ class GenerationSummary:
     There is deliberately no field for a Pegasus release: `Manifest` never
     records one (see `core.snapshot.Manifest`), and inventing one here would
     put a fact on screen that nothing on disk actually backs.
+
+    `label` is `Manifest.label`, carried through unchanged: the command that
+    produced this generation, in the caller's own words -- `"install"`,
+    `"mcp grant"`, and so on -- or `None` for a generation taken before this
+    field existed. A bare ordinal never said what a person actually did; the
+    label is what makes a row read as "that was when I configured my
+    models" instead of "generation 3".
     """
 
     generation: int
     taken_at: str
     files_restored: int
     paths_cleared: int
+    label: str | None = None
 
 
 def readable_timestamp(taken_at: str) -> str:
@@ -487,7 +495,8 @@ def _generation_label(summary: GenerationSummary, *, most_recent: bool) -> str:
     when = readable_timestamp(summary.taken_at)
     marker = " (most recent)" if most_recent else ""
     touched = _touch_summary(summary.files_restored, summary.paths_cleared)
-    return f"Generation {summary.generation} — {when}{marker} · {touched}"
+    label = f" — {summary.label}" if summary.label else ""
+    return f"Generation {summary.generation}{label} — {when}{marker} · {touched}"
 
 
 @dataclass(frozen=True)

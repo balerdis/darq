@@ -65,6 +65,49 @@ class ManifestRoundTripTest(unittest.TestCase):
         self.assertEqual(snapshot_module.from_dict(snapshot_module.to_dict(empty)), empty)
 
 
+class ManifestLabelTest(unittest.TestCase):
+    """`Manifest.label` names the intention that produced a generation --
+    `"install"`, `"mcp grant"`, and so on. It must be optional in both
+    directions: absent by default, and a manifest written before this field
+    existed must go on reading fine rather than become unreadable.
+    """
+
+    def test_a_manifest_with_no_label_defaults_to_none(self):
+        self.assertIsNone(Manifest(taken_at=AT).label)
+
+    def test_a_label_survives_serialization(self):
+        manifest = Manifest(taken_at=AT, label="mcp grant")
+        payload = snapshot_module.to_dict(manifest)
+        self.assertEqual(payload["label"], "mcp grant")
+        self.assertEqual(snapshot_module.from_dict(payload), manifest)
+
+    def test_an_absent_label_is_omitted_from_the_serialized_payload(self):
+        """Mirrors `Entry.is_directory`'s own omission: a manifest this
+        version writes for an unlabelled generation must read back
+        identically to one a version that predates this field would have
+        produced -- there is no reason for the two to differ on a fact
+        neither of them is describing.
+        """
+        payload = snapshot_module.to_dict(Manifest(taken_at=AT))
+        self.assertNotIn("label", payload)
+
+    def test_a_manifest_written_before_this_field_existed_still_reads(self):
+        """The constraint most likely to be broken silently: a real manifest
+        already on disk, written by a version of this product that never
+        heard of `label`, carries only `taken_at` and `entries` -- exactly
+        the bytes a real file on a real machine looks like today. Reading it
+        back must succeed, with `label` simply absent, not raise.
+        """
+        payload = {"taken_at": AT, "entries": []}
+        manifest = snapshot_module.from_dict(payload)
+        self.assertIsNone(manifest.label)
+        self.assertEqual(manifest.taken_at, AT)
+
+    def test_a_non_string_label_is_rejected(self):
+        with self.assertRaises(SnapshotError):
+            snapshot_module.from_dict({"taken_at": AT, "entries": [], "label": 42})
+
+
 class FromDictValidationTest(unittest.TestCase):
     def test_rejects_a_non_object_payload(self):
         with self.assertRaises(SnapshotError):

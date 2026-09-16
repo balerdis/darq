@@ -226,6 +226,7 @@ def _generation_summaries(runtime: cli.Runtime) -> tuple[tuple[GenerationSummary
             GenerationSummary(
                 generation=generation,
                 taken_at=_local_taken_at(manifest.taken_at),
+                label=manifest.label,
                 files_restored=sum(1 for entry in manifest.entries if entry.existed),
                 paths_cleared=sum(1 for entry in manifest.entries if not entry.existed),
             )
@@ -350,7 +351,7 @@ def _mcp_write(
         return None
     chosen = mcp_selection(screen)
     _, report = cli.safe_report(
-        "install", lambda: cli.install(screen.cli.id, runtime, dry_run=True, mcp=list(chosen))
+        "install", lambda: cli.install(screen.cli.id, runtime, dry_run=True, mcp=list(chosen), label="install")
     )
     return navigator.opened(InstallPlanScreen(cli=screen.cli, report=report, mcp=chosen))
 
@@ -656,7 +657,8 @@ def install_task(
 
     def run(sink: Callable[[cli.Progress], None]) -> Navigator:
         _, report = cli.safe_report(
-            "install", lambda: cli.install(screen.cli.id, runtime, mcp=list(screen.mcp), on_progress=sink)
+            "install",
+            lambda: cli.install(screen.cli.id, runtime, mcp=list(screen.mcp), on_progress=sink, label="install"),
         )
         return navigator.opened(
             InstallResultScreen(cli=screen.cli, report=report, wordmark_words=runtime.identity.wordmark_words)
@@ -817,7 +819,7 @@ def step(navigator: Navigator, runtime: cli.Runtime, action: Action) -> Navigato
             _, report = cli.safe_report("upgrade", lambda: cli.upgrade(runtime))
         else:
             _, report = cli.safe_report(
-                "install", lambda: cli.install(screen.cli.id, runtime, mcp=list(screen.mcp))
+                "install", lambda: cli.install(screen.cli.id, runtime, mcp=list(screen.mcp), label="install")
             )
         return navigator.opened(
             InstallResultScreen(

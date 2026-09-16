@@ -84,13 +84,21 @@ class SnapshotStore(Protocol):
         to recover it from.
         """
 
-    def save(self, captures: Sequence[Capture], *, taken_at: str) -> int:
+    def save(self, captures: Sequence[Capture], *, taken_at: str, label: str | None = None) -> int:
         """Write a new generation from the given captures and return its number.
 
         ``taken_at`` is the caller's clock, not this store's: every other
         timestamp Pegasus records — the journal's, the CLI report's — is
         injected from the composition root rather than read from the wall
         clock inside infra, and a snapshot's manifest is no exception.
+
+        ``label`` names the intention that produced this generation --
+        `"install"`, `"mcp grant"`, `"restore"`, and so on -- exactly as the
+        caller understands its own action; this store neither infers one nor
+        validates it against a fixed vocabulary, and passes it straight to
+        :class:`pegasus.core.snapshot.Manifest`. Left ``None``, the
+        generation is written unlabelled, the same shape a caller that
+        predates this parameter would have produced.
 
         The blobs are written first and the manifest last, as the mark that
         the generation is complete — a crash partway through leaves a folder

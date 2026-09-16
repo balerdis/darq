@@ -60,26 +60,44 @@ class Entry:
 
 @dataclass(frozen=True)
 class Manifest:
-    """One generation: when it was captured, and what it captured.
+    """One generation: when it was captured, what it captured, and — since
+    batching made one generation correspond to one human intention — what
+    intention that was.
 
     The date lives here, as data, rather than in whatever the store names the
     generation's folder — a folder name is address, not content, and the store
     is free to number generations however it needs to without the manifest
     caring.
+
+    ``label`` is a string the caller supplies, never inferred here or by the
+    store underneath this module: a caller like the TUI's models screen has
+    no `argv` to read a command name from, and this module has no business
+    learning a CLI's command vocabulary just to guess one. It defaults to
+    ``None`` for exactly one reason — a manifest already on disk before this
+    field existed carries only `taken_at` and `entries`, and it must go on
+    reading fine, with no label to show, rather than become unreadable the
+    day this field was added.
     """
 
     taken_at: str
     entries: tuple[Entry, ...] = ()
+    label: str | None = None
 
 
 # --- Serialization ---------------------------------------------------------
 
 
 def to_dict(manifest: Manifest) -> dict[str, Any]:
-    return {
-        "taken_at": manifest.taken_at,
-        "entries": [_entry_to_dict(entry) for entry in manifest.entries],
-    }
+    payload: dict[str, Any] = {"taken_at": manifest.taken_at}
+    # Omitted rather than written as `null`, for the same reason
+    # `Entry.is_directory` is omitted below: a manifest a released version
+    # before this field existed already wrote never had this key, and a
+    # manifest this version writes for an unlabelled generation should read
+    # back identically to one that version would have produced.
+    if manifest.label is not None:
+        payload["label"] = manifest.label
+    payload["entries"] = [_entry_to_dict(entry) for entry in manifest.entries]
+    return payload
 
 
 def _entry_to_dict(entry: Entry) -> dict[str, Any]:
@@ -108,7 +126,14 @@ def from_dict(payload: Any) -> Manifest:
     raw_entries = payload.get("entries", [])
     if not isinstance(raw_entries, list):
         raise SnapshotError("entries must be a list")
-    return Manifest(taken_at=taken_at, entries=tuple(_entry_from_dict(item) for item in raw_entries))
+    label = payload.get("label")
+    if label is not None and not isinstance(label, str):
+        raise SnapshotError("label must be a string")
+    return Manifest(
+        taken_at=taken_at,
+        entries=tuple(_entry_from_dict(item) for item in raw_entries),
+        label=label,
+    )
 
 
 def _entry_from_dict(payload: Any) -> Entry:
