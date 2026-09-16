@@ -59,7 +59,18 @@ def only(artifacts, kind):
 #: running the real hook under `node` and comparing.
 SCOPE_MARKER_CONST = re.compile(r'const SCOPE_MARKER = "([^"]*)"')
 SCOPE_NOTE_ARRAY = re.compile(r"const SCOPE_NOTE = \[(.*?)\n\]\.join\(\"\"\)", re.DOTALL)
-SCOPE_NOTE_FRAGMENT = re.compile(r'"([^"\\]*)"\s*,|`([^`\\]*)`\s*,')
+SCOPE_NOTE_FRAGMENT = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,|`((?:[^`\\]|\\.)*)`\s*,')
+
+#: A fragment's escapes have to be resolved, or the note's own paragraph break
+#: would come back as the two characters `\` and `n` and every reader of the
+#: reconstruction would be looking at something the model never sees.
+JS_ESCAPE = re.compile(r"\\(.)", re.DOTALL)
+JS_ESCAPED = {"n": "\n", "r": "\r", "t": "\t", "0": "\0"}
+
+
+def unescaped(fragment: str) -> str:
+    """A JavaScript string fragment as the joined constant actually reads."""
+    return JS_ESCAPE.sub(lambda match: JS_ESCAPED.get(match.group(1), match.group(1)), fragment)
 
 
 def scope_note_of(source: str) -> str:
@@ -69,7 +80,7 @@ def scope_note_of(source: str) -> str:
     if array is None or marker is None:
         return ""
     fragments = [
-        plain if backtick is None else backtick
+        unescaped(plain if backtick is None else backtick)
         for plain, backtick in (
             (match.group(1), match.group(2))
             for match in SCOPE_NOTE_FRAGMENT.finditer(array.group(1))
@@ -1454,6 +1465,32 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
         """Appending is this plugin's deliberate pattern: it never has to match a
         sentence the runtime owns and may reword without telling anyone."""
         self.assertTrue(self.result["once"].startswith("RUNTIME DESCRIPTION."))
+
+    def test_the_note_the_model_receives_starts_its_own_paragraph(self):
+        """The runtime's description ends in a sentence of its own, and this
+        plugin appends to it. With nothing between them the model is handed
+        `...to edit files.Scope of this tool:` -- a correction that begins in
+        the middle of somebody else's sentence, which is the reading failure
+        this plugin exists to prevent in the first place.
+
+        Asserted on the executed hook's output rather than on the source: the
+        note is built out of fragments, so no sentence of it exists as a
+        literal in the file and a source-level check would be asserting that
+        some fragment somewhere ends in a newline -- the proxy, not the fact.
+        """
+        description = self.result["once"]
+        runtime, _, note = description.partition("\n\n")
+        self.assertEqual(
+            runtime,
+            "RUNTIME DESCRIPTION.",
+            "the note does not start after a blank line; the model is handed "
+            f"{description[:64]!r}",
+        )
+        self.assertTrue(
+            note[:1].strip(),
+            f"the note starts with padding instead of its first word: {note[:32]!r}",
+        )
+        self.assertNotIn("\n\n", note, "the note is one paragraph, not several")
 
     def test_what_the_hook_appends_is_exactly_the_note_the_text_tests_read(self):
         """Pins `scope_note_of` to the real thing, so the assertions that run

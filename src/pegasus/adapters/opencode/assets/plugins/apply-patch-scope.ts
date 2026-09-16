@@ -40,9 +40,14 @@ import type { Plugin } from "@opencode-ai/plugin"
 // under this file's control.
 const SCOPE_MARKER = "writes to the local filesystem of the machine this session runs on"
 
+// The blank line is load-bearing. This note is concatenated onto a description
+// the runtime owns, and that description ends in a sentence of its own -- so
+// with nothing between them the model reads `...to edit files.Scope of this
+// tool:` and the correction starts inside somebody else's sentence. Everything
+// after the separator is one paragraph on purpose: the remaining entries are
+// line continuations, not lines, which is why the array is joined with "".
 const SCOPE_NOTE = [
-  "",
-  "",
+  "\n\n",
   `Scope of this tool: it ${SCOPE_MARKER}, as the user that session runs as, and nowhere else. It `,
   "cannot reach a file that lives on another host, and it cannot write a file owned by another user ",
   "on this one. When a request is about editing files, this tool means local files that user can ",
