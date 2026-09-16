@@ -368,16 +368,22 @@ class ManualSaysHowAGrantedDirectoryIsRenderedTest(RealHomeTestCase):
             self.assertIn(f"{self.path}/*", entry)
 
     def test_a_grant_is_not_a_prompt(self):
-        """The whole defect. The paragraph said a granted directory renders as
-        `"ask"`, which is the value of the baseline it is written after -- if
-        the two were ever the same value, granting a directory would change
-        nothing at all."""
+        """Still never a prompt -- but for a different reason than when this
+        test was written. The baseline itself is `"allow"` now (a workaround
+        for upstream #39112, see `_permission`'s own docstring), so a granted
+        directory's own entry is the *same* value as the baseline it is
+        written after, not a different one that out-ranks it. Asserting
+        equality here, not inequality, is the point: it is exactly what makes
+        granting a directory dormant rather than useful right now -- the
+        entry is still written and still survives every `install`/`update`,
+        and it regains its own meaning the moment the baseline reverts to
+        `"ask"`, without anyone having to grant it again.
+        """
         for entry in self.maps:
-            self.assertNotEqual(entry[f"{self.path}/*"], entry["*"])
+            self.assertEqual(entry[f"{self.path}/*"], entry["*"])
 
     def test_the_paragraph_quotes_the_entry_a_grant_actually_writes(self):
-        """Both halves, each attached to what it belongs to, because the value
-        alone is what went wrong: `"ask"` was in the old sentence too."""
+        """Both halves, each attached to what it belongs to."""
         paragraph = paragraph_naming(type(self).__name__)
         entry = self.maps[0]
         granted = json.dumps({f"{self.path}/*": entry[f"{self.path}/*"]})[1:-1]
