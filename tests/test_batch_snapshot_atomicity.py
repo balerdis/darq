@@ -156,6 +156,56 @@ class ModelsUnsetBatchTest(RealHomeTestCase):
         self.assertEqual(len(self.generations()), len(before) + 1)
 
 
+class ModelsApplyMixedBatchTest(RealHomeTestCase):
+    """`cli.models_apply` is the single entry point the TUI's models screen
+    confirms through when a sitting has staged both assignments and a
+    removal -- see that function's own docstring for why it exists apart
+    from `models_set`/`models_unset`. Exercised directly here, through
+    Python rather than a CLI subcommand (there is no `models apply`
+    subcommand -- see `models_apply`'s own docstring on why), the same way
+    `ModelsSetBatchTest` exercises `models_set` through `run_cli`.
+    """
+
+    def test_a_mixed_batch_of_assignments_and_a_removal_produces_exactly_one_generation(self):
+        self.install()
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{AGENT_TWO}=anthropic/claude-sonnet-5")
+        before = self.generations()
+        report = cli.models_apply(
+            CLI,
+            [cli.ModelAssignmentSpec(agent=AGENT_ONE, model="anthropic/claude-sonnet-5")],
+            [AGENT_TWO],
+            self.runtime(),
+        )
+        self.assertEqual(report["status"], "applied")
+        after = self.generations()
+        self.assertEqual(len(after), len(before) + 1)
+        from pegasus.core import model_assignments as model_assignments_module
+
+        assignments = cli.model_assignment_store(self.runtime()).load()
+        self.assertIsNotNone(model_assignments_module.get(assignments, CLI, AGENT_ONE))
+        self.assertIsNone(model_assignments_module.get(assignments, CLI, AGENT_TWO))
+
+    def test_an_invalid_assignment_in_a_mixed_batch_refuses_the_whole_call_and_writes_nothing(self):
+        self.install()
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{AGENT_TWO}=anthropic/claude-sonnet-5")
+        before = self.generations()
+        with self.assertRaises(cli.CommandError) as caught:
+            cli.models_apply(
+                CLI,
+                [cli.ModelAssignmentSpec(agent="nonexistent-agent", model="anthropic/claude-sonnet-5")],
+                [AGENT_TWO],
+                self.runtime(),
+            )
+        self.assertIn("nonexistent-agent", str(caught.exception))
+        self.assertEqual(self.generations(), before)
+        from pegasus.core import model_assignments as model_assignments_module
+
+        assignments = cli.model_assignment_store(self.runtime()).load()
+        # The staged removal must not have landed either -- all-or-nothing
+        # means the whole call, not just the assignment half of it.
+        self.assertIsNotNone(model_assignments_module.get(assignments, CLI, AGENT_TWO))
+
+
 class McpGrantBatchTest(RealHomeTestCase):
     def test_a_multi_key_grant_produces_exactly_one_generation(self):
         self.install()

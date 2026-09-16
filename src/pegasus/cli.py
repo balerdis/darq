@@ -484,6 +484,7 @@ def install(
     granted: list[str] | None = None,
     granted_directories: list[str] | None = None,
     model_assignments: list[ModelAssignmentSpec] | None = None,
+    model_removals: list[str] | None = None,
     on_progress: Callable[["Progress"], None] | None = None,
 ) -> dict[str, Any]:
     """Place Pegasus into one CLI's configuration, and report what happened.
@@ -523,6 +524,22 @@ def install(
     on every render regardless of this parameter, so there is no equivalent
     "silence retires everything" risk for this parameter to guard against --
     `None` simply means this call is not the one changing any assignment.
+
+    `model_removals`, when given, names agents whose assignment should be
+    dropped -- `models_unset`'s own batch, folded into this same call rather
+    than requiring a second one. The two parameters apply against the same
+    in-memory `effective_assignments` before either reaches the store, in
+    the order a person would expect a mixed batch to mean: an agent named in
+    both is assigned first, then immediately removed, so a removal always
+    wins over an assignment for the same agent in the same call rather than
+    the two racing against each other. This is what lets the TUI's models
+    screen stage several assignments and a removal in one sitting and
+    confirm them as one `install()` -- one snapshot, one render -- instead of
+    calling `models_set` and `models_unset` separately, which would be two of
+    each. A removal is never itself invalid (removing an assignment that was
+    never set is a no-op, the same as `models_unset`), so it cannot be the
+    offending item an all-or-nothing refusal names -- only `model_assignments`
+    can.
     """
     adapter = _adapter(cli_id)
     environment = runtime.environment
@@ -636,6 +653,11 @@ def install(
         for agent, parsed in parsed_assignments:
             effective_assignments = model_assignments_module.with_assignment(
                 effective_assignments, adapter.id, agent, parsed
+            )
+    if model_removals is not None:
+        for agent in model_removals:
+            effective_assignments = model_assignments_module.without_assignment(
+                effective_assignments, adapter.id, agent
             )
     # Resolved here, once `installed` is known, and applied before anything
     # downstream reads `content` again -- the Node guard included, since a
@@ -961,7 +983,7 @@ def install(
     # before reaching here, so a run that fails partway leaves the store
     # exactly as it was, never holding a preference the render it was meant
     # to reach never happened for.
-    if model_assignments is not None:
+    if model_assignments is not None or model_removals is not None:
         model_assignment_store(runtime).save(effective_assignments)
 
     # `kept_dependencies` were not touched this run at all -- the version and
@@ -2118,6 +2140,92 @@ def models_unset(cli_id: str, agents: list[str], runtime: Runtime) -> dict[str, 
     store.save(assignments)
     report = install(cli_id, runtime, mcp=selection)
     return {**report, "action": "unset", "agents": list(agents), "removed": to_remove, "status": "unset"}
+
+
+def models_apply(
+    cli_id: str,
+    assignments: list[ModelAssignmentSpec],
+    removals: list[str],
+    runtime: Runtime,
+) -> dict[str, Any]:
+    """`models_set` and `models_unset`, folded into the one call a mixed
+    batch needs -- assignments and removals reaching `install`'s own
+    `model_assignments`/`model_removals` together, so a sitting that stages
+    both writes exactly once, one snapshot, one render.
+
+    This is the entry point the TUI's models screen confirms through, and
+    the reason it exists at all: calling `models_set` for the staged
+    assignments and `models_unset` for the staged removals would be two
+    `install()` runs and two snapshot generations for what a person
+    experienced as one Continue -- precisely the storm `mcp_grant`/
+    `mcp_revoke` already learned to avoid for the MCP selection screen (see
+    `_grant_mcp_write`'s own docstring in `pegasus.tui.session`). A CLI
+    command line has no use for this shape -- `models set` and `models
+    unset` are two different subcommands a person types separately -- so
+    this is reached only from Python, not from `_models`'s own dispatch.
+
+    Every assignment is validated exactly as `models_set` validates its own
+    batch -- the agent is configurable, the model spec parses, no agent is
+    named twice within the assignment batch -- before anything is recorded:
+    an invalid assignment refuses the *whole* call, naming the offending
+    agent and why, and writes nothing. A removal can never be the offending
+    item: removing an assignment that was never set is a no-op, the same as
+    `models_unset`. An agent named in both `assignments` and `removals`
+    is assigned and then immediately removed -- `install`'s own docstring on
+    `model_removals` explains why that order, not this function's.
+
+    `assignments` and `removals` may not both be empty -- there would be
+    nothing to apply -- but either alone is enough, so a sitting that staged
+    only removals, or only assignments, still reaches here rather than
+    needing its own call for that case.
+    """
+    adapter = _adapter(cli_id)
+    if not assignments and not removals:
+        raise CommandError("models apply needs at least one assignment or removal")
+    seen_agents: set[str] = set()
+    for spec in assignments:
+        if spec.agent in seen_agents:
+            raise CommandError(f"--assign named {spec.agent!r} more than once")
+        seen_agents.add(spec.agent)
+        _require_configurable_agent(spec.agent)
+        try:
+            ModelAssignment.parse(spec.model, spec.effort)
+        except ValueError as error:
+            raise CommandError(f"invalid model assignment for {spec.agent!r}: {error}") from error
+    seen_removals: set[str] = set()
+    for agent in removals:
+        if agent in seen_removals:
+            raise CommandError(f"--agent named {agent!r} more than once")
+        seen_removals.add(agent)
+    installed = journal_module.install_for(journal_store(runtime).load(), adapter.id)
+    if installed is None:
+        raise CommandError(f"{adapter.id} has nothing installed; run install first")
+    selection, unresolved = _mcp_update_selection(installed, display_name=runtime.identity.display_name)
+    if unresolved:
+        raise CommandError(
+            unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
+        )
+    report = install(
+        cli_id,
+        runtime,
+        mcp=selection,
+        model_assignments=list(assignments) or None,
+        model_removals=list(removals) or None,
+    )
+    return {
+        **report,
+        "action": "apply",
+        "assignments": [
+            {
+                "agent": spec.agent,
+                "model": ModelAssignment.parse(spec.model, spec.effort).full_id,
+                "effort": spec.effort,
+            }
+            for spec in assignments
+        ],
+        "removed": list(removals),
+        "status": "applied",
+    }
 
 
 def models_list(runtime: Runtime, *, cli_id: str | None = None) -> dict[str, Any]:
