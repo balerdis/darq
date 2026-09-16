@@ -1555,9 +1555,40 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
         await brokenHook({ toolID: "apply_patch" }, broken);
         await brokenHook({ toolID: "apply_patch" }, broken);
 
+        // Overlapping calls, which the sequential scenario above cannot
+        // catch: this toast suspends before it records anything, so a latch
+        // set after the await instead of before it would let a second call
+        // through while the first is still in flight. Two turns resolving
+        // tools at once in the same session hit exactly this, because the
+        // runtime caches one hook closure -- and one flag -- per directory.
+        function slowClient(toasts) {
+          return {
+            tui: {
+              showToast: async (input) => {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                toasts.push(input);
+              },
+            },
+          };
+        }
+
+        const overlappingToasts = [];
+        const overlappingHooks = await plugin({ client: slowClient(overlappingToasts) });
+        const overlappingHook = overlappingHooks["tool.definition"];
+        const overlapping = { description: "RUNTIME DESCRIPTION.", parameters: {} };
+        await Promise.all([
+          overlappingHook({ toolID: "apply_patch" }, overlapping),
+          overlappingHook({ toolID: "apply_patch" }, overlapping),
+          overlappingHook({ toolID: "apply_patch" }, overlapping),
+        ]);
+        // The alarm is fire-and-forget, so the hook returns before the toast
+        // lands; give every in-flight one time to arrive before counting.
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
         console.log(JSON.stringify({
           once, thrice, other: other.description, missing,
           holdingToasts, brokenToasts, brokenDescription: broken.description,
+          overlappingToasts,
         }));
         """
     )
@@ -1677,6 +1708,21 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
         scoped to the session, not the call, so a second and third toast would
         be exactly the noise this design was chosen to avoid."""
         self.assertEqual(len(self.result["brokenToasts"]), 1)
+
+    def test_the_alarm_fires_once_even_when_the_calls_overlap(self):
+        """The test above proves the alarm does not repeat across calls that
+        wait for each other. It cannot prove the flag is set BEFORE the hook
+        suspends, because sequential awaits never let two calls interleave --
+        an implementation that latched after `await showToast(...)` would keep
+        it green and still fire once per concurrent call in production.
+
+        This scenario overlaps three calls against a toast that suspends
+        before it records anything, which is the shape the runtime really
+        produces: OpenCode caches one hook closure -- and therefore one flag
+        -- per directory, so two turns resolving tools at once in the same
+        session enter this hook concurrently.
+        """
+        self.assertEqual(len(self.result["overlappingToasts"]), 1)
 
     def test_the_alarm_names_the_sentence_it_no_longer_finds(self):
         """A person reading the toast has to be able to check the claim
