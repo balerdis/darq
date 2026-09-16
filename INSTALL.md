@@ -105,10 +105,11 @@ ver qué va a pasar antes de que pase: cada pantalla de selección va seguida de
 plan, y recién al confirmar esa vista previa se escribe algo de verdad. Nada se instala por elegirlo
 en el menú; se instala al confirmar la pantalla de resultado de esa elección.
 
-El menú principal agrupa sus siete entradas por intención, y el orden es a propósito: `Install`,
-`Update` y `Upgrade` primero (instalar y mantenerse al día), después `Configure models`, después
-`Status and diagnostics`, y por último `Uninstall` antes de `Exit` — la entrada destructiva queda
-lejos de donde la navegación con flechas la podría tocar por accidente.
+El menú principal agrupa sus ocho entradas por intención, y el orden es a propósito: `Install`,
+`Update` y `Upgrade` primero (instalar y mantenerse al día), después `Configure models` y
+`Grant MCP servers`, después `Status and diagnostics`, y por último `Uninstall` antes de `Exit`
+— la entrada destructiva queda lejos de donde la navegación con flechas la podría tocar por
+accidente.
 
 Se maneja enteramente con el teclado: flechas o `j`/`k` para moverte, `enter` o `espacio` para elegir
 (en la pantalla de selección de MCPs, cualquiera de los dos tilda o destilda un servidor), `d` para

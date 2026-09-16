@@ -310,7 +310,7 @@ Regla de higiene: si aparece un caso que no entra en ninguna de las dos formas, 
 
 Casi todo lo que un adapter escribe viene del núcleo: recibe un descriptor y lo materializa. Pero hay archivos que existen **solo porque un CLI funciona como funciona**, y para esos no hay descriptor posible.
 
-En OpenCode son once: cinco plugins escritos contra su API de plugins, el `package.json` y el lockfile de los que esos plugins dependen, la herramienta que uno de ellos invoca con su launcher, su plantilla de entorno, y un archivo de datos del propio adapter.
+En OpenCode son doce: seis plugins escritos contra su API de plugins, el `package.json` y el lockfile de los que esos plugins dependen, la herramienta que uno de ellos invoca con su launcher, su plantilla de entorno, y un archivo de datos del propio adapter.
 
 ```python
 def own_artifacts(self, environment: Environment) -> list[Artifact]: ...
