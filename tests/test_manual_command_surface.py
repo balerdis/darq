@@ -44,6 +44,13 @@ with nothing anywhere that looks at what the installation carries. And
 configuration: `update`, `mcp grant` and `directory grant` re-render too, so
 a person who ran any of them already has it.
 
+A sixth was an omission rather than a wrong sentence, and it nearly cost a
+real installation its bound servers: the section where a person first types
+`--mcp` never said the flag has two spellings. Binding was explained in the
+selection screen's section and again in the grant section, both far below,
+so a reader who stopped after installing had been shown only half of what
+the flag accepts.
+
 And one gap, the same surface read the other way round: `pegasus upgrade`
 shipped and the manual never learned it existed. The last class here derives
 the whole top-level surface from the parser, so the next command cannot go
@@ -567,6 +574,113 @@ class ManualSaysEveryStatusDoctorCanReportTest(RealHomeTestCase):
         spelled = set(SPELLED_STATUS.findall(self.paragraph))
         self.assertTrue(spelled, "the paragraph spells no status at all, so this proves nothing")
         self.assertEqual(spelled - self.statuses, set())
+
+    def test_the_paragraph_says_where_this_was_measured(self):
+        self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
+
+
+#: A `--mcp` value as the manual shows one: backticked, whole, with whatever
+#: placeholder the document spells an id and a key with.
+MCP_SPELLING = re.compile(r"`--mcp ([^`]+)`")
+
+
+def agents_reached_by(key: str) -> frozenset[str]:
+    """Every agent a shipped server's own descriptor reaches, off `reaches`,
+    which is where that fact lives: `optional_mcp` is derived from these
+    lists, so this is the same set the render works from."""
+    from pegasus.core import content as content_module
+
+    server = next((item for item in content_module.load().mcp if item.name == key), None)
+    return frozenset(server.reaches) if server is not None else frozenset()
+
+
+class ManualSaysWhatTheTwoMcpSpellingsAskForTest(RealHomeTestCase):
+    """What a bare `--mcp <id>` asks for, and what `--mcp <id>=<clave>` asks
+    for instead.
+
+    The section where a person first types the flag did not say there were
+    two. The difference is not a detail of spelling: one asks Pegasus to
+    obtain and administer the server, the other asks only for the contract --
+    the convention and the permissions -- against a server the installation
+    already runs under that key, and Pegasus configures nothing for that id
+    at all. A reader who never got that far down the document had no way to
+    know the second form existed, and a reinstall spelled the first way takes
+    over a server somebody else's key was administering.
+
+    Both are RUN against a real installation, and the difference is read off
+    the rendered configuration: which servers it configures, and which prefix
+    each agent is granted. The set of agents is derived from the shipped
+    descriptor's own `reaches`, so the two runs are held to the same reach
+    rather than to each other -- a binding that quietly narrowed who gets the
+    server would otherwise look identical to one that did not.
+
+    The in-document link the paragraph carries is deliberately not asserted
+    here: `tools/check_docs_links.py` already fails the suite over an anchor
+    that does not resolve, and a second check of the same fact would only be
+    a second thing to update.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.present()
+        self.reached = agents_reached_by(REMOTE_SERVER)
+        self.paragraph = paragraph_naming(type(self).__name__)
+
+    def configured_servers(self) -> frozenset[str]:
+        return frozenset(json.loads(self.rendered()).get("mcp", {}))
+
+    def agents_granting(self, key: str) -> frozenset[str]:
+        document = json.loads(self.rendered())
+        return frozenset(
+            name
+            for name, agent in document["agent"].items()
+            if agent.get("permission", {}).get(f"{key}*") == "allow"
+        )
+
+    def test_the_two_spellings_are_the_ones_the_flag_actually_reads(self):
+        """Straight off the parser the flag's values go through, so a change
+        to what `=` means reaches this file."""
+        from pegasus.core import content as content_module
+
+        self.assertEqual(content_module.parse_mcp_choice(REMOTE_SERVER), (REMOTE_SERVER, None))
+        self.assertEqual(
+            content_module.parse_mcp_choice(f"{REMOTE_SERVER}={OWN_KEY}"), (REMOTE_SERVER, OWN_KEY)
+        )
+
+    def test_the_example_server_reaches_agents_at_all(self):
+        """Or both runs below would be comparing two empty sets."""
+        self.assertTrue(self.reached, f"{REMOTE_SERVER} reaches no agent, so nothing here proves anything")
+
+    def test_the_bare_spelling_has_pegasus_obtain_and_administer_the_server(self):
+        code, _ = self.run_cli("install", "--cli", CLI, "--mcp", REMOTE_SERVER)
+        self.assertEqual(code, 0)
+        self.assertIn(REMOTE_SERVER, self.configured_servers())
+        self.assertEqual(self.agents_granting(REMOTE_SERVER), self.reached)
+
+    def test_the_bound_spelling_configures_nothing_and_grants_the_key_instead(self):
+        code, _ = self.run_cli("install", "--cli", CLI, "--mcp", f"{REMOTE_SERVER}={OWN_KEY}")
+        self.assertEqual(code, 0)
+        self.assertNotIn(REMOTE_SERVER, self.configured_servers())
+        self.assertEqual(self.agents_granting(REMOTE_SERVER), frozenset())
+        self.assertEqual(self.agents_granting(OWN_KEY), self.reached)
+
+    def test_the_paragraph_is_found_exactly_once(self):
+        self.assertTrue(
+            self.paragraph, f"no single line of {MANUAL.name} names {type(self).__name__}"
+        )
+
+    def test_the_paragraph_shows_both_spellings_of_the_same_flag(self):
+        """The omission itself. Two forms, the second the first plus a key,
+        so a paragraph that drifts back to showing one of them fails."""
+        shown = MCP_SPELLING.findall(self.paragraph)
+        bare = [spelling for spelling in shown if "=" not in spelling]
+        bound = [spelling for spelling in shown if "=" in spelling]
+        self.assertEqual(len(bare), 1, f"the paragraph shows {len(bare)} bare spellings: {shown}")
+        self.assertEqual(len(bound), 1, f"the paragraph shows {len(bound)} bound spellings: {shown}")
+        self.assertTrue(
+            bound[0].startswith(f"{bare[0]}="),
+            f"the two spellings do not name the same id: {bare[0]!r} and {bound[0]!r}",
+        )
 
     def test_the_paragraph_says_where_this_was_measured(self):
         self.assertIn(f"`{GUARD_MODULE}`", self.paragraph)
