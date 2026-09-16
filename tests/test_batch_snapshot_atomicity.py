@@ -29,6 +29,7 @@ import json
 from pegasus import cli
 from pegasus.adapters import available
 from pegasus.core import journal as journal_module
+from pegasus.core import model_assignments as model_assignments_module
 from pegasus.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
@@ -154,6 +155,44 @@ class ModelsUnsetBatchTest(RealHomeTestCase):
         code, _ = self.run_cli("models", "unset", "--cli", CLI, "--agent", AGENT_ONE, "--agent", AGENT_TWO)
         self.assertEqual(code, 0)
         self.assertEqual(len(self.generations()), len(before) + 1)
+
+    def test_a_removal_that_fails_to_apply_leaves_the_assignment_on_disk(self):
+        """All-or-nothing is not only about the batch refusing itself: it is
+        about what survives when the apply fails after the batch was accepted.
+
+        `models unset` used to write the mutated assignment store and only
+        then call `install`. A failure inside `install` -- the render, the
+        journal, the snapshot -- reported a failure the person could see
+        while the removal was already on disk. That is the one state this
+        guarantee exists to prevent, and it is the state `models_apply`, the
+        sibling introduced for the identical operation, never had.
+
+        The failure here is a real one: the snapshot root is made unwritable,
+        so `install` cannot create the generation folder it opens with, and
+        refuses for the same reason it would on a machine where that
+        directory belongs to somebody else. Nothing is faked, and the
+        failure lands on `install`'s very first write, which is exactly
+        where a store already mutated by the caller would be stranded.
+        """
+        self.install()
+        self.run_cli("models", "set", "--cli", CLI, "--assign", f"{AGENT_ONE}=anthropic/claude-sonnet-5")
+        runtime = self.runtime()
+        assigned = model_assignments_module.get(
+            cli.model_assignment_store(runtime).load(), CLI, AGENT_ONE
+        )
+        self.assertIsNotNone(assigned, "the assignment must exist before the failing removal")
+        snapshots = cli.snapshot_store(runtime).root
+        snapshots.chmod(0o500)
+        try:
+            code, _ = self.run_cli("models", "unset", "--cli", CLI, "--agent", AGENT_ONE)
+        finally:
+            snapshots.chmod(0o700)
+        self.assertNotEqual(code, 0, "the removal must report the failure")
+        self.assertEqual(
+            model_assignments_module.get(cli.model_assignment_store(self.runtime()).load(), CLI, AGENT_ONE),
+            assigned,
+            "a removal that reported failure must not have reached the store",
+        )
 
 
 class ModelsApplyMixedBatchTest(RealHomeTestCase):

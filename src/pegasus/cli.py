@@ -2155,10 +2155,15 @@ def models_unset(cli_id: str, agents: list[str], runtime: Runtime) -> dict[str, 
         raise CommandError(
             unresolved_bindings_message(adapter.id, unresolved, program_name=runtime.identity.program_name)
         )
-    for agent in to_remove:
-        assignments = model_assignments_module.without_assignment(assignments, cli_id, agent)
-    store.save(assignments)
-    report = install(cli_id, runtime, mcp=selection, label="models unset")
+    # The removal is handed to `install` rather than written here first, for
+    # the same reason `models_set` hands it its assignments: `install` saves
+    # the assignment store last, after the journal write has already
+    # succeeded, so a failure anywhere in the render leaves the store exactly
+    # as it was. Writing it here first meant a failed `install` reported a
+    # failure the person could see while the removal was already on disk --
+    # the one state all-or-nothing exists to prevent, and the one this
+    # function's own sibling `models_apply` never had.
+    report = install(cli_id, runtime, mcp=selection, model_removals=to_remove, label="models unset")
     return {**report, "action": "unset", "agents": list(agents), "removed": to_remove, "status": "unset"}
 
 
