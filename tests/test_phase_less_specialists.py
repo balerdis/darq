@@ -148,6 +148,117 @@ def resolve(rules: dict, name: str):
     return rules.get(name, rules["*"])
 
 
+def requires_tools_of(name: str) -> set[str]:
+    """The front matter list the renderer itself turns into the `permission`
+    and `tools` maps `RenderedPermissionTest` reads back. Reading it here,
+    rather than hard-coding a set of tool names in this module, is what makes
+    the honesty guard below a derived fact instead of a second, independent
+    guess that could quietly drift away from what the agent actually ships
+    with."""
+    front = whole(name).split("---\n", 2)[1]
+    line = next(l for l in front.splitlines() if l.startswith("requires_tools:"))
+    raw = line.split(":", 1)[1].strip().strip("[]")
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+
+def optional_tools_of(name: str) -> set[str]:
+    """The sibling field to `requires_tools_of`: tools the renderer grants but
+    does not mandate (`sdd-explore` is the one shipped agent that carries
+    one, `optional_tools: [write]`). Absent for most agents, so the missing
+    line means the empty set rather than an error -- the same "front matter
+    is the source of truth, a missing field is a fact about that agent, not a
+    parse failure" stance `requires_tools_of` takes."""
+    front = whole(name).split("---\n", 2)[1]
+    line = next((l for l in front.splitlines() if l.startswith("optional_tools:")), None)
+    if line is None:
+        return set()
+    raw = line.split(":", 1)[1].strip().strip("[]")
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+
+def all_agent_names() -> list[str]:
+    """Every shipped agent, read off the content tree rather than a list
+    maintained in this module -- the subject set below is derived FROM this,
+    not filtered down to a pair chosen in advance."""
+    return sorted(path.stem for path in AGENTS.glob("*.md"))
+
+
+def overclaimable_tools_of(name: str) -> set[str]:
+    """The write-capable tools this agent holds (required or optional) that
+    the render permission maps do NOT deny -- the gap a body may not paper
+    over with a no-write claim."""
+    tools = requires_tools_of(name) | optional_tools_of(name)
+    return (tools & WRITE_CAPABLE_TOOLS) - PERMISSION_DENIED_WRITE_TOOLS
+
+
+def no_write_claim_subjects() -> list[str]:
+    """The derived subject set for `ProseDoesNotOverclaimEnforcementTest`.
+
+    An agent belongs here when BOTH hold, both read off its own shipped
+    front matter rather than named by this module:
+
+    - it holds no `edit` and no `write` itself, so "I do not write" would be
+      a true statement about its own tool set in the first place -- an agent
+      that holds `edit`/`write` (`pegasus-implementer`, the SDD phase agents)
+      makes no such claim to check, and this excludes it automatically; and
+    - despite that, it holds a write-capable tool
+      (`WRITE_CAPABLE_TOOLS`) the render permission maps do not deny
+      (`PERMISSION_DENIED_WRITE_TOOLS`) -- the gap a "the permissions agree"
+      claim would be lying about.
+
+    Naming no agent here is what makes this a fact about the shipped tree
+    instead of a second, independent guess this module could get out of sync
+    with: add a third agent with the same shape tomorrow and it joins this
+    set the moment its front matter says so, with no edit to this file.
+    """
+    return [
+        name
+        for name in all_agent_names()
+        if not (requires_tools_of(name) | optional_tools_of(name)) & PERMISSION_DENIED_WRITE_TOOLS
+        and overclaimable_tools_of(name)
+    ]
+
+
+#: How each write-capable tool may be named in prose, for the positive
+#: "you must say which tool this is" check. `bash` is the only tool the
+#: derived subject set currently grants ungoverned, and this codebase's own
+#: prose (`pegasus-explorer.md`) calls it "the shell" as often as "bash", so
+#: both count. A tool with no entry here falls back to its own front-matter
+#: name -- the fallback is untested today because no shipped agent exercises
+#: it, which is disclosed rather than silently assumed correct.
+TOOL_MENTION_WORDS = {
+    "bash": ("bash", "shell"),
+}
+
+
+#: Tools that can alter the tree if granted. `edit` and `write` are the ones
+#: the renderer's `permission`/`tools` maps actually deny for a read-and-search
+#: agent; `bash` is not denied by that mechanism at all -- a shell can run `rm`
+#: or redirect output into a file just as easily as it can run `git log` -- so
+#: a tool set that grants `bash` while omitting `edit`/`write` has NOT closed
+#: off writing by permission, only by the tool it happened to pick.
+WRITE_CAPABLE_TOOLS = {"edit", "write", "bash"}
+
+#: Of those, the two the renderer's permission maps genuinely deny for
+#: `pegasus-explorer` (see `RenderedPermissionTest`). The gap between this and
+#: `WRITE_CAPABLE_TOOLS` is exactly the set a body may describe as enforced
+#: without lying, and exactly the set a body may NOT extend that claim to.
+PERMISSION_DENIED_WRITE_TOOLS = {"edit", "write"}
+
+#: Phrases that describe writing as impossible without qualification -- the
+#: shape of claim that was true of `pegasus-explorer` when it held only
+#: `read`, `grep`, `glob`, and stops being true the moment a write-capable
+#: tool the permission maps do not deny (namely `bash`) is granted alongside
+#: it. Matched only when that condition actually holds, so the guard is a
+#: derived fact about the shipped front matter, not a standing ban on these
+#: words.
+UNQUALIFIED_NO_WRITE_CLAIMS = (
+    re.compile(r"you do not write", re.IGNORECASE),
+    re.compile(r"\bcannot write\b", re.IGNORECASE),
+    re.compile(r"permissions[^.]*agree", re.IGNORECASE | re.DOTALL),
+)
+
+
 class SpecialistsShipTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -200,12 +311,20 @@ class RenderedPermissionTest(unittest.TestCase):
                 self.assertIs(resolve(value["tools"], "edit"), False)
                 self.assertIs(resolve(value["tools"], "write"), False)
 
-    def test_the_two_read_only_agents_still_render_what_they_do_need(self):
+    def test_the_two_agents_denied_write_still_render_what_they_do_need(self):
         """Without this the assertions above would also pass for an agent that
-        was denied everything, including its own trade."""
+        was denied everything, including its own trade.
+
+        Named for what the two share -- `edit`/`write` denial -- rather than
+        "read-only": the explorer also renders `bash`, granted so it can run
+        the shell to investigate (`git log`, `git blame`, a check to see what
+        it prints), which is not a read-only tool in general, only one this
+        agent is trusted to use without altering the tree.
+        """
         explorer = self.rendered("pegasus-explorer")
         self.assertEqual(resolve(explorer["permission"], "read"), "allow")
         self.assertEqual(resolve(explorer["permission"], "grep"), "allow")
+        self.assertEqual(resolve(explorer["permission"], "bash"), "allow")
         verifier = self.rendered("pegasus-verifier")
         self.assertEqual(resolve(verifier["permission"], "read"), "allow")
         self.assertEqual(resolve(verifier["permission"], "bash"), "allow")
@@ -214,6 +333,87 @@ class RenderedPermissionTest(unittest.TestCase):
         value = self.rendered("pegasus-implementer")
         self.assertEqual(resolve(value["permission"], "edit"), "allow")
         self.assertIs(resolve(value["tools"], "write"), True)
+
+
+class ProseDoesNotOverclaimEnforcementTest(unittest.TestCase):
+    """Pegasus refuses to ship a sentence that claims an enforcement it does
+    not have -- a guard, or a prose claim, approving by proxy instead of by
+    the thing itself is the recurring defect class this codebase keeps
+    finding and fixing.
+
+    The subject set is derived, not named: `no_write_claim_subjects()` reads
+    every shipped agent's own `requires_tools`/`optional_tools` and picks out
+    the ones that both (a) make no `edit`/`write` claim of their own to check
+    and (b) hold a write-capable tool (`bash`) the render permission maps do
+    not deny. That is `pegasus-explorer` and `pegasus-verifier` today,
+    pinned by the drift guard below; `pegasus-implementer` and the SDD phase
+    agents hold `edit`/`write` themselves and make no such claim to check.
+
+    Two layers, for two different failure modes:
+
+    - POSITIVE (the real teeth): a subject's body must NAME the tool its
+      permissions do not govern -- for `bash`, the words "bash" or "shell",
+      via `TOOL_MENTION_WORDS`. An adversarial review confirmed by execution
+      that five independent rewordings ("There is no way for you to write to
+      the tree...", "Nothing you do here can alter the repository...", and
+      three more) all make the exact same false claim this guard exists to
+      catch and matched NONE of the negative patterns below -- a blacklist of
+      phrasings is a proxy for the true statement, not the statement itself,
+      and a paraphrase escapes a proxy by construction. Requiring the tool's
+      own name closes that: there is no way to satisfy "mention bash" without
+      writing the word.
+    - NEGATIVE (kept as a second, cheaper layer): the three literal shapes
+      this codebase actually shipped and had to retract stay banned, so a
+      regression back to that exact wording is caught even before a review
+      would need to notice the missing tool name.
+
+    Disclosed honestly, in the register `_wildcard_match` in
+    `src/pegasus/adapters/opencode/render.py` uses for its own two
+    unreproduced behaviours, rather than hidden: this does NOT prove a body
+    is honest about what is and is not enforced. A body could name "bash" in
+    a sentence about something unrelated to writing and still pass the
+    positive check -- whether the disclosure is semantically truthful is not
+    machine-checkable, only whether the tool is named where the contract
+    claims "I do not write", and whether the one exact false shape already
+    found is absent. Mutate `bash` out of a subject's `requires_tools` and it
+    leaves the subject set entirely, both checks stop applying to it, and the
+    old bare claim becomes true again -- that ceasing-to-apply is itself a
+    fact about the shipped tree, not a hole in this guard.
+    """
+
+    def test_the_derived_subject_set_is_exactly_the_two_agents_with_this_shape(self):
+        """Pins the criterion's output against the shipped front matter today.
+        A change to any agent's tool list that alters who this guard watches
+        should show up here as a failing assertion, not silently -- the same
+        role `PHASE_MARKERS`' drift guard plays elsewhere in this file."""
+        self.assertEqual(set(no_write_claim_subjects()), {"pegasus-explorer", "pegasus-verifier"})
+
+    def test_a_subject_names_the_tool_its_permissions_do_not_govern(self):
+        for name in no_write_claim_subjects():
+            overclaimable = overclaimable_tools_of(name)
+            prose = body(name).lower()
+            with self.subTest(agent=name, tools=overclaimable):
+                self.assertTrue(
+                    any(
+                        word in prose
+                        for tool in overclaimable
+                        for word in TOOL_MENTION_WORDS.get(tool, (tool,))
+                    ),
+                    f"{name}'s body makes a no-write claim without naming "
+                    f"{overclaimable}, the tool its rendered permissions do not deny",
+                )
+
+    def test_a_subject_does_not_claim_permission_enforced_no_writing(self):
+        for name in no_write_claim_subjects():
+            overclaimable = overclaimable_tools_of(name)
+            prose = body(name)
+            for pattern in UNQUALIFIED_NO_WRITE_CLAIMS:
+                with self.subTest(agent=name, pattern=pattern.pattern, granted=overclaimable):
+                    self.assertIsNone(
+                        pattern.search(prose),
+                        f"{name}'s prose claims writing is permission-enforced away while "
+                        f"{overclaimable} is granted and not permission-denied",
+                    )
 
 
 class NoPhaseEnvelopeTest(unittest.TestCase):
