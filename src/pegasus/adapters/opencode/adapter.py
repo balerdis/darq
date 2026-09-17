@@ -227,7 +227,13 @@ class Adapter:
 
     # --- What this adapter ships on its own ---
 
-    def own_artifacts(self, layout: Layout, orchestrator_name: str, identity: Identity) -> list[Artifact]:
+    def own_artifacts(
+        self,
+        layout: Layout,
+        orchestrator_name: str,
+        identity: Identity,
+        delegation_targets: tuple[Any, ...],
+    ) -> list[Artifact]:
         """Files that exist only because OpenCode works the way it does.
 
         Plugins written against its plugin API, the npm manifest they depend on,
@@ -253,6 +259,18 @@ class Adapter:
         stay fixed, by design -- see `core.identity` and this repository's
         own product-identity rules for which strings are wire plumbing and
         which are brand.
+
+        `delegation_targets` (threaded through `core.catalog.render`, computed
+        by its own `_delegation_targets`) is content-derived, not this
+        adapter's own -- the one exception to this method's usual admission
+        test ("would this make sense in a CLI we do not support yet?"). It
+        still lands here rather than in the `SOURCES` loop `render` walks for
+        every other content-derived capability: it is one aggregate fact over
+        every agent, never one content-list item at a time, so it does not
+        fit that per-item shape. `render.delegation_capabilities` is where the
+        facts become the markdown table this CLI's agents actually read --
+        that shaping is this adapter's business, the same split
+        `_with_mcp_sections` draws for a body's own sections.
         """
         facts = _asset_facts(layout, orchestrator_name, identity)
         artifacts: list[Artifact] = [
@@ -268,6 +286,7 @@ class Adapter:
             for path, relative in _asset_files(ASSETS / group)
         ]
         artifacts.append(_skill_registry_contract(layout, identity))
+        artifacts += render.delegation_capabilities(layout, delegation_targets)
         artifacts += [
             # Appending keeps the user's own skill paths and plugins untouched.
             ConfigKeyArtifact(

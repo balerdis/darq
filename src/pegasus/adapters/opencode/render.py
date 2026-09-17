@@ -21,6 +21,7 @@ from pegasus.core.content import (
     RunsAs,
     Skill,
     SystemPrompt,
+    delegation_capabilities_path,
     mcp_convention_path,
 )
 from pegasus.core.dependencies import npm_script_path, program_path
@@ -522,6 +523,90 @@ def _convention_path(layout: Layout, item: Mcp) -> Path:
     if layout.skills_dir is None:
         raise RenderError(f"{item.name}: this layout has no skills directory")
     return layout.skills_dir / mcp_convention_path(item.name)
+
+
+def _mcp_cell(target: Any) -> str:
+    """One target's MCP column: every key it reaches, flagging what a
+    wildcard grant of that key does not actually cover.
+
+    `target.withheld_mcp_tools` already carries the key-to-tools association
+    -- this function's only job is formatting, per the split
+    `delegation_capabilities`'s docstring states. A key with nothing withheld
+    renders bare, exactly as it always did; a key that withholds anything
+    never renders bare, because bare is what a delegator reads as "granted in
+    full" and that reading would be false.
+    """
+    withheld = dict(target.withheld_mcp_tools)
+    parts = [
+        f"{key} (withholds: {', '.join(withheld[key])})" if key in withheld else key
+        for key in target.mcp
+    ]
+    return ", ".join(parts) or "none"
+
+
+def delegation_capabilities(layout: Layout, targets: tuple[Any, ...]) -> list[Artifact]:
+    """The generated reference every delegating body's pointer names.
+
+    `targets` is `core.catalog._delegation_targets(content)`, computed once
+    after `select_mcp`/`grant_mcp` have already pruned and granted -- this
+    function never reasons about which servers the user chose or an agent's
+    `may_delegate_to`, only about how the facts it was handed sit on a page.
+    That split mirrors `_with_mcp_sections`: the core hands over facts, and how
+    they read as a markdown table for this CLI's prompts is this adapter's own
+    business.
+
+    A markdown table, not a bare list, because a delegator scanning for one
+    target's row is the whole point of the file existing at all -- a wall of
+    prose would cost exactly the read time this design exists to save.
+
+    `target.withheld_mcp_tools` is the same kind of already-made fact as
+    `target.mcp` itself: `core.catalog` decides which withheld tool belongs to
+    which server key (a fact, not a presentation choice), and this function
+    only decides how that association reads on the page (`_mcp_cell`). This is
+    the same split `_with_mcp_sections` draws for a body's per-server prose --
+    the core hands over the fact already associated, the adapter only ever
+    formats it.
+    """
+    if layout.skills_dir is None:
+        raise RenderError("delegation-capabilities: this layout has no skills directory")
+    header = "| Agent | Native tools | MCP servers |\n| --- | --- | --- |\n"
+    rows = "".join(
+        "| `{name}` | {tools} | {mcp} |\n".format(
+            name=target.name,
+            tools=", ".join(sorted({*target.requires_tools, *target.optional_tools})) or "none",
+            mcp=_mcp_cell(target),
+        )
+        for target in targets
+    )
+    text = (
+        "# Delegation Target Capabilities\n\n"
+        "Generated -- never hand-edited, and never a snapshot: every install regenerates\n"
+        "this from the content core's own agent declarations, after this machine's own\n"
+        "MCP selection and grants have already been applied. One row per agent that is\n"
+        "the declared target of at least one other agent's `may_delegate_to`: what it\n"
+        "reads here is what an install actually grants it, `granted_mcp` included\n"
+        "alongside `optional_mcp`, because a target that can do something a delegator\n"
+        "did not know about is cheap, and a target a delegator wrongly assumed could do\n"
+        "something is the expensive direction this file exists to close.\n\n"
+        "A server listed with `(withholds: ...)` still grants every tool it exposes\n"
+        "except the ones named -- a wildcard grant with a tool or two taken back out,\n"
+        "never the whole server refused. Assuming one of those named tools is\n"
+        "reachable is exactly the wrongly-assumed-capability mistake this file exists\n"
+        "to close, so it is never left off the row.\n\n"
+        "Read this before writing a brief that assumes a target can run a command, open\n"
+        "a browser, or write a file. If this reference is missing or unreadable, do not\n"
+        "assume the capability: verify it directly, or ask for less.\n\n"
+        + header
+        + rows
+    )
+    return [
+        FileArtifact(
+            id="own:delegation-capabilities",
+            path=layout.skills_dir / delegation_capabilities_path(),
+            content=text.encode("utf-8"),
+            executable=False,
+        )
+    ]
 
 
 def _body(layout: Layout, body: str, owner: str) -> str:

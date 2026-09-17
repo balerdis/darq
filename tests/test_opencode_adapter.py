@@ -1278,14 +1278,30 @@ class OwnArtifactsIdentityPlumbingTest(unittest.TestCase):
         self.assertNotIn(".parse(", source)
 
 
+class OwnArtifactsDelegationTargetsPlumbingTest(unittest.TestCase):
+    """`own_artifacts` must receive `delegation_targets` explicitly, the same
+    way `OwnArtifactsIdentityPlumbingTest` pins `identity`: a default here
+    would let a future refactor drop the argument at the one production call
+    site (`core.catalog.render`) and still render a plausible-looking file --
+    with zero rows -- instead of failing loudly at the call."""
+
+    def test_delegation_targets_is_a_required_parameter_not_a_default(self):
+        layout = Adapter().layout(ENVIRONMENT)
+        with self.assertRaises(TypeError):
+            Adapter().own_artifacts(layout, ORCHESTRATOR, IDENTITY)
+
+
 class OwnArtifactsTest(unittest.TestCase):
     def setUp(self):
         self.layout = Adapter().layout(ENVIRONMENT)
-        self.artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY)
+        self.artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY, ())
         self.files = {item.path: item for item in only(self.artifacts, FileArtifact)}
 
     def test_ships_the_adapter_only_assets(self):
-        self.assertEqual(len(only(self.artifacts, FileArtifact)), 12)
+        # 13, not 12: `own_artifacts` now also emits the generated
+        # delegation-capabilities reference (`render.delegation_capabilities`),
+        # unconditionally, the same way it emits every other file here.
+        self.assertEqual(len(only(self.artifacts, FileArtifact)), 13)
 
     def test_build_leftovers_are_excluded(self):
         self.assertEqual([item for item in self.artifacts if "__pycache__" in str(item.path)], [])
@@ -1362,8 +1378,8 @@ class OwnArtifactsTest(unittest.TestCase):
 
     def test_the_result_is_deterministic(self):
         self.assertEqual(
-            Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY),
-            Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY),
+            Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY, ()),
+            Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY, ()),
         )
 
     def test_the_shipped_notifier_names_the_content_declared_orchestrator(self):
@@ -1377,7 +1393,7 @@ class OwnArtifactsTest(unittest.TestCase):
     def test_a_non_pegasus_orchestrator_name_reaches_the_notifier(self):
         """The negative half: a distribution's own orchestrator name must
         substitute cleanly, and the old literal must not survive alongside it."""
-        artifacts = Adapter().own_artifacts(self.layout, "king-pegasus-two", IDENTITY)
+        artifacts = Adapter().own_artifacts(self.layout, "king-pegasus-two", IDENTITY, ())
         notifier = next(item for item in only(artifacts, FileArtifact) if item.path.name == "pegasus-orchestrator-notifier.ts")
         content = notifier.content.decode("utf-8")
         self.assertIn('"king-pegasus-two"', content)
@@ -1452,7 +1468,7 @@ class OwnArtifactsTest(unittest.TestCase):
         three occurrences (one in `package.json`, two in `package-lock.json`)
         must agree, or `npm ci` fails on the mismatch."""
         identity = replace(IDENTITY, program_name="MyTool")
-        artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, identity)
+        artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, identity, ())
         files = only(artifacts, FileArtifact)
         manifest = next(item for item in files if item.path.name == "package.json")
         lockfile = next(item for item in files if item.path.name == "package-lock.json")
@@ -1596,7 +1612,7 @@ class ApplyPatchScopeHookTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         layout = Adapter().layout(ENVIRONMENT)
-        artifacts = Adapter().own_artifacts(layout, ORCHESTRATOR, IDENTITY)
+        artifacts = Adapter().own_artifacts(layout, ORCHESTRATOR, IDENTITY, ())
         files = {item.path: item for item in only(artifacts, FileArtifact)}
         cls.source = files[
             CONFIG / f"plugins/{IDENTITY.program_name}-apply-patch-scope.ts"
@@ -1860,7 +1876,7 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
             env = Environment(home=home, data_dir=home / ".local" / "share" / "pegasus-harness")
             adapter = Adapter()
             layout = adapter.layout(env)
-            artifacts = adapter.own_artifacts(layout, "pegasus-orchestrator", default_identity())
+            artifacts = adapter.own_artifacts(layout, "pegasus-orchestrator", default_identity(), ())
             plugin = next(
                 item for item in artifacts
                 if str(item.path).endswith("plugins/engram.ts")
@@ -1889,7 +1905,7 @@ class SkillRegistryContractTest(unittest.TestCase):
 
     def setUp(self):
         self.layout = Adapter().layout(ENVIRONMENT)
-        self.artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY)
+        self.artifacts = Adapter().own_artifacts(self.layout, ORCHESTRATOR, IDENTITY, ())
         self.files = {item.path: item for item in only(self.artifacts, FileArtifact)}
 
     def rendered_plugin(self) -> str:
@@ -1971,7 +1987,7 @@ class ShippedContentRenderTest(unittest.TestCase):
             ),
             *(item for mcp in loaded.mcp for item in adapter.render_mcp(cls.layout, mcp)),
             *adapter.render_system_prompt(cls.layout, loaded.system_prompt, IDENTITY),
-            *adapter.own_artifacts(cls.layout, orchestrator_name, IDENTITY),
+            *adapter.own_artifacts(cls.layout, orchestrator_name, IDENTITY, ()),
         ]
 
     def test_no_two_artifacts_claim_the_same_address(self):

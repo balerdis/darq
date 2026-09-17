@@ -82,6 +82,29 @@ def mcp_convention_path(server_id: str) -> PurePosixPath:
     return _MCP_CONVENTION_DIR / f"{server_id}-convention.md"
 
 
+_DELEGATION_CAPABILITIES_PATH = PurePosixPath("_shared") / "delegation-capabilities.md"
+"""Where the generated delegation-target reference lands, relative to the skills root.
+
+Flat inside `_shared/`, the same home `exploration-craft.md`, `sdd-applicability.md`
+and every other lazy-loaded reference already lives in -- not a subdirectory of its
+own. Unlike a server id, which is chosen by whoever writes an MCP descriptor and could
+someday collide with a hand-authored stem, this file has exactly one name, chosen once,
+here. There is nothing left for a subdirectory to protect against.
+"""
+
+
+def delegation_capabilities_path() -> PurePosixPath:
+    """Where the generated delegation-capabilities reference lands, relative to the
+    skills root.
+
+    A single stable path, read by `core.catalog` to derive the reference every
+    qualifying agent's body points at, and by the adapter to know where to write it --
+    the same path both sides use, so a pointer naming a file nobody wrote is not a
+    failure mode this design can express.
+    """
+    return _DELEGATION_CAPABILITIES_PATH
+
+
 _MCP_REFERENCE_PATTERN = re.compile(
     r"\{\{skills_root\}\}/"
     + re.escape(_MCP_CONVENTION_DIR.as_posix())

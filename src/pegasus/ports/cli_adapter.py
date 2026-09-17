@@ -103,7 +103,13 @@ class CliAdapter(Protocol):
 
     # --- What this adapter contributes on its own ---
 
-    def own_artifacts(self, layout: Layout, orchestrator_name: str, identity: Identity) -> list[Artifact]:
+    def own_artifacts(
+        self,
+        layout: Layout,
+        orchestrator_name: str,
+        identity: Identity,
+        delegation_targets: tuple[Any, ...],
+    ) -> list[Artifact]:
         """Artifacts this adapter ships itself, not derived from the content core.
 
         Some files exist only because one CLI works the way it does: plugins
@@ -138,6 +144,22 @@ class CliAdapter(Protocol):
         implementing this method derives every one of its own asset names
         from `identity` rather than from a fixed literal of its own -- see
         any adapter's own `own_artifacts` for the pattern.
+
+        `delegation_targets` is `core.catalog`'s own derived fact -- every
+        agent named in at least one `may_delegate_to`, with the native tools
+        and MCP servers it will actually be granted, resolved after
+        `select_mcp`/`grant_mcp` have already pruned and granted. It is the
+        one deliberate exception to this method's own admission test above:
+        the fact itself belongs in the content core (`core.catalog` computes
+        it, this port only receives it), but *how it reads* -- a table, a
+        list, whatever shape a given CLI's prompts expect -- is exactly the
+        kind of presentation choice this method exists to hold. Required, the
+        same way `identity` is: a default here would let a future refactor
+        drop the argument at the call and still render a plausible-looking
+        file with zero rows instead of failing loudly, which is exactly the
+        silent-capability-gap failure mode this whole feature exists to
+        close. A caller exercising `own_artifacts` in isolation, or an
+        adapter untouched by this feature, passes an empty tuple explicitly.
         """
 
     # --- Models: only when the manifest declares per_agent_model ---

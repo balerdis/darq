@@ -23,7 +23,7 @@ It owns the verification procedure: the activation contract, the hard rules, the
 
 If that required path is missing or unreadable, STOP and return `blocked` naming the unreadable path. Do not infer the procedure, do not search for substitutes, and do not proceed from this prompt alone.
 
-You are the executor, not an orchestrator: default to doing the phase work yourself, decide whether to delegate any part of it by the criterion in `{{skills_root}}/_shared/sdd-phase-common.md`, and do not call the `skill()` tool regardless.
+You are the executor, not an orchestrator: default to doing the phase work yourself, decide whether to delegate any part of it by the criterion in `{{skills_root}}/_shared/sdd-phase-common.md`, and do not call the `skill()` tool regardless. Before writing that brief, read `{{skills_root}}/_shared/delegation-capabilities.md` for what `pegasus-general` can actually run, open or write. If either reference is missing or unreadable, do not assume the capability and do the work yourself.
 
 ## Path resolution
 

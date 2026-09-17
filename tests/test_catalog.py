@@ -84,9 +84,10 @@ class StubAdapter:
         self.agent_calls.append((agent.name, model))
         return []
 
-    def own_artifacts(self, layout, orchestrator_name, identity):
+    def own_artifacts(self, layout, orchestrator_name, identity, delegation_targets):
         self.own_artifacts_orchestrator_name = orchestrator_name
         self.own_artifacts_identity = identity
+        self.own_artifacts_delegation_targets = delegation_targets
         return list(self._own)
 
 
@@ -481,7 +482,14 @@ class ShippedCatalogTest(unittest.TestCase):
         # in the product owned -- whether a request is SDD work at all -- which
         # the orchestrator body now carries the compact IF for and points here
         # for the rest. A lazy-loaded reference is a file, never a config entry.
-        self.assertEqual((len(files), len(keys)), (97, 27))
+        # 98, not 97: `_shared/delegation-capabilities.md` is the generated
+        # reference every delegating agent's body now points at instead of
+        # assuming a target's tools and MCP reach -- a fifth file to join
+        # `exploration-craft.md`, `verification-craft.md`,
+        # `implementation-craft.md` and `sdd-applicability.md` in that same
+        # lazy-loaded home. No settings key of its own, for the same reason
+        # every other reference in that list has none.
+        self.assertEqual((len(files), len(keys)), (98, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:

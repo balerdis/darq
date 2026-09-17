@@ -50,6 +50,19 @@ synthetic, can never be mistaken for a real distribution's identity if it ever
 leaked into output.
 """
 
+PROBE_DELEGATION_TARGETS: tuple = ()
+"""The same idea again, for `own_artifacts`'s `delegation_targets` parameter.
+
+`delegation_targets` carries no default (see `ports.cli_adapter.CliAdapter
+.own_artifacts`) precisely so a caller cannot forget it and get a
+plausible-looking empty table instead of a loud failure -- and this
+registration probe is a caller, so it names its empty tuple explicitly
+too, the same way it never lets `PROBE_ORCHESTRATOR`/`PROBE_IDENTITY` ride
+on a default that does not exist. An empty tuple is the correct probe value
+regardless: `_check_own_artifacts` only checks path territory, a check every
+adapter must pass whether or not any target ends up in the generated table.
+"""
+
 RENDERERS: dict[Capability, tuple[str, ...]] = {
     Capability.SKILLS: ("render_skill",),
     Capability.SYSTEM_PROMPT: ("render_system_prompt",),
@@ -159,7 +172,9 @@ def _check_own_artifacts(adapter: object, cli_id: str, layout: Layout) -> None:
         raise ManifestMismatchError(
             f"adapter {cli_id!r} must implement own_artifacts; return an empty list when it ships nothing"
         )
-    for artifact in adapter.own_artifacts(layout, PROBE_ORCHESTRATOR, PROBE_IDENTITY):
+    for artifact in adapter.own_artifacts(
+        layout, PROBE_ORCHESTRATOR, PROBE_IDENTITY, PROBE_DELEGATION_TARGETS
+    ):
         if not artifact.path.is_relative_to(layout.config_dir):
             raise AdapterScopeError(
                 f"adapter {cli_id!r} would write {artifact.path} outside {layout.config_dir}"

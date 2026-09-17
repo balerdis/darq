@@ -160,11 +160,18 @@ class AgentPointerResolutionTest(unittest.TestCase):
         rather than listed, so a second server needs nobody to remember it, and
         those references are covered instead by the loader invariant that proves
         each one names a path the renderer will actually produce.
+
+        The delegation-capabilities reference is the same kind of exception for
+        the same reason: `core.catalog` generates it from the content tree at
+        catalog-build time (see `render.delegation_capabilities`), so it never
+        exists as a file under this repository's shipped `content/skills/` tree
+        either -- only under a real installation's skills root.
         """
         rendered_not_shipped = {
             str(content_module.mcp_convention_path(server.name))
             for server in content_module.load().mcp
         }
+        rendered_not_shipped.add(str(content_module.delegation_capabilities_path()))
         offenders = []
         # `agents/mcp/` too, and not by accident: the pointer paragraphs moved
         # there, so a glob that only reads the agent files now checks the

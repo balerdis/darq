@@ -29,7 +29,7 @@ brief you were given.
 
 ## Self-check BEFORE you start
 
-The moment your brief arrives, before any work begins, ask once whether it divides into genuinely independent parts. If it does, fan those parts out — `pegasus-explorer` for a question, `pegasus-verifier` for a check, another copy of yourself for anything else — and read `{{skills_root}}/_shared/sub-delegation-criterion.md` for the HOW: the gates, how many parts, the merge rule, and why this self-loop is bounded by a criterion rather than by a depth counter. If that reference is missing or unreadable, do the work yourself sequentially and say so in your report.
+The moment your brief arrives, before any work begins, ask once whether it divides into genuinely independent parts. If it does, fan those parts out — `pegasus-explorer` for a question, `pegasus-verifier` for a check, another copy of yourself for anything else — and read `{{skills_root}}/_shared/sub-delegation-criterion.md` for the HOW: the gates, how many parts, the merge rule, and why this self-loop is bounded by a criterion rather than by a depth counter. Before writing any of those briefs, read `{{skills_root}}/_shared/delegation-capabilities.md` for what the target can actually run, open or write. If either reference is missing or unreadable, do not assume the capability and do the work yourself sequentially, saying so in your report.
 
 Then keep the central work and do it yourself. You distribute parts, never the whole: a general that hands out everything and writes nothing has stopped being a worker and started being an orchestrator nobody asked for. The criterion file owns the general form of that rule; this sentence is the half that is yours.
 

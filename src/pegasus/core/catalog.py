@@ -63,6 +63,43 @@ if _UNSOURCED:
 
 
 @dataclass(frozen=True)
+class DelegationTarget:
+    """One agent's real capabilities, as an install will actually grant them.
+
+    Exists to answer the question a delegating agent's brief keeps getting wrong:
+    can the agent I am about to hand this to actually do what I am about to ask?
+    `requires_tools`/`optional_tools` are native tools, exactly as `Agent` declares
+    them. `mcp` folds `optional_mcp` (a shipped server the user chose) and
+    `granted_mcp` (a server the user administers) into one set, because the
+    question a delegator asks is "can this agent reach it", never "which of two
+    mechanisms granted it" -- and treating them separately risks a delegator
+    reading only `optional_mcp`, missing a `granted_mcp` server, and concluding a
+    target cannot do something it actually can. That false negative is the
+    expensive direction this whole file exists to close, so the two are never
+    split back apart here.
+
+    `withheld_mcp_tools` closes the other, symmetric direction of the same
+    mistake: a server named bare in `mcp` reads as "granted in full", which is
+    only true when nothing in `Mcp.withheld_tools` takes part of it back. Pairs
+    of (key, tools), one pair per server in `mcp` that withholds anything --
+    never every server, and never keyed by a tuple a `dict` could not also
+    represent, so a frozen dataclass instance stays hashable. The key is each
+    server's *resolved* key (`Mcp.bound_to` or its `name`, exactly what `mcp`
+    itself already lists), computed here from the same descriptor fields
+    `content._denied_mcp_tools` resolves a grant against -- never by splitting
+    an already-qualified `Agent.denied_mcp_tools` string back apart, which
+    `<key>_<tool>` cannot support unambiguously the moment a key itself
+    contains an underscore.
+    """
+
+    name: str
+    requires_tools: tuple[str, ...]
+    optional_tools: tuple[str, ...]
+    mcp: tuple[str, ...]
+    withheld_mcp_tools: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+
+@dataclass(frozen=True)
 class Entry:
     id: str
     kind: str
@@ -136,12 +173,26 @@ def render(
     opaque here, and only the adapter's `render_agent` knows what to do with
     it. Only `render_agent` ever receives it: every other capability's
     renderer keeps its original two-argument shape.
+
+    `_delegation_targets(content)` is computed here, the same moment
+    `orchestrator_name` is, and for the same reason: `content` at this point has
+    already been through `select_mcp` and `grant_mcp` (see `cli.py`'s ordering),
+    so `optional_mcp` and `granted_mcp` are what an install will actually grant,
+    not the shipped superset. Deriving it any earlier -- at `content.load()` time
+    -- would advertise a server the user never chose, which is the exact defect
+    this value exists to close, inverted. It is threaded to `own_artifacts`
+    alongside `orchestrator_name` rather than sourced from a new `Capability`:
+    it is one aggregate fact over every agent, not a per-item render, so it does
+    not fit the `SOURCES` loop above, and `own_artifacts` is already the
+    established seam for a value `render` derives from the whole content tree
+    and hands to the adapter to place and format.
     """
     layout = adapter.layout(environment)
     manifest = adapter.capabilities()
     overrides = model_overrides or {}
     artifacts: list[Any] = []
     orchestrator_name = _orchestrator_name(content)
+    delegation_targets = _delegation_targets(content)
 
     for capability in sorted(manifest.enabled - INTERACTIVE, key=lambda item: item.value):
         attribute, renderer = SOURCES[capability]
@@ -155,7 +206,7 @@ def render(
             else:
                 artifacts.extend(getattr(adapter, renderer)(layout, item))
 
-    artifacts.extend(adapter.own_artifacts(layout, orchestrator_name, identity))
+    artifacts.extend(adapter.own_artifacts(layout, orchestrator_name, identity, delegation_targets))
     return artifacts
 
 
@@ -245,6 +296,47 @@ def _orchestrator_name(content: Content) -> str:
     if starts is None:
         raise CatalogError("no agent starts the session; cannot render slash commands")
     return starts.name
+
+
+def _delegation_targets(content: Content) -> tuple[DelegationTarget, ...]:
+    """Every agent named in at least one `may_delegate_to`, with its real capabilities.
+
+    The subject set is the union of every agent's `may_delegate_to`, including a
+    name an agent lists for itself: `pegasus-general` naming itself is still a real
+    delegation another agent's brief may target through `pegasus-general`'s own
+    fan-out, and the row exists so THAT delegator can look it up too. An agent
+    nobody's `may_delegate_to` ever names -- the two primaries this content ships,
+    `king-pegasus` and `pegasus-orchestrator` -- is never the answer to "what can my
+    delegation target do", so it earns no row: listing it would be noise with no
+    question it answers.
+
+    A name with no matching agent in `content.agents` is skipped rather than
+    raised: `may_delegate_to` carries no `_require_reaches_known_agents`-style
+    invariant the way an `Mcp` descriptor's `reaches` list does, so this stays as
+    forgiving of an unknown name as the rest of this module already is.
+    """
+    known = {agent.name: agent for agent in content.agents}
+    names = sorted({target for agent in content.agents for target in agent.may_delegate_to})
+    withheld_by_key = {
+        server.bound_to or server.name: server.withheld_tools
+        for server in content.mcp
+        if server.withheld_tools
+    }
+    return tuple(
+        DelegationTarget(
+            name=name,
+            requires_tools=known[name].requires_tools,
+            optional_tools=known[name].optional_tools,
+            mcp=tuple(sorted({*known[name].optional_mcp, *known[name].granted_mcp})),
+            withheld_mcp_tools=tuple(
+                (key, withheld_by_key[key])
+                for key in sorted({*known[name].optional_mcp, *known[name].granted_mcp})
+                if key in withheld_by_key
+            ),
+        )
+        for name in names
+        if name in known
+    )
 
 
 def _items(content: Content, attribute: str) -> tuple[Any, ...]:
