@@ -1304,6 +1304,47 @@ class ShippedContentTest(unittest.TestCase):
     def setUpClass(cls):
         cls.content = content.load()
 
+    def test_every_delegation_target_is_a_shipped_agent(self):
+        """A `may_delegate_to` entry naming no shipped agent is a typo that
+        costs the delegation it was written to allow, silently.
+
+        The field is not documentation: `render._permission` turns it into the
+        `task` permission directly, as `{"*": "deny"}` plus one `allow` per
+        name. So a misspelling does two things at once and announces neither.
+        It writes an `allow` for an agent that does not exist, which nothing
+        will ever look up, and it leaves the agent the author meant on the
+        deny baseline -- the delegation simply stops working, with no file in
+        the tree the absence shows up in.
+
+        Nothing else catches this today. The renderer's own delegation tests
+        (`tests/test_opencode_adapter.py`) walk `may_delegate_to` and assert
+        the permission map reflects it, which is fidelity to the declaration
+        rather than a check that the declaration is real: the misspelled name
+        does get its `allow`, so those assertions pass. Their second half,
+        which forbids an `allow` for anyone undeclared, subtracts
+        `may_delegate_to` from the set of real agents, so the misspelling is
+        never among the names it examines. And `catalog._delegation_targets`
+        skips a name it cannot resolve, so the generated capability reference
+        loses the row without complaining either.
+
+        `Mcp.reaches` -- the other field whose hand-typed names become
+        permissions -- is held to exactly this standard at load time by
+        `_require_reaches_known_agents`. This check is deliberately a test
+        rather than a second load-time refusal: the authoring surface for
+        `may_delegate_to` is this repository, where the suite runs, and a
+        refusal in the loader would also stop a distribution that ships a
+        different set of agents from loading at all.
+        """
+        names = {agent.name for agent in self.content.agents}
+        for agent in self.content.agents:
+            for target in agent.may_delegate_to:
+                with self.subTest(agent=agent.name, target=target):
+                    self.assertIn(
+                        target,
+                        names,
+                        f"{agent.name} delegates to {target!r}, which is no shipped agent",
+                    )
+
     def test_every_agent_mcp_section_opens_with_its_own_heading(self):
         """A section is appended after the body, so it has to announce itself.
 
