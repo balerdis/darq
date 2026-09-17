@@ -3,7 +3,7 @@ name: context7
 description: Up-to-date documentation for third-party libraries, frameworks, and CLIs
 distribution: remote
 endpoint: https://mcp.context7.com/mcp
-reaches: [king-pegasus, pegasus-general, pegasus-orchestrator, sdd-apply, sdd-design, sdd-explore, sdd-onboard, sdd-verify]
+reaches: [king-pegasus, pegasus-explorer, pegasus-general, pegasus-implementer, pegasus-orchestrator, pegasus-verifier, sdd-apply, sdd-design, sdd-explore, sdd-onboard, sdd-verify]
 ---
 
 # Context7 Convention (reference documentation)

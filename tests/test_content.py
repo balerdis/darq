@@ -1400,7 +1400,7 @@ class ShippedContentTest(unittest.TestCase):
         README promise, but no agent declared it, so choosing it installed a
         server nothing could ever use.
 
-        The set now holds three different reasons, and saying so is the point.
+        The set now holds four different reasons, and saying so is the point.
         Four agents declare it because they drive a browser: `sdd-apply`,
         `sdd-explore`, `sdd-verify`, `pegasus-general`. `king-pegasus` declares
         it because the reconversion made that voice declare every server this
@@ -1410,9 +1410,15 @@ class ShippedContentTest(unittest.TestCase):
         declares it for neither reason: it does not drive a browser as a
         trade, but its own Direct Work Threshold lets it resolve a small
         change on its own, and when that change touches a page it needs to be
-        able to see the page it touched. Spelled out here on purpose: an agent
-        gaining browser reach should have to come and change this line, rather
-        than the assertion quietly widening to fit.
+        able to see the page it touched. `pegasus-explorer`, `pegasus-verifier`
+        and `pegasus-implementer` declare it for the fourth reason: each is the
+        phase-less twin of an SDD phase agent already in this set (`sdd-explore`,
+        `sdd-verify`, `sdd-apply` respectively), extracted to carry the same
+        craft without the SDD chain, and craft parity means tool parity --
+        there is no principled reason for the twin to see less of a rendered
+        page than the phase agent it was extracted from. Spelled out here on
+        purpose: an agent gaining browser reach should have to come and change
+        this line, rather than the assertion quietly widening to fit.
         """
         playwright = next(s for s in self.content.mcp if s.name == "playwright")
         self.assertEqual(
@@ -1424,6 +1430,9 @@ class ShippedContentTest(unittest.TestCase):
                 "pegasus-general",
                 "king-pegasus",
                 "pegasus-orchestrator",
+                "pegasus-explorer",
+                "pegasus-verifier",
+                "pegasus-implementer",
             },
         )
 
@@ -1708,7 +1717,12 @@ class ShippedContentTest(unittest.TestCase):
         not carry the graph's convention, and the pairing invariant would make
         it carry one. The two primaries earn it for different reasons -- the
         orchestrator to route, the voice to answer -- and the five phase agents
-        (four SDD phases plus the generic worker) because discovery is their work.
+        (four SDD phases plus the generic worker) because discovery is their
+        work. `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer`
+        join for the same reason as their SDD twins: `sdd-explore`, `sdd-verify`
+        and `sdd-apply` respectively already discover structure as part of
+        their trade, and the phase-less specialist practises the identical
+        craft with the SDD chain removed, not a narrower one.
         """
         self.assertEqual(
             {agent.name for agent in self.content.agents if "cbm" in agent.optional_mcp},
@@ -1720,6 +1734,9 @@ class ShippedContentTest(unittest.TestCase):
                 "sdd-design",
                 "sdd-explore",
                 "sdd-verify",
+                "pegasus-explorer",
+                "pegasus-verifier",
+                "pegasus-implementer",
             },
         )
 
@@ -1767,6 +1784,11 @@ class ShippedContentTest(unittest.TestCase):
         section rather than an override. Its `cbm` entry is the opposite case
         and shows the contrast: that one IS an override, because the graph
         framing is genuinely its own.
+
+        `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer` carry
+        it too, for the same reason they carry `cbm` and `playwright`: each is
+        the phase-less twin of an SDD phase agent already in this set, and
+        craft parity means tool parity.
         """
         context7_agents = {
             "sdd-apply",
@@ -1777,6 +1799,9 @@ class ShippedContentTest(unittest.TestCase):
             "pegasus-general",
             "king-pegasus",
             "pegasus-orchestrator",
+            "pegasus-explorer",
+            "pegasus-verifier",
+            "pegasus-implementer",
         }
         for agent in self.content.agents:
             with self.subTest(agent=agent.name):
@@ -1785,9 +1810,16 @@ class ShippedContentTest(unittest.TestCase):
 
     def test_the_jira_agents_carry_the_shared_section_and_no_one_else_does(self):
         """Exactly the `context7` set, and the criterion is what a phase's
-        scope is *made of*. These eight either answer a person directly or
+        scope is *made of*. These eleven either answer a person directly or
         implement against a scope that was argued somewhere outside the
         repository, so the ticket can be the thing that settles a question.
+
+        The three phase-less specialists qualify by the same criterion read
+        the other way round: having no phase, they have no earlier artifact
+        of their own cycle to work from, so whatever scope they were handed
+        was argued somewhere this repository does not hold. That is the very
+        condition the four exclusions below fail.
+
         Four of the five left out -- `sdd-propose`, `sdd-spec`, `sdd-tasks`,
         `sdd-archive` -- work from artifacts an earlier phase of the same
         cycle produced, so the scope already reached them in writing and a
@@ -1808,6 +1840,9 @@ class ShippedContentTest(unittest.TestCase):
             "sdd-verify",
             "sdd-onboard",
             "pegasus-general",
+            "pegasus-explorer",
+            "pegasus-implementer",
+            "pegasus-verifier",
             "king-pegasus",
             "pegasus-orchestrator",
         }
@@ -1816,12 +1851,26 @@ class ShippedContentTest(unittest.TestCase):
                 carries = "jira" in [s.name for s in agent.mcp_sections]
                 self.assertEqual(carries, agent.name in jira_agents)
 
-    def test_the_cbm_section_is_shared_for_four_agents_and_overridden_for_three(self):
-        """`sdd-apply`, `sdd-design`, `sdd-explore` and `pegasus-general` carry the
+    def test_the_cbm_section_is_shared_for_seven_agents_and_overridden_for_three(self):
+        """`sdd-apply`, `sdd-design`, `sdd-explore`, `pegasus-general`,
+        `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer` carry the
         plain pointer; `king-pegasus`, `pegasus-orchestrator` and `sdd-verify` each
         carry deliberate, agent-specific framing that a shared file would flatten.
+
+        The three phase-less specialists land in the shared group rather than the
+        overridden one: they have nothing agent-specific to say about the graph
+        beyond what their SDD twin's shared framing already says, so an override
+        file for any of them would be a copy, not a genuine second voice.
         """
-        shared_agents = {"sdd-apply", "sdd-design", "sdd-explore", "pegasus-general"}
+        shared_agents = {
+            "sdd-apply",
+            "sdd-design",
+            "sdd-explore",
+            "pegasus-general",
+            "pegasus-explorer",
+            "pegasus-verifier",
+            "pegasus-implementer",
+        }
         overridden_agents = {"king-pegasus", "pegasus-orchestrator", "sdd-verify"}
         by_name = {agent.name: agent for agent in self.content.agents}
 
