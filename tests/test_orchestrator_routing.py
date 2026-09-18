@@ -52,8 +52,56 @@ PERMISSION_FRAMINGS = (
 #: place means the compact IF swallowed the HOW it was supposed to point at.
 APPLICABILITY_NEEDLE = "Name the moment out loud, propose the switch, and resolve preflight then"
 
-#: 97 lines before this change. "Trade text for text" as a measurable fact.
-ORCHESTRATOR_LINE_CEILING = 104
+#: Word count, not line count. A line ceiling was proven defeatable in this
+#: repository: hand-wrapping a bullet across three physical lines and then
+#: collapsing it back to one, while ALSO adding new prose, took this very file
+#: from 103 lines to 101 -- the guard's own name calls itself "traded text for
+#: text" and it passed while text was added and none removed, because
+#: rewrapping moves lines without moving words. Word count cannot be bought by
+#: reflow: joining or splitting physical lines never changes how many
+#: whitespace-separated tokens the file holds (see
+#: `WordCeilingIsReformatProofTest` below, which proves this on a rewrapped
+#: copy rather than asserting it).
+#:
+#: 1327 words today. The ceiling carries the same proportional headroom the
+#: retired line ceiling did (104 / 97 ~= 1.072x), rounded down: 1327 * 1.07 ~=
+#: 1420. That is room for a short new sentence, not a second section -- a
+#: change that needs more than that earns a deliberate ceiling bump, not a
+#: reflow.
+ORCHESTRATOR_WORD_CEILING = 1420
+
+
+def rewrap_preserving_words(text: str) -> str:
+    """Reflow `text` without adding or removing a single word.
+
+    Joins any run of continuation lines (plain prose that wraps across
+    physical lines) into one line per paragraph or bullet, so a hand-wrapped
+    sentence becomes a single long line -- the exact transform that shrank
+    this file's line count in the incident above. Headings, front-matter
+    delimiters, and table rows are left alone, since folding them together
+    would garble structure rather than merely rewrap prose; every word inside
+    them is still preserved untouched. Blank lines are kept as paragraph
+    breaks. This is a reflow, not a summary: no word is added, dropped, or
+    reordered.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    buffer: list[str] = []
+
+    def flush() -> None:
+        if buffer:
+            out.append(" ".join(" ".join(buffer).split()))
+            buffer.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("#") or stripped.startswith("|") or stripped == "---":
+            flush()
+            out.append(line)
+        else:
+            buffer.append(stripped)
+    flush()
+    return "\n".join(out)
 
 
 def content_documents() -> dict[Path, str]:
@@ -207,8 +255,38 @@ class PersonaScopeNamesTheTerseExtremeTest(unittest.TestCase):
 
 class OrchestratorStaysSmallTest(unittest.TestCase):
     def test_the_body_traded_text_for_text(self):
-        lines = len(ORCHESTRATOR.read_text(encoding="utf-8").splitlines())
-        self.assertLessEqual(lines, ORCHESTRATOR_LINE_CEILING, "the orchestrator body grew")
+        words = len(ORCHESTRATOR.read_text(encoding="utf-8").split())
+        self.assertLessEqual(words, ORCHESTRATOR_WORD_CEILING, "the orchestrator body grew")
+
+
+class WordCeilingIsReformatProofTest(unittest.TestCase):
+    """The decisive guard: the measure must not move when only line breaks do.
+
+    Rewraps the real orchestrator body in memory -- the repository file is
+    read and never written -- and asserts the word count this suite relies on is
+    unchanged while the line count is, proving the incident in the comment
+    above cannot recur under the new measure the way it did under the old one.
+    """
+
+    def test_rewrapping_moves_lines_but_not_words(self):
+        original = ORCHESTRATOR.read_text(encoding="utf-8")
+        rewrapped = rewrap_preserving_words(original)
+
+        original_words = len(original.split())
+        rewrapped_words = len(rewrapped.split())
+        original_lines = len(original.splitlines())
+        rewrapped_lines = len(rewrapped.splitlines())
+
+        self.assertEqual(
+            original_words,
+            rewrapped_words,
+            "the rewrap changed the word count -- it is not a pure reflow",
+        )
+        self.assertNotEqual(
+            original_lines,
+            rewrapped_lines,
+            "the rewrap did not actually change the line layout -- the test proves nothing",
+        )
 
 
 if __name__ == "__main__":

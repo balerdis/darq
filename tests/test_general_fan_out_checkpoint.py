@@ -39,9 +39,19 @@ CRITERION_REFERENCE = "_shared/sub-delegation-criterion.md"
 #: finding it in a second place means this body restated instead of pointing.
 OFFLOADING_SECTION = "Fan-out is help, never offloading"
 
-#: 42 lines before this change. Two short sections traded against one long
-#: sentence must not turn into a second body.
-GENERAL_LINE_CEILING = 46
+#: Word count, not line count. A line ceiling is defeated by reflow alone --
+#: `tests/test_orchestrator_routing.py` proves this in this same repository on
+#: `pegasus-orchestrator.md`, where hand-wrapping (or collapsing) a bullet
+#: moves the line count without moving a single word. Word count cannot be
+#: bought that way: joining or splitting physical lines never changes how many
+#: whitespace-separated tokens the file holds.
+#:
+#: 508 words today. The retired line ceiling carried roughly 9.5% headroom
+#: over its measured baseline (4 / 42); applied to the word count that same
+#: proportion gives 508 * 1.095 ~= 556, rounded to 556. That is room for a
+#: short new sentence, not a second body -- a change that needs more earns a
+#: deliberate ceiling bump, not a reflow.
+GENERAL_WORD_CEILING = 556
 
 
 def sections(text: str) -> dict[str, str]:
@@ -144,8 +154,8 @@ class WidenedTargetsTest(unittest.TestCase):
 
 class BodyStaysShortTest(unittest.TestCase):
     def test_the_body_did_not_become_a_second_document(self):
-        lines = len(GENERAL.read_text(encoding="utf-8").splitlines())
-        self.assertLessEqual(lines, GENERAL_LINE_CEILING, "pegasus-general.md grew past its budget")
+        words = len(GENERAL.read_text(encoding="utf-8").split())
+        self.assertLessEqual(words, GENERAL_WORD_CEILING, "pegasus-general.md grew past its budget")
 
 
 if __name__ == "__main__":

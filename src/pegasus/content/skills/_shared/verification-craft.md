@@ -21,6 +21,15 @@ and what happens with its verdict; it does not restate how to verify.
 - Compare specs first, design second, task completion third.
 - Do not fix issues; report them for the orchestrator/user.
 
+## Distinct Execution, Not Distinct Labels
+
+Executed evidence is only as strong as the distinctness of what executed. When a report claims N
+named groups, cases, or scenarios ran, the names are a claim, not the evidence — a genuine split
+changes what was selected, a renamed one only changes what was printed. Before crediting a claimed
+split, resolve every claimed group to the actual command or selector it ran, never to the label
+attached to it; when two or more resolve to the identical selection, credit only the first execution
+and treat the rest as not executed, regardless of what their labels say.
+
 ## Execution Steps
 
 1. Count completed and incomplete tasks. Any unchecked task blocks full verification; focused checks

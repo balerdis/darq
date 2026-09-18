@@ -77,12 +77,21 @@ PHASE_MARKERS = (
 #: `test_readiness_authority_scope.py` refuses outside its owner.
 AUTHORITY_CLAIM = re.compile(r"\bsole\b.{0,60}\bauthority\b", re.IGNORECASE | re.DOTALL)
 
-#: A body that carries identity and a compact IF fits in this; a body that
-#: inlined the craft it was told to point at does not. Measured against the
-#: prose as written (31-32 lines), with room to breathe. Front matter is not
-#: counted: it is a fixed declaration block, not the lazy-load contract this
-#: budget exists to hold.
-BODY_LINE_CEILING = 38
+#: Word count, not line count. A line ceiling is defeated by reflow alone --
+#: `tests/test_orchestrator_routing.py` proves this in this same repository:
+#: hand-wrapping (or collapsing) a paragraph moves the line count without
+#: moving a single word. Word count cannot be bought that way: joining or
+#: splitting physical lines never changes how many whitespace-separated
+#: tokens the prose holds. Front matter is not counted: it is a fixed
+#: declaration block, not the lazy-load contract this budget exists to hold.
+#:
+#: The heaviest specialist today (`pegasus-verifier`) is 428 words. The
+#: retired line ceiling carried roughly 20.6% headroom over its measured
+#: baseline (6.5 / 31.5); applied to word count that same proportion gives
+#: 428 * 1.206 ~= 516, rounded to 516. That is room for a body that carries
+#: identity and a compact IF, not one that inlined the craft it was told to
+#: point at.
+BODY_WORD_CEILING = 516
 
 
 def whole(name: str) -> str:
@@ -458,8 +467,8 @@ class CraftIsPointedAtNotRestatedTest(unittest.TestCase):
         craft it points at cannot fit in this."""
         for name in SPECIALISTS:
             with self.subTest(agent=name):
-                lines = len(body(name).splitlines())
-                self.assertLessEqual(lines, BODY_LINE_CEILING, f"{name}.md grew past its budget")
+                words = len(body(name).split())
+                self.assertLessEqual(words, BODY_WORD_CEILING, f"{name}.md grew past its budget")
 
     def test_the_craft_pointer_fails_open(self):
         """A craft reference is a lazy-loaded reference, not a required gate:
