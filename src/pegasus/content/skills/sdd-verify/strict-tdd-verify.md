@@ -16,9 +16,24 @@ Read apply-progress artifact:
 ├── Find the "TDD Cycle Evidence" table
 ├── FOR EACH task row:
 │   ├── RED column:
-│   │   ├── Must say "✅ Written"
-│   │   ├── Verify: test file EXISTS in the codebase
-│   │   └── Flag: CRITICAL if test file does not exist
+│   │   ├── Must record the command that was run and the failure it produced
+│   │   │   — NOT a fixed string. "✅ Written" alone is not sufficient evidence
+│   │   │   and must be rejected: it shows a test file exists, never that it ran.
+│   │   ├── Verify: test file EXISTS in the codebase (necessary, but not
+│   │   │   sufficient on its own — existence alone cannot show the test ran
+│   │   │   before the code, only that it exists now)
+│   │   ├── Verify: the recorded failure is internally consistent — the named
+│   │   │   assertion or error should actually match what the test file checks,
+│   │   │   and a shared "module/method does not exist" failure reused across
+│   │   │   several scenarios does not individually cover each of them
+│   │   ├── Know the limit: this check can confirm an observation was recorded
+│   │   │   and is internally consistent; it CANNOT reconstruct after the fact
+│   │   │   whether the test really ran before the code was written — that
+│   │   │   chronology is only ever known at RED time, which is exactly why
+│   │   │   the observation must be captured then, not demanded here
+│   │   └── Flag: CRITICAL if test file does not exist, OR if the RED cell is
+│   │       "✅ Written" (or equivalent) with no command and no observed
+│   │       failure, OR if the recorded failure is inconsistent with the test
 │   │
 │   ├── GREEN column:
 │   │   ├── Must say "✅ Passed"

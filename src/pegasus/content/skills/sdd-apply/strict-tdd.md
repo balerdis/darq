@@ -33,14 +33,28 @@ FOR EACH TASK:
 │   ├── Read existing code and test patterns (match the style)
 │   └── Determine test layer (see "Choosing Test Layer" below)
 │
-├── 2. RED — Write a failing test FIRST
+├── 2. RED — Write a failing test FIRST, then RUN it and OBSERVE the failure
 │   ├── Write test(s) that describe the expected behavior from the spec
 │   ├── Prefer pure functions where possible (no side effects = easy to test)
-│   ├── The test MUST reference production code that does NOT exist yet
-│   │   (this guarantees failure — no need to execute to confirm)
+│   ├── The test SHOULD reference production code that does NOT exist yet
+│   │   (this makes failure likely, which is not the same as observed)
+│   ├── RUN the test now, before writing any production code for this task
+│   │   ├── Record the exact command and the failure it produced, verbatim
+│   │   └── The failure MUST be about the behavior this test describes
+│   ├── A blanket "module/method does not exist" failure IS a legitimate RED
+│   │   for the task that FIRST introduces that method or module, but it does
+│   │   NOT individually prove the other scenarios behind it — one shared
+│   │   error can mask several untested cases at once, so each of those still
+│   │   needs its own observed failure once the symbol it depends on exists
+│   ├── A failure caused by a setup or environment problem (a misconfigured
+│   │   mock, an unrelated import error) is not RED at all, it is a broken
+│   │   fixture — fix it and re-run until the test fails for the reason it
+│   │   is actually about
 │   ├── If the production code/function already exists:
-│   │   └── Write a test for the NEW behavior that is NOT yet implemented
-│   └── GATE: Do NOT proceed to GREEN until the test is written
+│   │   └── Write a test for the NEW behavior that is NOT yet implemented,
+│   │       then run it and confirm IT fails on its own assertion
+│   └── GATE: Do NOT proceed to GREEN until the failure has been RUN and
+│       OBSERVED — a test that was only written, never executed, is not RED
 │
 ├── 3. GREEN — Write the MINIMUM code to pass
 │   ├── Implement ONLY what the failing test needs
@@ -183,9 +197,9 @@ When Strict TDD Mode is active, your return summary MUST include this section:
 ### TDD Cycle Evidence
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
-| 1.1 | `path/test.ext` | Unit | ✅ 5/5 | ✅ Written | ✅ Passed | ✅ 3 cases | ✅ Clean |
-| 1.2 | `path/test.ext` | Integration | N/A (new) | ✅ Written | ✅ Passed | ➖ Single | ✅ Clean |
-| 1.3 | `path/test.ext` | Unit | ✅ 2/2 | ✅ Written | ✅ Passed | ✅ 2 cases | ➖ None needed |
+| 1.1 | `path/test.ext` | Unit | ✅ 5/5 | `pytest test.py::test_bulk_discount` → `AttributeError: module 'tax' has no attribute 'calculate_discount'` | ✅ Passed | ✅ 3 cases | ✅ Clean |
+| 1.2 | `path/test.ext` | Integration | N/A (new) | `vitest run cart.test.ts -t "shows empty state"` → `ReferenceError: EmptyCart is not defined` | ✅ Passed | ➖ Single | ✅ Clean |
+| 1.3 | `path/test.ext` | Unit | ✅ 2/2 | `pytest test.py::test_discount_over_threshold` → `AssertionError: assert 0 == 15` (existing function, new branch) | ✅ Passed | ✅ 2 cases | ➖ None needed |
 
 ### Test Summary
 - **Total tests written**: {N}
@@ -197,7 +211,7 @@ When Strict TDD Mode is active, your return summary MUST include this section:
 
 **Column definitions**:
 - **Safety Net**: Pre-existing tests run before modifying files. "N/A (new)" for new files.
-- **RED**: Test written first, referencing code that doesn't exist yet. Always "✅ Written".
+- **RED**: The command you ran and the failure it produced, before any production code for this task existed. Format: `{command} → {failure}` — quote the actual error or failed assertion, e.g. `pytest test.py::test_x` → `AttributeError: ...`. A generic `1 failed` is weak evidence; the specific message is what a fabricated cell cannot cheaply invent. Never "✅ Written" alone — that records that a file exists, not that it ran, and not that it ran first.
 - **GREEN**: Tests executed and passing after minimal implementation. Must show execution result.
 - **TRIANGULATE**: Additional test cases added to force real logic. "➖ Single" if spec has only one scenario.
 - **REFACTOR**: Code improved with tests still passing. "➖ None needed" if code was already clean.
@@ -351,7 +365,7 @@ expect(screen.getByRole("button")).toBeDisabled();
 
 ## Rules (Strict TDD specific)
 
-- NEVER write production code before writing its test — this is the ONE rule that cannot be broken
+- NEVER write production code before writing its test AND running it to watch it fail — this is the ONE rule that cannot be broken, and a test that was only written has not been run
 - NEVER skip the GREEN execution gate — you MUST run tests and confirm they pass
 - NEVER skip triangulation when the spec defines multiple scenarios — hardcoded Fake It must be forced out
 - NEVER write trivial assertions (see Banned Assertion Patterns above) — they are WORSE than no test
