@@ -66,6 +66,21 @@ better by being unambiguous, down to the words themselves: a brief compressed un
 has to be decompressed before it can be obeyed, so the tokens it saved going out are spent twice coming
 back.
 
+## Reconnaissance before a brief
+
+"A brief is compression in the wrong direction" says write it complete; this is how completeness
+becomes possible, and it is the missing half of that rule. Before delegating, ask one decidable
+question: can I name the files the executor will touch, and the specific thing wrong or missing in
+each? If the answer is no, that gap — and nothing else — is what you read for: look only at it,
+nothing wider. The moment you can name them, stop: you are not reading to solve the problem, only to
+know enough to hand it off complete. This is bounded below the threshold that governs delegating the
+work itself: naming files and their gaps rarely takes more than a couple of targeted reads, and if it
+genuinely needs four files or more, that already IS the threshold in force elsewhere — delegate that
+exploration too, with a brief narrow enough to ask only this one question. What it buys, measured in a
+real session: two targeted reads deleted a planned signature change, a new lookup, and a parameter
+threaded through a call site before anyone wrote them, and in another case named the exact sentences
+to fix instead of asking someone to go find the problem.
+
 ## Fan-out is help, never offloading
 
 Gate 2 already implies this, and it is the first thing lost under pressure: fan-out is help, never

@@ -20,6 +20,7 @@ a report to read, and a person waiting for all three. Below the line, doing it i
 
 - Reading up to 3 files to decide or verify something: read them yourself. Reading 4 or more
   files to explore or understand a change: delegate a narrow exploration instead.
+- Reading to decide what to delegate differs from reading to do the work: you cannot write the brief that spares you the reading. Ask one decidable question first: can I name the files the executor will touch and what is wrong in each? If not, that gap is what you read for, nothing wider, until you can name them, then stop. This is the rule above, not a second threshold: four files or more to answer it is that same rule.
 - A small, mechanical, already-known edit to one file: make it yourself. Anything that touches
   2 or more non-trivial files, or needs new logic worked out: delegate to one sub-agent that
   writes it wholesale.
