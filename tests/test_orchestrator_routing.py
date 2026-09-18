@@ -171,6 +171,40 @@ class PreflightStaysStrictTest(unittest.TestCase):
         self.assertIn("a natural-language request never loads a command file", self.text)
 
 
+class PersonaScopeNamesTheTerseExtremeTest(unittest.TestCase):
+    """The Persona Scope bullet on briefs (line 96) already named every WARM
+    failure -- persona, slang, CAPS, rhetorical questions. An observed real
+    session failed the opposite way: a brief compressed until its grammar
+    broke (`useramendment11068keepallsessions`). A model checking its own
+    brief against the old list would have passed a brief in that shape. This
+    pins the instruction that closes the gap (the actual prohibition, an
+    imperative clause inside the sentence) separately from the diagnosis that
+    merely explains why it matters, following the same lesson already learned
+    for `sub-delegation-criterion.md`'s parallel-issuance section: a
+    description is not an instruction."""
+
+    def setUp(self):
+        self.text = ORCHESTRATOR.read_text(encoding="utf-8")
+        self.collapsed = " ".join(self.text.split())
+
+    def test_pins_the_prohibition_not_only_its_diagnosis(self):
+        """The actual instruction: no fusing words together to save tokens.
+        Proven by deletion: removing only this clause and leaving the
+        surrounding diagnosis intact must turn this assertion red while the
+        diagnosis test below stays green."""
+        self.assertIn("no words fused together to save tokens either", self.collapsed)
+
+    def test_names_the_diagnosis_for_the_terse_extreme(self):
+        self.assertIn(
+            "a brief compressed until its grammar breaks is a brief its executor has to decompress "
+            "first",
+            self.collapsed,
+        )
+
+    def test_names_both_extremes_as_the_same_failure(self):
+        self.assertIn("the terse extreme breaks the same contract as the warm one", self.collapsed)
+
+
 class OrchestratorStaysSmallTest(unittest.TestCase):
     def test_the_body_traded_text_for_text(self):
         lines = len(ORCHESTRATOR.read_text(encoding="utf-8").splitlines())

@@ -101,6 +101,44 @@ class ReferencesUpdatedTest(unittest.TestCase):
         self.assertNotIn("the only agent you may fan out to", text)
 
 
+class BriefCompressionIsAsymmetricTest(unittest.TestCase):
+    """The file mentions compression eight times and every instance describes
+    the CHILD'S report coming back — never the brief going out. A reader who
+    only reads that far could compress a brief the same way they compress a
+    report, and an observed real-world session did exactly that: a brief
+    arrived with its grammar destroyed to save tokens. This pins both halves:
+    the diagnosis (compression runs one way) and, separately, the one
+    sentence that actually tells an agent what to do about it — because a
+    description is not an instruction, and this file's own docstring records
+    a case where deleting the instruction left every other assertion green."""
+
+    def setUp(self):
+        self.text = CRITERION.read_text(encoding="utf-8")
+        self.collapsed = " ".join(self.text.split())
+
+    def test_names_the_diagnosis_compression_runs_one_way(self):
+        self.assertIn(
+            "The brief you send out runs the other way, and the instinct that serves the report is "
+            "a bug when applied to it",
+            self.collapsed,
+        )
+        self.assertIn(
+            "What you leave out, the executor invents, and an invented requirement becomes a gate "
+            "someone else has to spend rounds negotiating down",
+            self.collapsed,
+        )
+
+    def test_pins_the_imperative_not_only_its_diagnosis(self):
+        """The single sentence that gives an agent something to DO, distinct
+        from the sentences that merely explain why. Proven by deletion: removing
+        only this sentence and leaving the surrounding diagnosis intact must
+        turn this assertion red while the diagnosis test above stays green."""
+        self.assertIn(
+            "Write every brief complete: never trim it to save tokens or shorten the round trip.",
+            self.collapsed,
+        )
+
+
 class ParallelIssuanceMechanicTest(unittest.TestCase):
     """Concluding two parts are independent (the gates) is not the same as
     running them concurrently (how the calls are issued). The file must state

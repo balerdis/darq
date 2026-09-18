@@ -54,6 +54,18 @@ Three gates, checked in order; fail any one and do not delegate. Then two tests 
   counter: every level must compress, a child that fans out makes its parent's merge a merge of
   merges, and a level that does not compress is the wrong level to delegate at.
 
+## A brief is compression in the wrong direction
+
+Every gate and test above binds the child's report back to you — many files read, one conclusion
+returned, and that direction rewards compression without exception. The brief you send out runs the
+other way, and the instinct that serves the report is a bug when applied to it. **Write every brief
+complete: never trim it to save tokens or shorten the round trip.** What you leave out, the executor
+invents, and an invented requirement becomes a gate someone else has to spend rounds negotiating down
+— the exact cost compression exists to avoid. A brief is not made better by being shorter; it is made
+better by being unambiguous, down to the words themselves: a brief compressed until its grammar breaks
+has to be decompressed before it can be obeyed, so the tokens it saved going out are spent twice coming
+back.
+
 ## Fan-out is help, never offloading
 
 Gate 2 already implies this, and it is the first thing lost under pressure: fan-out is help, never
