@@ -53,7 +53,8 @@ def build(environment: Environment) -> Layout:
         system_prompt_file=root / "rules" / SYSTEM_PROMPT,
         # Pegasus's own directory, not Claude Code's -- `None` when this frame
         # has no answer for it, the same as every other environment-derived
-        # fact. Unused today (mcp=False), kept for parity with the other
-        # adapter and for the day this capability is revisited.
+        # fact. Where a `download`- or `npm`-distributed server's fetched
+        # tree lands; `render.py`'s `_download_command`/`_npm_command` point
+        # a granted agent's inline `mcpServers:` entry at a path inside it.
         dependencies_dir=(environment.data_dir / "mcp") if environment.data_dir is not None else None,
     )

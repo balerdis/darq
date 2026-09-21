@@ -205,7 +205,37 @@ class Adapter:
     def render_skill(self, layout: Layout, skill: Skill) -> list[Artifact]:
         return render.skill(layout, skill)
 
-    def render_agent(self, layout: Layout, agent: Agent, assignment: ModelAssignment | None = None) -> list[Artifact]:
+    def render_agent(
+        self,
+        layout: Layout,
+        agent: Agent,
+        assignment: ModelAssignment | None = None,
+        *,
+        mcp: tuple[Mcp, ...],
+    ) -> list[Artifact]:
+        """`mcp` -- the resolved `Mcp` descriptors this agent was granted --
+        is accepted, per the port's signature, and ignored.
+
+        OpenCode defines a server exactly once, globally, in the settings
+        file's own `/mcp/<id>` key (`render.mcp` below): every agent that
+        reaches it merely references that one definition by id, through the
+        `f"{id}*"` wildcard `_tools`/`_permission` already write from
+        `item.optional_mcp` alone. A descriptor's `command`, `endpoint`, or
+        `distribution` have nowhere new to go here -- the one place they are
+        spelled for this CLI is `render.mcp`, already called once per server
+        regardless of which or how many agents reach it -- so threading them
+        again into this method would duplicate a definition OpenCode itself
+        only ever wants once. This is the mirror image of Claude Code's own
+        `render_agent`, which has no such global location and therefore
+        cannot ignore this parameter (see `ports.cli_adapter.CliAdapter.
+        render_agent`'s own docstring for the full contrast).
+
+        Ignoring the parameter here is not a smaller version of using it: it
+        is the correct, complete implementation for this CLI's own shape, and
+        it must never change OpenCode's rendered output -- any adapter change
+        here that alters a byte OpenCode writes is a regression, not a
+        refinement.
+        """
         return render.agent(layout, agent, assignment)
 
     def render_prompt(self, layout: Layout, agent: Agent) -> list[Artifact]:

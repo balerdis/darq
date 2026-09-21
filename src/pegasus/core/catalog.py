@@ -171,8 +171,19 @@ def render(
     machine, never about the release, which is exactly why `build` below
     never passes one. This function never looks inside the value: it is
     opaque here, and only the adapter's `render_agent` knows what to do with
-    it. Only `render_agent` ever receives it: every other capability's
-    renderer keeps its original two-argument shape.
+    it.
+
+    `render_agent` also receives, as its fourth argument, every `Mcp`
+    descriptor `_mcp_by_key(content)` resolves for that agent's own
+    `optional_mcp` -- see that helper's own docstring for why the lookup key
+    is `Mcp.bound_to or Mcp.name`, never the bare name alone. `content` at
+    this point has already been through `select_mcp`/`grant_mcp` (see
+    `cli.py`'s ordering), exactly the same precondition `_delegation_targets`
+    below relies on, so `optional_mcp` is what an install will really grant,
+    not the shipped superset -- an agent's rendered grant and the descriptors
+    handed to `render_agent` for it can never disagree about which servers
+    survived selection. Every other capability's renderer keeps its original
+    two-argument shape.
 
     `_delegation_targets(content)` is computed here, the same moment
     `orchestrator_name` is, and for the same reason: `content` at this point has
@@ -193,12 +204,18 @@ def render(
     artifacts: list[Any] = []
     orchestrator_name = _orchestrator_name(content)
     delegation_targets = _delegation_targets(content)
+    mcp_by_key = _mcp_by_key(content)
 
     for capability in sorted(manifest.enabled - INTERACTIVE, key=lambda item: item.value):
         attribute, renderer = SOURCES[capability]
         for item in _items(content, attribute):
             if capability is Capability.SUB_AGENTS:
-                artifacts.extend(getattr(adapter, renderer)(layout, item, overrides.get(item.name)))
+                granted = tuple(
+                    mcp_by_key[key] for key in item.optional_mcp if key in mcp_by_key
+                )
+                artifacts.extend(
+                    getattr(adapter, renderer)(layout, item, overrides.get(item.name), mcp=granted)
+                )
             elif capability is Capability.SLASH_COMMANDS:
                 artifacts.extend(getattr(adapter, renderer)(layout, item, orchestrator_name))
             elif capability is Capability.SYSTEM_PROMPT:
@@ -337,6 +354,27 @@ def _delegation_targets(content: Content) -> tuple[DelegationTarget, ...]:
         for name in names
         if name in known
     )
+
+
+def _mcp_by_key(content: Content) -> dict[str, Any]:
+    """Every server this content ships, keyed by its *resolved* binding key.
+
+    `Mcp.bound_to or Mcp.name` -- not the bare `Mcp.name` alone -- because
+    `select_mcp` rewrites every granted agent's `optional_mcp` to that same
+    resolved key the instant a server is bound to one (see `content.
+    select_mcp` and `content._denied_mcp_tools`, which resolve a grant
+    against this identical key). Looking this map up by `name` alone would
+    silently miss every bound server's real key and grant the wrong agent
+    nothing, which is exactly the mismatch this function exists to rule out.
+
+    Computed once per `render` call, the same moment `orchestrator_name` and
+    `_delegation_targets` are, and for the same reason: `content` at this
+    point has already been through `select_mcp`/`grant_mcp` (see `cli.py`'s
+    ordering, and `_delegation_targets`'s own docstring), so this map holds
+    exactly what an install would actually grant, never the shipped
+    superset.
+    """
+    return {server.bound_to or server.name: server for server in content.mcp}
 
 
 def _items(content: Content, attribute: str) -> tuple[Any, ...]:

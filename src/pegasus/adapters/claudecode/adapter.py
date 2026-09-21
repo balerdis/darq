@@ -13,7 +13,7 @@ from typing import Any
 from pegasus.adapters.claudecode import layout as layout_module
 from pegasus.adapters.claudecode import manifest as manifest_module
 from pegasus.adapters.claudecode import render
-from pegasus.core.content import Agent, Command, Skill, SystemPrompt
+from pegasus.core.content import Agent, Command, Mcp, Skill, SystemPrompt
 from pegasus.core.identity import Identity
 from pegasus.core.types import (
     Artifact,
@@ -83,9 +83,17 @@ class Adapter:
         return render.skill(layout, skill)
 
     def render_agent(
-        self, layout: Layout, agent: Agent, assignment: ModelAssignment | None = None
+        self,
+        layout: Layout,
+        agent: Agent,
+        assignment: ModelAssignment | None = None,
+        *,
+        mcp: tuple[Mcp, ...],
     ) -> list[Artifact]:
-        return render.agent(layout, agent, assignment)
+        return render.agent(layout, agent, assignment, mcp)
+
+    def render_mcp(self, layout: Layout, mcp: Mcp) -> list[Artifact]:
+        return render.mcp(layout, mcp)
 
     def render_command(self, layout: Layout, command: Command, orchestrator_name: str) -> list[Artifact]:
         return render.command(layout, command, orchestrator_name)

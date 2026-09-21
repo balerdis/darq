@@ -62,13 +62,64 @@ class CliAdapter(Protocol):
 
     def render_skill(self, layout: Layout, skill: Any) -> list[Artifact]: ...
 
-    def render_agent(self, layout: Layout, agent: Any, assignment: ModelAssignment | None = None) -> list[Artifact]:
+    def render_agent(
+        self,
+        layout: Layout,
+        agent: Any,
+        assignment: ModelAssignment | None = None,
+        *,
+        mcp: tuple[Any, ...],
+    ) -> list[Artifact]:
         """`assignment`, when given, is an already-resolved model and effort --
         a preference from Pegasus's own state, its model validated against
         what this machine can reach, never a fact the content core itself
         carries. Naming the model and spelling an effort in this CLI's own
         vocabulary (its ``variant``, say) is this adapter's job, not the
-        engine's."""
+        engine's. `None` is a real state of its own here -- "no model was
+        assigned" -- which is exactly why `assignment` keeps its default.
+
+        `mcp` has none, and is keyword-only so that a required parameter can
+        follow a defaulted one. `()` would mean two things at once -- "this
+        agent was granted nothing" and "the caller forgot to pass it" -- and
+        only the first is a state this port should let a caller reach by
+        omission. A future refactor that stops passing `mcp` at the call in
+        `core.catalog.render` would still find every other piece of an agent
+        in place -- frontmatter, tools, body -- and render a file that looks
+        complete but has silently lost every MCP server it was granted,
+        exactly the silent-capability-gap failure mode `own_artifacts`'s
+        `delegation_targets` already pays to close. Requiring `mcp` turns
+        that drop into a loud `TypeError` at the call site instead. A caller
+        exercising `render_agent` in isolation passes an empty tuple
+        explicitly.
+
+        `mcp` is the resolved `Mcp` descriptors this agent was granted --
+        exactly the servers named in its `optional_mcp`, looked up back
+        against `Content.mcp` by `core.catalog.render` after `select_mcp`/
+        `grant_mcp` have already pruned and granted (see that function's own
+        docstring). It is a tuple of descriptors, never bare server ids: an
+        id alone is not enough to spell a server's definition, and spelling
+        the definition is exactly the reason this parameter exists.
+
+        Why a *server's own definition* is part of one agent's render for
+        some CLIs and a separate, global fact for others is not an accident
+        of this port's design -- it is a real difference in where each CLI
+        keeps that definition. One CLI's adapter defines a server exactly
+        once, globally, inside its own settings file, and an agent merely
+        references it by id there (that adapter's own `render_agent`
+        accepts `mcp` and ignores it -- see its own docstring for why).
+        Another CLI has no such global location inside its own configuration
+        directory: a sub-agent's own scoping syntax is documented as the
+        only in-tree place a server can be scoped to less than every
+        session, and that syntax lives inside the agent's own file, not a
+        shared one. So the same fact -- "this agent may reach this server"
+        -- is spelled once, at the top of the tree, for one CLI, and once
+        per file, at the leaves, for another. `render_agent` is the one
+        method every adapter already implements per agent, which is why the
+        fact is threaded through here rather than through a new,
+        adapter-specific seam: a port serves every CLI's shape by handing
+        over the same fact to all of them and letting each adapter decide
+        whether its own vocabulary has any use for it.
+        """
 
     def render_command(self, layout: Layout, command: Any, orchestrator_name: str) -> list[Artifact]:
         """`orchestrator_name` is the content-declared name of the agent a
@@ -79,7 +130,24 @@ class CliAdapter(Protocol):
 
     def render_system_prompt(self, layout: Layout, system_prompt: Any, identity: Identity) -> list[Artifact]: ...
 
-    def render_mcp(self, layout: Layout, server: Any, resolved: Any) -> list[Artifact]: ...
+    def render_mcp(self, layout: Layout, server: Any) -> list[Artifact]:
+        """Render one server's own artifacts -- its settings key, its usage
+        convention, or both, depending on what this CLI's vocabulary has a
+        place for.
+
+        This method used to declare a third parameter, `resolved`, that
+        nothing ever passed: `core.catalog.render` has always called this
+        with two arguments, and the one adapter that implemented it before
+        this port grew a second has always taken two. `Protocol` is not
+        checked against its implementers at runtime, so a phantom parameter
+        with no caller and no implementation sat here, undetected, until
+        this docstring's own review read the call sites side by side.
+        Removed rather than wired up: nothing downstream ever needed a
+        second, separately "resolved" form of a server distinct from
+        `server` itself -- `Mcp` already carries everything a render needs,
+        `bound_to` included -- so inventing a caller for a parameter nobody
+        asked for would be solving a problem this codebase does not have.
+        """
 
     # --- What the user still has to do ---
 

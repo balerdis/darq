@@ -70,6 +70,7 @@ class StubAdapter:
         self._own = own
         self._manifest = manifest or CapabilityManifest(cli_id="probe", skills=True)
         self.agent_calls = []
+        self.agent_mcp_calls = []
 
     def capabilities(self):
         return self._manifest
@@ -80,8 +81,9 @@ class StubAdapter:
     def render_skill(self, layout, skill):
         return list(self._artifacts)
 
-    def render_agent(self, layout, agent, model=None):
+    def render_agent(self, layout, agent, model=None, *, mcp):
         self.agent_calls.append((agent.name, model))
+        self.agent_mcp_calls.append((agent.name, mcp))
         return []
 
     def own_artifacts(self, layout, orchestrator_name, identity, delegation_targets):
@@ -215,6 +217,85 @@ class RenderModelOverrideTest(unittest.TestCase):
         adapter = StubAdapter(manifest=manifest)
         build(one_agent("probe-agent"), adapter)
         self.assertIn(("probe-agent", None), adapter.agent_calls)
+
+
+class RenderAgentMcpGrantTest(unittest.TestCase):
+    """`render` must resolve, per agent, exactly the `Mcp` descriptors its
+    (already-selected) `optional_mcp` names -- looked up by the *resolved*
+    binding key (`Mcp.bound_to or Mcp.name`), never by the descriptor's bare
+    `name` alone, since `select_mcp` rewrites `optional_mcp` to the bound key
+    the moment a server is bound to one."""
+
+    def setUp(self):
+        self.server = content_module.Mcp(
+            name="cbm",
+            description="d",
+            body="body",
+            distribution=content_module.Distribution.REMOTE,
+            endpoint="https://example.test/mcp",
+            source=PurePosixPath("mcp/cbm.md"),
+            reaches=("probe-agent",),
+        )
+        base = _content(
+            mcp=(self.server,),
+            agents=(
+                content_module.Agent(
+                    name="probe-agent",
+                    description="d",
+                    body="body",
+                    mode=content_module.AgentMode.SUBAGENT,
+                    source=PurePosixPath("agents/probe-agent.md"),
+                    optional_mcp=("cbm",),
+                ),
+                content_module.Agent(
+                    name="untouched-agent",
+                    description="d",
+                    body="body",
+                    mode=content_module.AgentMode.SUBAGENT,
+                    source=PurePosixPath("agents/untouched-agent.md"),
+                ),
+            ),
+        )
+        self.content = content_module.select_mcp(base, ["cbm"])
+        self.manifest = CapabilityManifest(cli_id="probe", sub_agents=True)
+
+    def test_the_granted_agent_receives_the_resolved_server(self):
+        adapter = StubAdapter(manifest=self.manifest)
+        catalog_module.render(self.content, adapter, ENVIRONMENT, IDENTITY)
+        calls = dict(adapter.agent_mcp_calls)
+        self.assertEqual(calls["probe-agent"], (self.content.mcp[0],))
+
+    def test_an_agent_not_granted_the_server_receives_nothing(self):
+        adapter = StubAdapter(manifest=self.manifest)
+        catalog_module.render(self.content, adapter, ENVIRONMENT, IDENTITY)
+        calls = dict(adapter.agent_mcp_calls)
+        self.assertEqual(calls["untouched-agent"], ())
+
+    def test_matches_by_the_resolved_binding_key_not_the_bare_name(self):
+        """A server bound to a user-administered key rewrites `optional_mcp`
+        to that key (`select_mcp`); the lookup must follow, not the
+        descriptor's own unbound `name`."""
+        bound = content_module.select_mcp(
+            _content(
+                mcp=(self.server,),
+                agents=(
+                    content_module.Agent(
+                        name="probe-agent",
+                        description="d",
+                        body="body",
+                        mode=content_module.AgentMode.SUBAGENT,
+                        source=PurePosixPath("agents/probe-agent.md"),
+                        optional_mcp=("cbm",),
+                    ),
+                ),
+            ),
+            ["cbm=my-own-cbm"],
+        )
+        adapter = StubAdapter(manifest=self.manifest)
+        catalog_module.render(bound, adapter, ENVIRONMENT, IDENTITY)
+        calls = dict(adapter.agent_mcp_calls)
+        self.assertEqual(calls["probe-agent"], (bound.mcp[0],))
+        self.assertEqual(bound.mcp[0].bound_to, "my-own-cbm")
 
 
 class DigestTest(unittest.TestCase):

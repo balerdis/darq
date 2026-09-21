@@ -316,10 +316,18 @@ class AgentRenderTest(unittest.TestCase):
         return Agent(**fields)
 
     def value(self, agent):
-        return only(self.adapter.render_agent(self.layout, agent), ConfigKeyArtifact)[0].value
+        return only(self.adapter.render_agent(self.layout, agent, mcp=()), ConfigKeyArtifact)[0].value
+
+    def test_omitting_mcp_raises_type_error(self):
+        """`mcp` has no default -- even though this adapter ignores its
+        contents, a caller that forgets it must fail loudly with
+        `TypeError`, not silently render an agent (see `ports.cli_adapter.
+        CliAdapter.render_agent`'s own docstring for why)."""
+        with self.assertRaises(TypeError):
+            self.adapter.render_agent(self.layout, self.agent())
 
     def test_writes_one_entry_under_the_agent_map(self):
-        artifact = only(self.adapter.render_agent(self.layout, self.agent()), ConfigKeyArtifact)[0]
+        artifact = only(self.adapter.render_agent(self.layout, self.agent(), mcp=()), ConfigKeyArtifact)[0]
         self.assertEqual(artifact.pointer, "/agent/sdd-verify")
         self.assertEqual(artifact.path, CONFIG / "opencode.json")
 
@@ -782,13 +790,14 @@ class AgentRenderTest(unittest.TestCase):
                 mode=AgentMode.PRIMARY,
                 source=PurePosixPath(f"agents/{starts}.md"),
             ),
+            mcp=(),
         )
         default = [item for item in artifacts if item.pointer == "/default_agent"]
         self.assertEqual([item.value for item in default], [starts])
 
     def test_another_primary_agent_does_not_touch_the_default(self):
         """Being selectable at top level is one thing; being where a session opens is another."""
-        artifacts = self.adapter.render_agent(self.layout, self.agent(mode=AgentMode.PRIMARY))
+        artifacts = self.adapter.render_agent(self.layout, self.agent(mode=AgentMode.PRIMARY), mcp=())
         self.assertEqual([item for item in artifacts if item.pointer == "/default_agent"], [])
 
     def test_the_real_mode_still_reaches_the_agent_entry(self):
@@ -796,7 +805,7 @@ class AgentRenderTest(unittest.TestCase):
         self.assertEqual(self.value(self.agent())["mode"], "subagent")
 
     def test_a_subagent_does_not_touch_the_default(self):
-        artifacts = self.adapter.render_agent(self.layout, self.agent())
+        artifacts = self.adapter.render_agent(self.layout, self.agent(), mcp=())
         self.assertEqual([item for item in artifacts if item.pointer == "/default_agent"], [])
 
     def test_the_prompt_is_a_file_of_its_own(self):
@@ -809,14 +818,14 @@ class AgentRenderTest(unittest.TestCase):
 
     def test_a_resolved_model_is_written_into_the_agent_entry(self):
         artifacts = self.adapter.render_agent(
-            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5")
+            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5"), mcp=()
         )
         value = only(artifacts, ConfigKeyArtifact)[0].value
         self.assertEqual(value["model"], "anthropic/claude-sonnet-5")
 
     def test_no_variant_key_when_the_assignment_carries_no_effort(self):
         artifacts = self.adapter.render_agent(
-            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5")
+            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5"), mcp=()
         )
         value = only(artifacts, ConfigKeyArtifact)[0].value
         self.assertNotIn("variant", value)
@@ -825,7 +834,7 @@ class AgentRenderTest(unittest.TestCase):
         """`variant` is OpenCode's own schema word for a model's reasoning effort --
         this adapter's job to spell, never the engine's."""
         artifacts = self.adapter.render_agent(
-            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5", effort="high")
+            self.layout, self.agent(), ModelAssignment("anthropic", "claude-sonnet-5", effort="high"), mcp=()
         )
         value = only(artifacts, ConfigKeyArtifact)[0].value
         self.assertEqual(value["model"], "anthropic/claude-sonnet-5")
@@ -1978,7 +1987,7 @@ class ShippedContentRenderTest(unittest.TestCase):
         orchestrator_name = next(agent.name for agent in loaded.agents if agent.default)
         cls.artifacts = [
             *(item for skill in loaded.skills for item in adapter.render_skill(cls.layout, skill)),
-            *(item for agent in loaded.agents for item in adapter.render_agent(cls.layout, agent)),
+            *(item for agent in loaded.agents for item in adapter.render_agent(cls.layout, agent, mcp=())),
             *(item for agent in loaded.agents for item in adapter.render_prompt(cls.layout, agent)),
             *(
                 item

@@ -27,13 +27,15 @@ MANIFEST = CapabilityManifest(
     # session-wide MCP server definition: user scope lives in ~/.claude.json,
     # a SIBLING of that directory, and core.catalog._entries() hard-fails on
     # any artifact outside layout.config_dir. The in-tree alternative --
-    # `mcpServers:` inside each agent's own frontmatter -- would need
-    # `render_agent` to receive `Mcp` descriptors it is never handed, or
-    # would stash them between `render_mcp` and `render_agent` calls, which
-    # would give this adapter per-machine state the port forbids. This is an
-    # open architectural decision the user is deciding separately; declare
-    # `mcp=False` and let the registry enforce it until it is resolved.
-    mcp=False,
+    # `mcpServers:` inside each agent's own frontmatter -- is what this
+    # adapter now uses: `core.catalog.render` resolves, per agent, the `Mcp`
+    # descriptors its own `optional_mcp` names and hands them to
+    # `render_agent` as its `mcp` parameter (see `ports.cli_adapter.
+    # CliAdapter.render_agent`'s own docstring), so this adapter carries no
+    # per-machine state of its own between `render_mcp` and `render_agent` --
+    # the fact travels through the port, not through anything this module
+    # remembers.
+    mcp=True,
     # Claude Code resolves models live or from env vars -- "no local cached
     # models.json file" (code.claude.com/docs/en/model-config.md) -- and its
     # `model:` field takes aliases (sonnet, opus, haiku, fable, inherit) or

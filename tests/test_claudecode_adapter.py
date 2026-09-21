@@ -15,7 +15,9 @@ from pegasus.core.content import (
     AgentMode,
     Asset,
     Command,
+    Distribution,
     Execution,
+    Mcp,
     RunsAs,
     Skill,
     SystemPrompt,
@@ -45,7 +47,7 @@ class RegistrationTest(unittest.TestCase):
         manifest = Adapter().capabilities()
         self.assertEqual(
             sorted(item.value for item in manifest.enabled),
-            ["skills", "slash_commands", "sub_agents", "system_prompt"],
+            ["mcp", "skills", "slash_commands", "sub_agents", "system_prompt"],
         )
 
     def test_the_tier_is_partial(self):
@@ -174,7 +176,7 @@ class AgentRenderTest(unittest.TestCase):
         return Agent(**fields)
 
     def render(self, **overrides):
-        artifacts = self.adapter.render_agent(self.layout, self.agent(**overrides))
+        artifacts = self.adapter.render_agent(self.layout, self.agent(**overrides), mcp=())
         return only(artifacts, FileArtifact)[0]
 
     def test_lands_in_the_agents_directory(self):
@@ -195,7 +197,7 @@ class AgentRenderTest(unittest.TestCase):
 
     def test_an_unmapped_tool_raises(self):
         with self.assertRaises(render_module.RenderError):
-            self.adapter.render_agent(self.layout, self.agent(requires_tools=("nope",)))
+            self.adapter.render_agent(self.layout, self.agent(requires_tools=("nope",)), mcp=())
 
     def test_may_delegate_to_becomes_an_agent_entry(self):
         content = self.render(may_delegate_to=("sdd-apply", "sdd-tasks")).content.decode()
@@ -217,9 +219,172 @@ class AgentRenderTest(unittest.TestCase):
     def test_an_assignment_renders_a_model_key(self):
         assignment = ModelAssignment(provider_id="anthropic", model_id="claude-sonnet-5")
         artifact = only(
-            self.adapter.render_agent(self.layout, self.agent(), assignment), FileArtifact
+            self.adapter.render_agent(self.layout, self.agent(), assignment, mcp=()), FileArtifact
         )[0]
         self.assertIn('model: "claude-sonnet-5"', artifact.content.decode())
+
+
+class RenderAgentRequiresMcpTest(unittest.TestCase):
+    """`mcp` has no default: a caller that forgets it must fail loudly with
+    `TypeError`, not silently render an agent with zero servers -- the same
+    silent-capability-gap failure mode `own_artifacts`'s `delegation_targets`
+    already closed once (see `ports.cli_adapter.CliAdapter.render_agent`'s
+    own docstring)."""
+
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def agent(self, **overrides):
+        fields = dict(
+            name="sdd-verify",
+            description="Readiness authority",
+            body="Verify things.\n",
+            mode=AgentMode.SUBAGENT,
+            source=PurePosixPath("agents/sdd-verify.md"),
+        )
+        fields.update(overrides)
+        return Agent(**fields)
+
+    def test_omitting_mcp_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            self.adapter.render_agent(self.layout, self.agent())
+
+
+class AgentMcpGrantRenderTest(unittest.TestCase):
+    """`render_agent`'s `mcp` parameter must turn into a real, inline
+    `mcpServers:` entry -- and a withheld tool must turn into a real
+    `disallowedTools` entry -- naming actual output bytes, not intermediate
+    shapes."""
+
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+        self.server = Mcp(
+            name="context7",
+            description="d",
+            body="# Context7 Convention\n",
+            distribution=Distribution.REMOTE,
+            endpoint="https://mcp.context7.com/mcp",
+            source=PurePosixPath("mcp/context7.md"),
+        )
+
+    def agent(self, **overrides):
+        fields = dict(
+            name="sdd-verify",
+            description="Readiness authority",
+            body="Verify things.\n",
+            mode=AgentMode.SUBAGENT,
+            source=PurePosixPath("agents/sdd-verify.md"),
+        )
+        fields.update(overrides)
+        return Agent(**fields)
+
+    def test_a_granted_agent_carries_the_inline_definition(self):
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), mcp=(self.server,)), FileArtifact
+        )[0]
+        content = artifact.content.decode()
+        self.assertIn("mcpServers", content)
+        self.assertIn('"context7"', content)
+        self.assertIn('"type": "http"', content)
+        self.assertIn('"url": "https://mcp.context7.com/mcp"', content)
+
+    def test_a_non_granted_agent_carries_no_mcpServers_key(self):
+        artifact = only(self.adapter.render_agent(self.layout, self.agent(), mcp=()), FileArtifact)[0]
+        self.assertNotIn("mcpServers", artifact.content.decode())
+
+    def test_a_bound_server_is_a_bare_reference_not_a_second_definition(self):
+        from dataclasses import replace
+
+        bound = replace(self.server, bound_to="my-own-context7")
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), mcp=(bound,)), FileArtifact
+        )[0]
+        content = artifact.content.decode()
+        self.assertIn("my-own-context7", content)
+        self.assertNotIn('"type": "http"', content)
+
+    def test_a_withheld_tool_appears_in_disallowed_tools(self):
+        from dataclasses import replace
+
+        withheld = replace(self.server, withheld_tools=("dangerous_tool",))
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), mcp=(withheld,)), FileArtifact
+        )[0]
+        content = artifact.content.decode()
+        self.assertIn("disallowedTools", content)
+        self.assertIn("mcp__context7__dangerous_tool", content)
+
+    def test_a_withheld_tool_uses_the_bound_key_not_the_bare_name(self):
+        from dataclasses import replace
+
+        withheld = replace(self.server, bound_to="my-own-context7", withheld_tools=("dangerous_tool",))
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), mcp=(withheld,)), FileArtifact
+        )[0]
+        content = artifact.content.decode()
+        self.assertIn("mcp__my-own-context7__dangerous_tool", content)
+        self.assertNotIn("mcp__context7__dangerous_tool", content)
+
+    def test_no_disallowed_tools_key_when_nothing_is_withheld(self):
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), mcp=(self.server,)), FileArtifact
+        )[0]
+        self.assertNotIn("disallowedTools", artifact.content.decode())
+
+
+class McpRenderTest(unittest.TestCase):
+    """`render_mcp` writes only the shared usage convention for Claude Code --
+    the server's own definition lives per agent instead (`AgentMcpGrantRenderTest`)."""
+
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+        self.server = Mcp(
+            name="context7",
+            description="d",
+            body="# Context7 Convention\n",
+            distribution=Distribution.REMOTE,
+            endpoint="https://mcp.context7.com/mcp",
+            source=PurePosixPath("mcp/context7.md"),
+        )
+
+    def test_renders_exactly_one_artifact(self):
+        artifacts = self.adapter.render_mcp(self.layout, self.server)
+        self.assertEqual(len(artifacts), 1)
+
+    def test_it_is_the_convention_file_under_shared_skills(self):
+        artifact = self.adapter.render_mcp(self.layout, self.server)[0]
+        self.assertEqual(
+            artifact.path, self.layout.skills_dir / "_shared" / "mcp" / "context7-convention.md"
+        )
+        self.assertEqual(artifact.content, b"# Context7 Convention\n")
+
+    def test_writes_no_settings_key(self):
+        artifacts = self.adapter.render_mcp(self.layout, self.server)
+        self.assertEqual(only(artifacts, ConfigKeyArtifact), [])
+
+    def test_a_bound_server_still_gets_its_convention(self):
+        from dataclasses import replace
+
+        bound = replace(self.server, bound_to="my-own-context7")
+        artifacts = self.adapter.render_mcp(self.layout, bound)
+        self.assertEqual(len(artifacts), 1)
+        self.assertEqual(artifacts[0].content, b"# Context7 Convention\n")
+
+    def test_a_layout_without_skills_refuses(self):
+        from pegasus.core.types import Layout
+
+        layout = Layout(config_dir=CONFIG, settings_file=CONFIG / "settings.json")
+        with self.assertRaises(render_module.RenderError) as raised:
+            render_module.mcp(layout, self.server)
+        self.assertIn("context7", str(raised.exception))
+
+    def test_the_dispatch_table_covers_every_distribution_member(self):
+        from pegasus.core.content import Distribution as DistributionEnum
+
+        self.assertEqual(set(render_module.MCP_VALUE), set(DistributionEnum))
 
 
 class CommandRenderTest(unittest.TestCase):
