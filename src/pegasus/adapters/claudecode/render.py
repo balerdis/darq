@@ -17,6 +17,7 @@ from pegasus.core.content import (
     Mcp,
     Skill,
     SystemPrompt,
+    delegation_capabilities_path,
     mcp_convention_path,
 )
 from pegasus.core.dependencies import npm_script_path, program_path
@@ -270,6 +271,126 @@ def _convention_path(layout: Layout, item: Mcp) -> Path:
     if layout.skills_dir is None:
         raise RenderError(f"{item.name}: this layout has no skills directory")
     return layout.skills_dir / mcp_convention_path(item.name)
+
+
+def _delegation_tools_cell(target: Any) -> str:
+    """A target's native-tool column, spelled exactly as `_tools_field` spells
+    the same names for a real agent file: `TOOL_NAME` is looked up here too,
+    the one and only tool vocabulary this adapter ever writes, so a delegator
+    reading `Bash` in this table and `Bash` in `disallowedTools`/`tools:` is
+    reading the identical fact both times, never a second table's own guess
+    at the same name.
+
+    Raises the same `RenderError` `_tools_field` would for a name outside
+    `TOOL_NAME`: a delegation target is a real shipped agent (`content.
+    catalog._delegation_targets` only ever selects those), so an unmapped
+    name here is exactly as much an authoring bug as it would be in that
+    agent's own rendered file, and deserves the identical loud failure.
+    """
+    names = sorted({*target.requires_tools, *target.optional_tools})
+    unknown = [name for name in names if name not in TOOL_NAME]
+    if unknown:
+        raise RenderError(
+            f"{target.name}: no Claude Code name for tools {', '.join(sorted(unknown))}"
+        )
+    return ", ".join(TOOL_NAME[name] for name in names) or "none"
+
+
+def _delegation_mcp_cell(target: Any) -> str:
+    """A target's MCP column, one entry per server key in `target.mcp`.
+
+    `target.withheld_mcp_tools` is the same already-associated (key, tools)
+    fact `opencode.render._mcp_cell` reads -- `core.catalog` decided which
+    withheld tool belongs to which server key, and this function, like its
+    OpenCode counterpart, only decides how that association reads on a page.
+    Where the two adapters diverge on purpose: a withheld tool is spelled
+    here as `mcp__<key>__<tool>`, this CLI's own qualified name for one MCP
+    tool -- the exact string this adapter's `disallowedTools` frontmatter key
+    (`_disallowed_tools_field`, above) would carry to actually deny it. A
+    bare tool name would read as a fact about the *server*; the qualified
+    form reads as the fact this table exists to state: which single
+    capability Claude Code itself has already refused to grant, in Claude
+    Code's own vocabulary for refusing it, not OpenCode's differently-shaped
+    `f"{key}_{tool}"` permission string.
+    """
+    withheld = dict(target.withheld_mcp_tools)
+    parts = [
+        "{key} (withholds: {tools})".format(
+            key=key,
+            tools=", ".join(f"mcp__{key}__{tool}" for tool in withheld[key]),
+        )
+        if key in withheld
+        else key
+        for key in target.mcp
+    ]
+    return ", ".join(parts) or "none"
+
+
+def delegation_capabilities(layout: Layout, targets: tuple[Any, ...]) -> list[Artifact]:
+    """The generated reference every delegating Claude Code body's pointer names.
+
+    Mirrors `opencode.render.delegation_capabilities` in structure only --
+    same table shape, same reason for existing (see that function's own
+    docstring for the split between `core.catalog`'s facts and an adapter's
+    presentation of them) -- and diverges from it everywhere the two CLIs
+    disagree about vocabulary. `_delegation_tools_cell` spells a target's
+    tools the way `TOOL_NAME` spells them for a real agent file (`Bash`,
+    `Read`, ...), never OpenCode's lowercase server-prefixed names, because a
+    table that spelled tools in the wrong CLI's vocabulary would be a file
+    that lies about capabilities in the one place that exists to stop
+    capability guesswork -- exactly the failure this whole feature exists to
+    prevent. `_delegation_mcp_cell` spells a withheld tool the way this
+    adapter's own `disallowedTools` key would.
+
+    Written unconditionally by `own_artifacts`, the same as every other file
+    it ships: this adapter has no interactive selection step of its own to
+    gate it on.
+    """
+    if layout.skills_dir is None:
+        raise RenderError("delegation-capabilities: this layout has no skills directory")
+    header = "| Agent | Native tools | MCP servers |\n| --- | --- | --- |\n"
+    rows = "".join(
+        "| `{name}` | {tools} | {mcp} |\n".format(
+            name=target.name,
+            tools=_delegation_tools_cell(target),
+            mcp=_delegation_mcp_cell(target),
+        )
+        for target in targets
+    )
+    text = (
+        "# Delegation Target Capabilities\n\n"
+        "Generated -- never hand-edited, and never a snapshot: every install regenerates\n"
+        "this from the content core's own agent declarations, after this machine's own\n"
+        "MCP selection and grants have already been applied. One row per agent that is\n"
+        "the declared target of at least one other agent's `may_delegate_to`: what it\n"
+        "reads here is what an install actually grants it, `granted_mcp` included\n"
+        "alongside `optional_mcp`, because a target that can do something a delegator\n"
+        "did not know about is cheap, and a target a delegator wrongly assumed could do\n"
+        "something is the expensive direction this file exists to close.\n\n"
+        "Native tools are spelled exactly as this CLI's own `tools:` frontmatter key\n"
+        "spells them (`Bash`, `Read`, ...), never a lowercase agnostic name -- the same\n"
+        "vocabulary a delegating body reads in its own rendered file.\n\n"
+        "A server listed with `(withholds: ...)` still grants every tool it exposes\n"
+        "except the ones named -- a wildcard grant with a tool or two taken back out,\n"
+        "never the whole server refused. Each withheld tool is spelled\n"
+        "`mcp__<server>__<tool>`, the exact qualified name this CLI's own\n"
+        "`disallowedTools` key uses to refuse it -- assuming one of those named tools is\n"
+        "reachable is exactly the wrongly-assumed-capability mistake this file exists\n"
+        "to close, so it is never left off the row.\n\n"
+        "Read this before writing a brief that assumes a target can run a command, open\n"
+        "a browser, or write a file. If this reference is missing or unreadable, do not\n"
+        "assume the capability: verify it directly, or ask for less.\n\n"
+        + header
+        + rows
+    )
+    return [
+        FileArtifact(
+            id="own:delegation-capabilities",
+            path=layout.skills_dir / delegation_capabilities_path(),
+            content=text.encode("utf-8"),
+            executable=False,
+        )
+    ]
 
 
 def _tools_field(item: Agent) -> str:

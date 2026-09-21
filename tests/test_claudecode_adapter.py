@@ -23,6 +23,8 @@ from pegasus.core.content import (
     SystemPrompt,
 )
 from pegasus.core import registry as registry_module
+from pegasus.core.catalog import DelegationTarget
+from pegasus.core.content import delegation_capabilities_path
 from pegasus.core.registry import Registry
 from pegasus.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, ModelAssignment
 
@@ -465,9 +467,12 @@ class OwnArtifactsTest(unittest.TestCase):
         self.adapter = Adapter()
         self.layout = self.adapter.layout(ENVIRONMENT)
 
-    def test_exactly_one_artifact(self):
+    def test_exactly_two_artifacts(self):
+        # 2, not 1: `own_artifacts` now also emits the generated
+        # delegation-capabilities reference (`render.delegation_capabilities`),
+        # unconditionally, the same way OpenCode's own `own_artifacts` does.
         artifacts = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())
-        self.assertEqual(len(artifacts), 1)
+        self.assertEqual(len(artifacts), 2)
 
     def test_it_is_a_config_key_at_settings_pointing_at_agent(self):
         artifact = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())[0]
@@ -482,6 +487,75 @@ class OwnArtifactsTest(unittest.TestCase):
     def test_stays_inside_config_dir(self):
         for artifact in self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ()):
             self.assertTrue(artifact.path.is_relative_to(self.layout.config_dir))
+
+
+class DelegationCapabilitiesRenderTest(unittest.TestCase):
+    """The generated reference itself, in Claude Code's own vocabulary --
+    the fix for the gap where six shipped agent bodies pointed at
+    `{{skills_root}}/_shared/delegation-capabilities.md` and this adapter
+    never wrote it (see `tests/test_adapter_reference_integrity.py`)."""
+
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def _content(self, targets):
+        artifact = only(
+            self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, targets),
+            FileArtifact,
+        )[0]
+        return artifact
+
+    def test_lands_at_the_shared_delegation_capabilities_path(self):
+        artifact = self._content(())
+        self.assertEqual(artifact.path, self.layout.skills_dir / delegation_capabilities_path())
+
+    def test_a_targets_tools_are_named_in_claude_codes_own_spelling(self):
+        """`bash` must render `Bash`, never the lowercase agnostic name --
+        the exact vocabulary check the brief calls for: a table rendered in
+        the wrong CLI's spelling would lie about what a target can run."""
+        target = DelegationTarget(
+            name="pegasus-explorer",
+            requires_tools=("read", "bash", "grep"),
+            optional_tools=(),
+            mcp=(),
+        )
+        text = self._content((target,)).content.decode("utf-8")
+        self.assertIn("`pegasus-explorer`", text)
+        self.assertIn("Bash", text)
+        self.assertIn("Read", text)
+        self.assertIn("Grep", text)
+        self.assertNotIn("| bash", text)
+        self.assertNotIn(", bash", text)
+
+    def test_an_unmapped_tool_name_raises_rather_than_render_silently(self):
+        target = DelegationTarget(
+            name="pegasus-explorer",
+            requires_tools=("no-such-tool",),
+            optional_tools=(),
+            mcp=(),
+        )
+        with self.assertRaises(render_module.RenderError):
+            self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, (target,))
+
+    def test_a_withheld_mcp_tool_is_shown_in_claude_codes_own_qualified_form(self):
+        """`mcp__<server>__<tool>`, the exact string this adapter's own
+        `disallowedTools` frontmatter key would use to refuse it -- not a
+        bare tool name, and not OpenCode's `f"{key}_{tool}"` shape."""
+        target = DelegationTarget(
+            name="pegasus-explorer",
+            requires_tools=("read",),
+            optional_tools=(),
+            mcp=("cbm",),
+            withheld_mcp_tools=(("cbm", ("delete_project",)),),
+        )
+        text = self._content((target,)).content.decode("utf-8")
+        self.assertIn("mcp__cbm__delete_project", text)
+        self.assertIn("withholds", text)
+
+    def test_no_targets_still_renders_a_valid_empty_table(self):
+        text = self._content(()).content.decode("utf-8")
+        self.assertIn("| Agent | Native tools | MCP servers |", text)
 
 
 if __name__ == "__main__":

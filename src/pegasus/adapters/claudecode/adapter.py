@@ -130,11 +130,25 @@ class Adapter:
         SESSION_STARTS_IN`) -- never a literal this adapter invents -- which
         is exactly why it is written here as a value, not baked in as a key.
 
-        `identity` and `delegation_targets` are unused: this adapter ships no
-        bundled asset that needs to name the running distribution or read the
-        delegation table, unlike OpenCode's plugins. Both parameters are
+        `identity` is unused: this adapter ships no bundled asset that needs
+        to name the running distribution, unlike OpenCode's plugins. It is
         still accepted, because the port's signature requires every adapter
-        to take them.
+        to take it.
+
+        `delegation_targets`, unlike `identity`, IS used: it is what
+        `render.delegation_capabilities` turns into the generated reference
+        every delegating agent's body already points at
+        (`{{skills_root}}/_shared/delegation-capabilities.md`, six agent
+        bodies -- see `content.delegation_capabilities_path`). Before this,
+        this adapter accepted the parameter but never wrote the file it
+        describes, leaving that pointer dangling in every real Claude Code
+        install: the instruction survives on its own stated fallback ("if
+        this reference is missing or unreadable, do not assume the
+        capability"), but the whole capability-table feature was silently
+        absent for this CLI. See `render.delegation_capabilities`'s own
+        docstring for why its table is not a copy of OpenCode's -- it must
+        speak this CLI's own tool and MCP-denial vocabulary, not the other
+        adapter's, or it would lie about what a target can actually run.
         """
         return [
             ConfigKeyArtifact(
@@ -142,5 +156,6 @@ class Adapter:
                 path=layout.settings_file,
                 pointer="/agent",
                 value=orchestrator_name,
-            )
+            ),
+            *render.delegation_capabilities(layout, delegation_targets),
         ]
