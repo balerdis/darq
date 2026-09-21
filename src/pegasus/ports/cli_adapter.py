@@ -149,6 +149,34 @@ class CliAdapter(Protocol):
         asked for would be solving a problem this codebase does not have.
         """
 
+    def writes_mcp_config_key(self) -> bool:
+        """Whether this CLI keeps one global, addressable configuration key
+        per granted MCP server -- the `/mcp/<id>` pointer `render_mcp`
+        writes for an unbound server on a CLI whose vocabulary has a place
+        for one.
+
+        `True` for a CLI that defines a server exactly once, globally, inside
+        its own settings file (that adapter's `render_mcp` writes a
+        `ConfigKeyArtifact` for every server it does not merely reference).
+        `False` for a CLI with no such global location at all -- one where a
+        granted agent's own scoping syntax is the only in-tree place a
+        server is ever defined, so `render_mcp` never writes a settings key
+        for *any* server, bound or not (see that adapter's own `render_mcp`
+        docstring).
+
+        This is not the same fact as `capabilities().mcp`: that says this
+        CLI's vocabulary has *some* place for a granted server at all; this
+        says whether that place is a config-key `doctor`/`update` can read
+        back later. The engine needs the distinction because a server this
+        method answers `False` for leaves the exact same journal shape a
+        binding does -- a convention entry with no `mcp:<id>` key beside it
+        -- for every server it installs normally, not only for one the user
+        administers. Reading that shape as "granted but not installed by
+        Pegasus" is true for a CLI answering `True` here (see
+        `cli._bound_checks`) and false for one answering `False`: nothing
+        distinguishes a normal grant from a binding there except this fact.
+        """
+
     # --- What the user still has to do ---
 
     def activation_steps(self) -> tuple[str, ...]:

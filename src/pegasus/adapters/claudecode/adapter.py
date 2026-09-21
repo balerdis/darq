@@ -95,6 +95,13 @@ class Adapter:
     def render_mcp(self, layout: Layout, mcp: Mcp) -> list[Artifact]:
         return render.mcp(layout, mcp)
 
+    def writes_mcp_config_key(self) -> bool:
+        """Never: see `render.mcp`'s own docstring. Claude Code keeps a
+        server's definition inside each granted agent's own `mcpServers:`
+        frontmatter, not in one global settings key, so this adapter never
+        writes a `/mcp/<id>` pointer for any server -- bound or not."""
+        return False
+
     def render_command(self, layout: Layout, command: Command, orchestrator_name: str) -> list[Artifact]:
         return render.command(layout, command, orchestrator_name)
 

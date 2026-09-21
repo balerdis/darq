@@ -1114,15 +1114,39 @@ def _mcp_update_selection(install: Install, *, display_name: str) -> tuple[list[
     `Runtime` in reach, so there is no reason left to default it and risk a
     future reader of `.detail` seeing the packaged identity's own name
     instead of the caller's.
+
+    `_bound_checks` no longer names a server this CLI never writes a config
+    key for at all (`CliAdapter.writes_mcp_config_key` is `False`) unless it
+    is a genuine, recorded binding -- that shape is this CLI's ordinary one
+    for a server Pegasus obtained and administers itself, not a binding and
+    not something `update` should refuse over. This still has to reapply
+    that server's own grant, though, so it is picked up in the second pass
+    below, straight off the journal's convention entries, and rejoins the
+    selection the same bare way `--mcp <id>` would have spelled it in the
+    first place -- never into `unresolved`, since there is no missing key to
+    wait on.
     """
+    configured = {name for _, name in _mcp_entries(install)}
     selection = [name for _, name in _mcp_entries(install)]
     unresolved = []
+    accounted = set(configured)
     for check in _bound_checks(install, display_name=display_name):
+        accounted.add(check.id)
         key = install.mcp_bindings.get(check.id)
         if key is None:
             unresolved.append(check.id)
         else:
             selection.append(f"{check.id}={key}")
+    for entry in install.entries:
+        if not entry.id.startswith(_MCP_CONVENTION_PREFIX):
+            continue
+        name = entry.id[len(_MCP_CONVENTION_PREFIX):]
+        if name in accounted:
+            continue
+        # Reached only for a name `_bound_checks` skipped outright: this CLI
+        # never writes a `/mcp/<id>` key for any server, and no binding was
+        # recorded for this one either, so it is a normal grant, not a gap.
+        selection.append(name)
     return selection, sorted(unresolved)
 
 
@@ -3093,29 +3117,38 @@ def _mcp_checks(runtime: Runtime, install) -> list[mcp_handshake.ServerCheck]:
 
 
 def _bound_checks(install, *, display_name: str) -> list[mcp_handshake.ServerCheck]:
-    """The servers this install granted without ever configuring them.
+    """The servers this install granted without ever configuring them --
+    genuinely, or ambiguously enough that it still has to be said.
 
     A bound server writes no `/mcp/<id>` key — only its convention — so
     `_mcp_entries` cannot see it, and an install whose servers are all bound
     reported "No MCP servers configured": not a gap in the report but a false
     statement about the machine. A convention entry with no configuration key
-    beside it is exactly the shape a binding leaves behind, and it is enough
-    to say the true thing instead.
+    beside it used to be read as exactly the shape a binding leaves behind.
+    It no longer is, on its own: `CliAdapter.writes_mcp_config_key` (`False`
+    for Claude Code, `True` for OpenCode) is now consulted first, because a
+    CLI that answers `False` there writes *no* `/mcp/<id>` key for any
+    server it installs, bound or not -- that shape is this CLI's ordinary
+    one for a server Pegasus obtained and administers itself, and reporting
+    it as "granted but not installed" would be the false statement this
+    function exists to avoid, not make.
 
-    The key the server was bound to now travels on `Install.mcp_bindings`
-    (`select_mcp` computes it; `_merged` records it), so what is said no
-    longer stops at "no configuration of its own" the way it used to. A
-    binding is still not the only cause of this shape -- `retire` walks kinds
-    in sorted order, `config-key` before `file`, so an uninstall that removed
-    the configuration key and then failed on the convention leaves the journal
-    holding exactly this too -- but that shape never populates
-    `mcp_bindings`, since nothing but `select_mcp`/`_merged` ever writes it.
-    So a present key is proof this really is a binding, and the detail says so
-    plainly; an absent key stays exactly as ambiguous as before, and names
-    both readings the same way it always has. Starting the server is out of
-    reach either way: bound or half-uninstalled, there is no configuration
-    here to start it from.
+    The key a genuine binding was bound to travels on `Install.mcp_bindings`
+    (`select_mcp` computes it; `_merged` records it), so what is said about
+    one no longer stops at "no configuration of its own" the way it used to.
+    A binding is still not the only cause of the shape on a CLI that answers
+    `True` above -- `retire` walks kinds in sorted order, `config-key` before
+    `file`, so an uninstall that removed the configuration key and then
+    failed on the convention leaves the journal holding exactly this too --
+    but that shape never populates `mcp_bindings`, since nothing but
+    `select_mcp`/`_merged` ever writes it. So a present key is proof this
+    really is a binding, and the detail says so plainly; an absent key, on
+    such a CLI, stays exactly as ambiguous as before, and names both
+    readings the same way it always has. Starting the server is out of reach
+    either way: bound or half-uninstalled, there is no configuration here to
+    start it from.
     """
+    writes_mcp_config_key = _adapter(install.cli).writes_mcp_config_key()
     configured = {name for _, name in _mcp_entries(install)}
     checks = []
     for entry in install.entries:
@@ -3131,6 +3164,13 @@ def _bound_checks(install, *, display_name: str) -> list[mcp_handshake.ServerChe
                 f"administer, whose tools {display_name} grants and whose convention it ships without "
                 f"installing or starting it"
             )
+        elif not writes_mcp_config_key:
+            # This CLI never writes a `/mcp/<id>` key for any server, bound
+            # or not, so a bare convention with no key beside it carries no
+            # information at all about whether this server is a binding --
+            # it is this CLI's normal shape for one Pegasus installed and
+            # administers itself. Nothing to hedge, nothing to report.
+            continue
         else:
             detail = (
                 "no configuration of its own in this install: either bound to a server you "
@@ -3919,11 +3959,22 @@ def _cli_prose(entry: dict[str, Any], *, identity: Identity | None = None) -> st
         line += f"\n  If it was already running when {identity.display_name} was installed:"
         line += "".join(f"\n    {step}" for step in steps)
     if entry.get("mcp_bound"):
-        line += f"\n  MCP servers you administer, granted but not installed by {identity.display_name}:"
-        line += "".join(
-            f"\n    {check['id']} (bound to {check['key']!r})" if check.get("key") else f"\n    {check['id']}"
-            for check in entry["mcp_bound"]
-        )
+        # Two headlines, not one, because the per-item `detail` beneath them
+        # already hedges when no key was recorded (see `cli._bound_checks`):
+        # a single flat "you administer" headline over the whole list used
+        # to assert more confidence than that detail ever claimed. A known
+        # key is proof of a binding; its absence still names both readings.
+        known = [check for check in entry["mcp_bound"] if check.get("key")]
+        unknown = [check for check in entry["mcp_bound"] if not check.get("key")]
+        if known:
+            line += f"\n  MCP servers you administer, granted but not installed by {identity.display_name}:"
+            line += "".join(f"\n    {check['id']} (bound to {check['key']!r})" for check in known)
+        if unknown:
+            line += (
+                "\n  MCP servers granted with no configuration of their own here -- each either a "
+                "server you administer, or a convention left behind by an uninstall that did not finish:"
+            )
+            line += "".join(f"\n    {check['id']}" for check in unknown)
     if entry.get("mcp_bound_unknown_keys"):
         line += f"\n  To find out the key(s) above, run this once, {mcp_placeholder_instruction()}:"
         line += f"\n    {entry['mcp_bound_unknown_keys']['command']}"

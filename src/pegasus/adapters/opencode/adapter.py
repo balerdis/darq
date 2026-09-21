@@ -250,6 +250,13 @@ class Adapter:
     def render_mcp(self, layout: Layout, mcp: Mcp) -> list[Artifact]:
         return render.mcp(layout, mcp)
 
+    def writes_mcp_config_key(self) -> bool:
+        """Always: see `render.mcp`'s own docstring. OpenCode defines an
+        unbound server exactly once, globally, at `/mcp/<id>` in its own
+        settings file -- a bound server is the one exception, and that
+        exception is exactly what `cli._bound_checks` exists to read."""
+        return True
+
     # --- Models ---
 
     def model_catalog(self, environment: Environment) -> ModelCatalog:

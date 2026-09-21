@@ -85,9 +85,9 @@ class RealHomeTestCase(_RealHomeTestCase):
     def installed(self):
         return journal_module.install_for(self.store().load(), CLI)
 
-    def install(self) -> dict:
+    def install(self, *extra) -> dict:
         self.present()
-        code, report = self.run_cli("install", "--cli", CLI)
+        code, report = self.run_cli("install", "--cli", CLI, *extra)
         self.assertEqual(code, 0, report)
         return report
 
@@ -158,6 +158,69 @@ class DoctorTest(RealHomeTestCase):
         self.present()
         _, report = self.run_cli("doctor")
         self.assertFalse(cli_entry(report)["pegasus_installed"])
+
+
+class DoctorMcpTest(RealHomeTestCase):
+    """Claude Code's `render_mcp` writes no `/mcp/<id>` configuration key for
+    any server it grants -- bound or not (see `render.mcp`'s own docstring):
+    the definition lives inside each granted agent's own `mcpServers:`
+    frontmatter instead. Every server this adapter installs normally
+    therefore leaves the exact same journal shape a binding does: a
+    `mcp-convention:<id>` entry with no `mcp:<id>` key beside it, and no
+    recorded `mcp_bindings` entry either.
+
+    Before `CliAdapter.writes_mcp_config_key` existed, `_bound_checks` read
+    that shape as "granted but not installed by Pegasus" regardless of
+    adapter, which made a real install of five servers Pegasus itself
+    obtained and administers (`cbm`, `context7`, `engram`, `jira`,
+    `playwright`) get reported as five servers the user administers, with a
+    remedy command telling them to re-bind servers Pegasus already owns.
+
+    `context7` and `jira` stand in for the five here: both ship
+    `distribution: remote` (see `content/mcp/context7.md`,
+    `content/mcp/jira.md`), so granting them unbound needs no download and no
+    `npm`/binary on `PATH` -- exactly what `cbm`, `engram` and `playwright`
+    would need, and exactly the kind of real filesystem/network condition
+    this suite's `no_network` guard refuses on purpose. The shape this test
+    reproduces (a convention entry, no config key, no recorded binding) is
+    identical regardless of which shipped server produces it.
+    """
+
+    def test_servers_pegasus_installed_are_not_reported_as_user_administered(self):
+        self.install("--mcp", "context7", "--mcp", "jira")
+        _, report = self.run_cli("doctor")
+        entry = cli_entry(report)
+        self.assertEqual(entry["mcp_bound"], [])
+
+    def test_the_prose_report_says_nothing_about_administering_them(self):
+        self.install("--mcp", "context7", "--mcp", "jira")
+        _, output = self.run_prose("doctor")
+        self.assertNotIn("you administer", output)
+        self.assertNotIn("MCP servers granted with no configuration", output)
+
+    def test_a_genuine_binding_is_still_reported_as_administered(self):
+        """The false positive above must not take the true positive with it:
+        `--mcp id=key` still asks Pegasus to grant tools for a server the
+        user runs and administers themselves, and that fact is still worth
+        reporting."""
+        self.install("--mcp", "cbm=codebase-memory-mcp")
+        _, report = self.run_cli("doctor")
+        entry = cli_entry(report)
+        self.assertEqual([check["id"] for check in entry["mcp_bound"]], ["cbm"])
+        self.assertEqual(entry["mcp_bound"][0]["key"], "codebase-memory-mcp")
+        self.assertIn("administer", entry["mcp_bound"][0]["detail"])
+
+    def test_update_reapplies_pegasus_installed_servers_without_asking_for_a_key(self):
+        """The same false shape used to make `update` refuse outright,
+        telling the operator to supply a key for a server nobody bound --
+        see `cli._mcp_update_selection`."""
+        self.install("--mcp", "context7", "--mcp", "jira")
+        code, report = self.run_cli("update", "--cli", CLI)
+        self.assertEqual(code, 0, report)
+        entry = cli_entry(self.run_cli("doctor")[1])
+        self.assertEqual(entry["mcp_bound"], [])
+        self.assertEqual(entry["drifted"], [])
+        self.assertEqual(entry["missing"], [])
 
 
 class UninstallTest(RealHomeTestCase):

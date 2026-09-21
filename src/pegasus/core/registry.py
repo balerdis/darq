@@ -112,6 +112,7 @@ class Registry:
         _check_capabilities(adapter, cli_id, manifest, layout)
         _check_own_artifacts(adapter, cli_id, layout)
         _check_activation_steps(adapter, cli_id)
+        _check_writes_mcp_config_key(adapter, cli_id, manifest)
 
         self._adapters[cli_id] = adapter
         self._manifests[cli_id] = manifest
@@ -148,6 +149,29 @@ def _check_activation_steps(adapter: object, cli_id: str) -> None:
         raise ManifestMismatchError(
             f"adapter {cli_id!r} must implement activation_steps; "
             "return an empty tuple when its CLI picks changes up on its own"
+        )
+
+
+def _check_writes_mcp_config_key(adapter: object, cli_id: str, manifest: CapabilityManifest) -> None:
+    """Confirm an adapter that declares `mcp` can say whether it ever writes
+    a global `/mcp/<id>` configuration key.
+
+    `doctor` and `update` read this back through `cli._bound_checks` to tell
+    a genuine binding (or an unfinished uninstall) apart from the ordinary
+    shape a CLI with no such global key leaves for every server it installs
+    normally -- see `CliAdapter.writes_mcp_config_key`'s own docstring. An
+    adapter that cannot answer would leave that inference guessing again,
+    the exact defect this method exists to close, so it is asked here, at
+    registration, rather than the first time a report needs it. Gated on
+    `manifest.mcp` the same way the `mcp` capability's own render methods
+    are: an adapter that never declares `mcp` has no server for this
+    question to be about.
+    """
+    if not manifest.mcp:
+        return
+    if not _implements(adapter, "writes_mcp_config_key"):
+        raise ManifestMismatchError(
+            f"adapter {cli_id!r} declares mcp but does not implement writes_mcp_config_key"
         )
 
 
