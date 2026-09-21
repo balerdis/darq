@@ -1,6 +1,6 @@
 # Instalar Pegasus
 
-Pegasus soporta hoy Linux, con OpenCode como único cliente. Ejecutá esto:
+Pegasus soporta hoy Linux, con dos clientes: OpenCode y Claude Code. Ejecutá esto:
 
 ```sh
 curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/install.sh | bash
@@ -8,9 +8,18 @@ curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/
 
 Ese único comando detecta qué te falta, te muestra el plan completo antes de tocar nada, pide
 confirmación, instala sólo lo que hace falta, y termina dejándote siempre en la interfaz de Pegasus:
-si instaló algo nuevo, todavía hay que elegir MCPs y confirmar dentro de OpenCode; si tu entorno ya
-estaba completo, se abre igual para avisarte si hay una versión más nueva de pegasus publicada. No
-hace falta elegir una versión ni copiar un tag a mano: siempre baja el último release publicado.
+si instaló algo nuevo, bajo OpenCode todavía hay que elegir MCPs y confirmar dentro de esa interfaz;
+bajo Claude Code no hace falta ningún reinicio, la configuración se lee tal como quedó escrita. Si tu
+entorno ya estaba completo, se abre igual para avisarte si hay una versión más nueva de pegasus
+publicada. No hace falta elegir una versión ni copiar un tag a mano: siempre baja el último release
+publicado.
+
+El script nunca elige el CLI por su cuenta. Con `--cli claudecode` o `--cli opencode` instala en ese
+uno sin preguntar. Sin el flag, hay tres casos: si la cuenta tiene exactamente uno de los dos ya
+instalado, el preflight lo nombra como destino y la misma confirmación de siempre lo cubre; si no hay
+ninguno instalado, o hay más de uno, y hay una terminal, te pregunta cuál elegir; sin terminal (por
+ejemplo, `curl | bash` corrido por un proceso sin tty) y sin `--cli`, el script falla nombrando el
+flag y los ids válidos, en vez de elegir uno por su cuenta.
 
 El resto de esta guía explica, en orden, qué hace exactamente ese script, y qué hace falta para
 mantener la instalación al día o deshacerla. Para usar Pegasus una vez instalado — la interfaz
@@ -23,8 +32,9 @@ probamos.)*
 ## 1. Qué hace `install.sh`
 
 **Detecta, sin instalar nada todavía:** si tenés `python3` 3.12 o más nuevo (lo que pide
-`pyproject.toml`), `curl`, `node`, `opencode`, un `pegasus` ya instalado, y si el directorio de
-destino del binario ya está en tu `PATH`.
+`pyproject.toml`), `curl`, `node`, cada uno de los dos CLIs soportados (`opencode` y `claude`, los dos,
+no sólo el elegido con `--cli`), un `pegasus` ya instalado, y si el directorio de destino del binario
+ya está en tu `PATH`.
 
 **Te muestra el plan antes de escribir nada:** un bloque con cada requisito y su estado — presente
 (con versión), o "se instalará" (con qué exactamente, versión pinneada incluida). Es la pantalla que
@@ -57,26 +67,31 @@ curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/
 nunca `sudo ./install.sh`.
 
 **Instala, en orden de dependencia, sólo lo que falta** (y correrlo dos veces es seguro: no reinstala
-lo que ya está): nvm y Node LTS, después OpenCode con una versión fija (por la misma razón que fija la
-versión de OpenCode: la API de GitHub sin autenticar permite 60 pedidos por hora por IP, y resolver
-"la última versión" cada vez la agota rápido), y por último el binario `pegasus`, verificado contra su
-checksum antes de instalarse — si el checksum no coincide, el script se detiene y no instala nada; eso
-también puede pasar si se publicó un release nuevo entre las dos descargas, así que lo primero que
-vale la pena probar es correr el script de nuevo. Si ya había un `pegasus` instalado, no lo pisa: te
-dice qué versión encontró y que `pegasus upgrade` es el comando que reemplaza el binario (se explica
-en [MANUAL.md](MANUAL.md#mantener-pegasus-al-día)).
+lo que ya está): nvm y Node LTS -- incondicional, para cualquiera de los dos CLIs, porque parte de los
+MCPs que Pegasus distribuye se materializa con npm sea cual sea el destino --, después el CLI elegido
+con su propio instalador oficial (`opencode.ai/install` para OpenCode, `claude.ai/install.sh` para
+Claude Code -- ninguno de los dos es cosa de `pegasus`, sólo de este script), y por último el binario
+`pegasus`, verificado contra su checksum antes de instalarse. Sólo OpenCode fija una versión (por la
+misma razón que fija la de nvm: la API de GitHub sin autenticar permite 60 pedidos por hora por IP, y
+resolver "la última versión" cada vez la agota rápido); el instalador oficial de Claude Code no toma
+ese parámetro. Si el checksum del binario de `pegasus` no coincide, el script se detiene y no instala
+nada; eso también puede pasar si se publicó un release nuevo entre las dos descargas, así que lo
+primero que vale la pena probar es correr el script de nuevo. Si ya había un `pegasus` instalado, no
+lo pisa: te dice qué versión encontró y que `pegasus upgrade` es el comando que reemplaza el binario
+(se explica en [MANUAL.md](MANUAL.md#mantener-pegasus-al-día)).
 
 **Flags:**
 
 | Flag | Qué hace |
 | --- | --- |
 | (ninguno) | detecta, muestra el plan, pide confirmación, instala lo que falte |
+| `--cli ID` | elige qué CLI instalar sin preguntar (`claudecode` u `opencode`). Sin este flag: si hay exactamente un CLI ya instalado, ese es el destino; si hay ambigüedad y una terminal, se pregunta cuál; sin terminal, el script falla nombrando este flag |
 | `--verify` | informa el estado; no cambia nada — ni descarga, ni crea directorios |
 | `--yes`, `-y` | salta la confirmación |
 | `--no-run` | instala lo que falte igual que una corrida normal, pero no lanza nada al final: imprime qué habría lanzado |
 | `--bin-dir DIR` | instala el binario de `pegasus` en `DIR` en vez de `~/.local/bin` |
-| `--opencode-version X` | fija la versión de OpenCode a instalar |
-| `--opencode-ultima` | instala la última versión de OpenCode publicada (consulta la API de GitHub) |
+| `--opencode-version X` | si el CLI elegido es OpenCode, fija la versión a instalar |
+| `--opencode-ultima` | si el CLI elegido es OpenCode, instala la última versión publicada (consulta la API de GitHub) |
 | `--help`, `-h` | imprime el uso |
 
 **Detecta tu shell y, si hace falta, deja el PATH resuelto para las próximas terminales.** Bajo
@@ -93,11 +108,12 @@ la terminal actual para no tener que abrir una nueva.
 
 **Qué queda corriendo al final:** siempre la interfaz de Pegasus (ver
 [Usar la interfaz interactiva de Pegasus](MANUAL.md#usar-la-interfaz-interactiva-de-pegasus-la-tui) en
-el manual). Si instaló algo nuevo,
-porque todavía falta elegir qué MCPs instalar y confirmar esa instalación en OpenCode. Si no hacía
-falta instalar nada, porque `install.sh` no compara versiones — sólo dice si algo está o no está — y
-es la TUI, al arrancar, la que revisa si hay un release de pegasus más nuevo publicado y te ofrece
-`Upgrade`. Bajo `--verify` o `--no-run` no lanza nada: dice qué habría lanzado.
+el manual). Si instaló algo nuevo y el CLI elegido fue OpenCode, porque todavía falta elegir qué MCPs
+instalar y confirmar esa instalación ahí; si fue Claude Code, no hace falta ningún paso de activación
+adicional, pero la TUI de Pegasus sigue siendo el lugar donde se elige qué MCPs instalar la primera
+vez. Si no hacía falta instalar nada, porque `install.sh` no compara versiones — sólo dice si algo
+está o no está — y es la TUI, al arrancar, la que revisa si hay un release de pegasus más nuevo
+publicado y te ofrece `Upgrade`. Bajo `--verify` o `--no-run` no lanza nada: dice qué habría lanzado.
 
 ## 2. Mantener la instalación al día
 
@@ -209,12 +225,12 @@ python "$BIN_DIR/pegasus" doctor
 
 | Tema | Cómo trabaja Pegasus |
 | --- | --- |
-| OpenCode | Usted instala, actualiza y configura el cliente anfitrión. Pegasus no lo hace por usted. |
+| El CLI anfitrión (OpenCode o Claude Code) | Usted lo instala, actualiza y configura. Pegasus no lo hace por usted -- `install.sh` de la sección anterior es la única excepción, y sólo para dejarlo presente antes de que `pegasus` entre en escena. |
 | Archivos y claves de configuración existentes | Se detectan y se preservan. Una colisión se informa; no se sobreescribe. |
-| MCPs opcionales | `pegasus install --cli opencode --mcp <id>` decide qué servidores se instalan; uno no nombrado no se descarga, configura ni registra. También acepta `--mcp <id>=<clave>`. |
-| Credenciales, proveedores y modelos | Nunca se distribuyen ni se imponen acá. La persona configura las credenciales del proveedor con `/connect` y selecciona el modelo con `/models`, dentro de OpenCode. |
-| Rollback | `pegasus restore` devuelve el estado exacto anterior al último comando; `pegasus uninstall --cli opencode` retira sólo lo que el journal reclama como propio. |
-| Actualizaciones | `pegasus update --cli opencode` reaplica la selección ya instalada. `pegasus upgrade` reemplaza el binario de `pegasus`. Son cosas distintas — ver [Mantener Pegasus al día](MANUAL.md#mantener-pegasus-al-día) en el manual. |
+| MCPs opcionales | `pegasus install --cli <id> --mcp <id-del-mcp>` decide qué servidores se instalan; uno no nombrado no se descarga, configura ni registra. También acepta `--mcp <id-del-mcp>=<clave>`. |
+| Credenciales, proveedores y modelos | Nunca se distribuyen ni se imponen acá. Esa configuración es de cada CLI (bajo OpenCode, `/connect` para las credenciales y `/models` para el modelo). Aparte, Pegasus tiene su propia asignación de modelo por agente (`pegasus models set`), y sólo OpenCode la soporta hoy -- Claude Code no tiene un catálogo de modelos en disco que Pegasus pueda leer, así que ahí `models set` guarda la preferencia pero nunca llega a escribirla en ningún agente. |
+| Rollback | `pegasus restore` devuelve el estado exacto anterior al último comando; `pegasus uninstall --cli <id>` retira sólo lo que el journal reclama como propio. |
+| Actualizaciones | `pegasus update --cli <id>` reaplica la selección ya instalada. `pegasus upgrade` reemplaza el binario de `pegasus`. Son cosas distintas — ver [Mantener Pegasus al día](MANUAL.md#mantener-pegasus-al-día) en el manual. |
 
 Si alguno de los servidores elegidos se distribuye por npm (hoy, sólo `playwright`) y no hay `node` en
 el PATH, `install` se niega antes de escribir nada — también en `--dry-run` — con:

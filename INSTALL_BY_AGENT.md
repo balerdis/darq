@@ -1,8 +1,12 @@
 # Instalar Pegasus con un agente
 
 Este instructivo es para un agente que instala Pegasus 5 en nombre de una persona, en la cuenta Linux
-actual. El agente descarga, verifica y ejecuta cada comando exactamente como está escrito acá; la
-persona decide qué MCPs se instalan y mantiene el control de credenciales y modelos.
+actual. Pegasus soporta hoy dos CLIs anfitrionas -- OpenCode y Claude Code -- y este documento nunca
+elige una por vos: la parte 1 dice cómo averiguar cuál (o cuáles) hay en esta cuenta, y a partir de ahí
+cada comando lleva `--cli <id>` explícito, nunca adivinado. El agente descarga, verifica y ejecuta
+cada comando exactamente como está escrito acá; la persona decide qué MCPs se instalan, cuál es el
+CLI de destino cuando hay más de una opción razonable, y mantiene el control de credenciales y
+modelos.
 
 Pegasus 5 es un solo archivo: `pegasus`. No hay wheel, no hay venv, no hay `pip install` — se
 descarga, se verifica y se deja ejecutable en el PATH. Cada paso de esta guía dice si necesita red o
@@ -19,36 +23,63 @@ puedas parsear en vez de prosa.
 
 ## 0. Usar `install.sh`, cuando alcanza
 
-Si lo único que hace falta es dejar `python3` (ya presente), Node, OpenCode y el binario `pegasus`
-instalados -- sin elegir MCPs todavía --, `install.sh` hace eso solo, y es más corto que repetir los
-pasos manuales de este documento. La forma no interactiva, la que un agente debe usar, es:
+Si lo único que hace falta es dejar `python3` (ya presente), Node, el CLI elegido y el binario
+`pegasus` instalados -- sin elegir MCPs todavía --, `install.sh` hace eso solo, y es más corto que
+repetir los pasos manuales de este documento.
+
+**`install.sh` nunca elige el CLI por su cuenta, y menos todavía corrido sin una persona detrás.**
+Sin `--cli`, resuelve así: si la cuenta tiene exactamente un CLI soportado ya instalado, ese es el
+destino; si hay ambigüedad (ninguno instalado, o los dos) y hay una terminal, pregunta; sin terminal
+-- el caso de un agente corriendo esto por su cuenta -- se niega de entrada, nombrando `--cli` y los
+ids válidos, en vez de instalar en un CLI que nadie eligió. Esto es real incluso bajo `--verify`, que
+también resuelve el CLI antes de reportar nada:
+
+```
+$ install.sh --verify   (sin --cli, sin terminal, ningún CLI presente)
+ERROR: no se indicó qué CLI instalar y no hay una terminal para preguntarlo (por ejemplo, corriendo
+sin tty o con stdin cerrado). Usá --cli ID para elegir uno sin preguntar. Válidos: claudecode,
+opencode.
+```
+
+**Por eso un agente siempre pasa `--cli` a `install.sh`, en cualquier modo, y nunca confía en que
+"había exactamente uno instalado" vaya a seguir siendo cierto.** Si la persona ya te dijo qué CLI
+usar, o el paso 1 más abajo ya lo determinó, usá ese id. Si no lo sabés todavía y necesitás
+averiguarlo sin cambiar nada, `command -v claude` y `command -v opencode` (ninguno de los dos toca
+disco) alcanzan para ver qué hay antes de llamar a `install.sh` con el `--cli` correcto -- no le pidas
+a `install.sh` que adivine.
+
+La forma no interactiva, la que un agente debe usar para instalar (sustituí `<cli>` por `claudecode` u
+`opencode`):
 
 ```sh
 curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/install.sh \
-  | bash -s -- --yes --no-run
+  | bash -s -- --cli <cli> --yes --no-run
 ```
 
 `--yes` salta la confirmación (necesaria: nadie va a escribir "y" en un pipe) y `--no-run` evita que
 el script lance nada al final -- la TUI de Pegasus, que no es algo que un agente deba abrir. Repetido
-sin `--no-run` sí la lanzaría (siempre a la TUI, nunca directo a `opencode` -- ver INSTALL.md, sección
-1), así que un agente nunca lo corre sin ese flag. Para inspeccionar qué falta sin cambiar nada -- por
-ejemplo, para decidir si hace falta seguir con este instructivo o no --, usá `--verify`:
+sin `--no-run` sí la lanzaría (siempre a la TUI, nunca directo al CLI elegido -- ver INSTALL.md,
+sección 1), así que un agente nunca lo corre sin ese flag. Para inspeccionar qué falta sin cambiar
+nada -- por ejemplo, para decidir si hace falta seguir con este instructivo o no --, usá `--verify`,
+con el mismo `--cli` explícito:
 
 ```sh
 curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/install.sh \
-  | bash -s -- --verify
+  | bash -s -- --cli <cli> --verify
 ```
 
 `--verify` no descarga nada, no crea directorios, y termina con código de salida distinto de cero si
-`python3` está ausente o es más viejo que 3.12 -- el resto de esta guía asume que ese chequeo ya pasó.
-Si `install.sh` se niega por ese motivo, no lo resuelvas vos: instalar o actualizar el Python del
-sistema es una decisión específica de cada distribución, y una elección equivocada puede romper otra
-cosa. Decíselo a la persona con la versión que pide y la que se encontró, tal como el propio script
-las imprime, y esperá su decisión.
+`python3` está ausente o es más viejo que 3.12 (o si falta `curl`) -- el resto de esta guía asume que
+ese chequeo ya pasó. Que el CLI pedido con `--cli` no esté instalado todavía no es uno de esos
+bloqueos: `--verify` sale en `0` igual, y el reporte simplemente dice que ese CLI "se va a instalar".
+Si `install.sh` se niega por el motivo de Python, no lo resuelvas vos: instalar o actualizar el Python
+del sistema es una decisión específica de cada distribución, y una elección equivocada puede romper
+otra cosa. Decíselo a la persona con la versión que pide y la que se encontró, tal como el propio
+script las imprime, y esperá su decisión.
 
-Lo que `install.sh` no hace es elegir MCPs ni escribirlos en la configuración de OpenCode -- eso sigue
-siendo tarea de los pasos de abajo (sección "Instalar en OpenCode y elegir MCPs"), porque es ahí donde
-la persona tiene que tomar una decisión explícita por cada servidor.
+Lo que `install.sh` no hace es elegir MCPs ni escribirlos en la configuración del CLI -- eso sigue
+siendo tarea de los pasos de abajo (sección "Instalar en el CLI elegido y elegir MCPs"), porque es ahí
+donde la persona tiene que tomar una decisión explícita por cada servidor.
 
 ## 1. Ubicar el checkout y confirmar la cuenta
 
@@ -154,22 +185,34 @@ pegasus doctor
 ```
 
 Como el paso 2 no depende de red y el paso 3 no toca nada más, si `sha256sum -c` terminó en `0` este
-comando ya puede correr. Reporta qué CLIs anfitrionas detecta esta cuenta.
+comando ya puede correr. **Éste es el paso que te dice qué CLIs anfitrionas hay en esta cuenta -- no
+lo asumas de ningún otro lado.** Reporta cada adapter que Pegasus trae registrado, uno por línea, con
+su estado real: presente (con la ruta de su configuración) o ausente.
 
-*Ejecutado tal cual, contra el ejecutable puesto en un `bin_dir` de prueba y llamado por PATH:*
+*Ejecutado tal cual, contra el ejecutable puesto en un `bin_dir` de prueba y llamado por PATH, en una
+cuenta con las dos CLIs presentes:*
 
 ```
 $ pegasus doctor
+Claude Code: present at /home/.claude, Pegasus not installed.
 OpenCode: present at /home/.config/opencode, Pegasus not installed.
 ```
 
-## Instalar en OpenCode y elegir MCPs
+Si sólo una de las dos líneas dice `present`, ese es tu único destino razonable -- no le ofrezcas a la
+persona instalar en la que falta. Si las dos dicen `present`, pedile a la persona cuál de las dos
+querés que Pegasus integre (o si las dos), en vez de elegir vos. Si las dos dicen `not found on this
+machine`, no hay nada para integrar todavía: decíselo a la persona antes de seguir, no instales un CLI
+por su cuenta -- eso es tarea de la sección anterior (paso 0), no de Pegasus.
 
-Con `pegasus` en el PATH, identificá primero el binario de OpenCode en la shell real de la cuenta --
-no asumas que una shell de login comparte el mismo PATH que la sesión del agente:
+## Instalar en el CLI elegido y elegir MCPs
+
+Con `pegasus` en el PATH y ya sabiendo, por el paso 4, cuál CLI vas a integrar (llamalo `<cli>` de
+acá en adelante: `claudecode` u `opencode`), identificá primero su binario en la shell real de la
+cuenta -- no asumas que una shell de login comparte el mismo PATH que la sesión del agente:
 
 ```sh
-command -v opencode
+command -v claude       # si <cli> es claudecode
+command -v opencode     # si <cli> es opencode
 ```
 
 Pedile a la persona una decisión explícita por cada MCP que quiera instalar. El contenido embarca
@@ -188,7 +231,7 @@ Traducí cada decisión a `--mcp <id>` (instalar) o a la ausencia del flag (no i
 `--confirm`/`--decline` en v5, un servidor no nombrado simplemente no se instala:
 
 ```sh
-pegasus install --cli opencode --dry-run --mcp context7 --mcp jira
+pegasus install --cli <cli> --dry-run --mcp context7 --mcp jira
 ```
 
 Si la persona ya corre uno de estos servidores por su cuenta bajo una clave propia, no lo instales de
@@ -213,37 +256,42 @@ materializado no dispara esto: no hay nada que buscar, así que no hace falta No
 Mostrale el plan a la persona antes de aplicar. Recién con su confirmación, repetí el mismo comando sin
 `--dry-run`.
 
-Si la selección incluyó `jira`, decile que falta un paso que sólo puede dar ella, y que el reporte de
-`install` no lo cubre: correr `opencode mcp auth jira` una vez. Un `install` exitoso deja el servidor
-configurado y alcanzable por los agentes, pero sin esa autorización ninguna de sus herramientas
-contesta. No lo hagas vos y no lo des por hecho: si más adelante ese servidor falla, nombrá ese
-comando como la causa probable en vez de reinstalar.
+Si la selección incluyó `jira` y el CLI elegido fue OpenCode, decile que falta un paso que sólo puede
+dar ella, y que el reporte de `install` no lo cubre: correr `opencode mcp auth jira` una vez. Un
+`install` exitoso deja el servidor configurado y alcanzable por los agentes, pero sin esa autorización
+ninguna de sus herramientas contesta. No lo hagas vos y no lo des por hecho: si más adelante ese
+servidor falla, nombrá ese comando como la causa probable en vez de reinstalar.
 
 ## Dar acceso a un MCP que la persona administra por su cuenta
 
 Esto es distinto de todo lo anterior: `--mcp <id>` y `--mcp <id>=<clave>` son para servidores que
 Pegasus conoce, con descriptor propio. Si la persona instaló y administra un MCP que Pegasus nunca
-vio -- Sentry, Figma, o cualquier otro -- ese servidor puede figurar en su `opencode.json` y seguir
-siendo invisible para todos los agentes: Pegasus renderiza cada agente con una base que niega todo, y
-un servidor no nombrado en esa base no se abre aunque exista en la configuración general de OpenCode.
+vio -- Sentry, Figma, o cualquier otro -- ese servidor puede figurar en la configuración propia del
+CLI elegido y seguir siendo invisible para todos los agentes: Pegasus renderiza cada agente con una
+base que niega todo, y un servidor no nombrado en esa base no se abre aunque exista en la
+configuración general del CLI.
 
 `pegasus mcp grant` es el único mecanismo para eso, y es deliberadamente parejo: la clave se otorga a
 todos los agentes por igual, nunca a uno solo. Antes de correrlo, confirmá con la persona la clave
-exacta bajo la que su servidor está declarado en `opencode.json` (la sección `mcp`) -- no la
-adivines, y no aceptes un nombre "parecido".
+exacta bajo la que su servidor está declarado en la configuración propia de ese CLI -- no la adivines,
+y no aceptes un nombre "parecido". Si te equivocás, `grant` se niega y el JSON trae en `error` cuáles
+claves sí están declaradas ahí, para ese CLI puntual -- mostrale esa lista a la persona en vez de
+insistir con una variación.
 
 ```sh
-pegasus mcp grant --cli opencode <clave> --json
+pegasus mcp grant --cli <cli> <clave> --json
 ```
 
 Si la clave no está declarada en la configuración de esa CLI, el comando se niega y el JSON trae en
 `error` cuáles claves sí están declaradas -- mostrale esa lista a la persona en vez de reintentar con
 una variación. Con éxito, el JSON trae `"action": "grant"`, la clave otorgada, y la lista completa de
-lo ya otorgado bajo `"granted"`, más `activation` recordando que hace falta reiniciar OpenCode.
+lo ya otorgado bajo `"granted"`, más `activation`: bajo OpenCode trae el paso de reiniciarlo; bajo
+Claude Code viene vacío, porque esa CLI no necesita ningún paso de activación -- no asumas el mismo
+texto para las dos, leé lo que el JSON realmente trae.
 
 ```sh
-pegasus mcp list --cli opencode --json
-pegasus mcp revoke --cli opencode <clave> --json
+pegasus mcp list --cli <cli> --json
+pegasus mcp revoke --cli <cli> <clave> --json
 ```
 
 `list` muestra lo otorgado ahora (`"granted"`) y qué otras claves declaradas `grant` aceptaría tal
@@ -255,9 +303,9 @@ tiene una ligadura sin resolver (`--mcp id=<clave>` cuya clave nunca se registr�
 niegan de entrada para cualquier clave -- no sólo la ligada -- así que en ese estado `"available"` y
 `"already_covered"` vienen vacíos, `"unresolved_mcp_bindings"` nombra el o los ids que bloquean, y
 `"blocked"` trae el mismo texto exacto que `grant`/`revoke`/`update` ya usan para rechazar, nunca una
-segunda redacción del mismo hecho -- resolvé eso primero (`pegasus install --cli opencode --mcp
+segunda redacción del mismo hecho -- resolvé eso primero (`pegasus install --cli <cli> --mcp
 id=<clave>`) antes de esperar algo de `"available"`. `revoke` sobre una clave nunca otorgada no es un
-error: el JSON trae `"status": "already-revoked"` y sale en `0`. `pegasus update --cli opencode`
+error: el JSON trae `"status": "already-revoked"` y sale en `0`. `pegasus update --cli <cli>`
 reaplica las claves ya otorgadas junto con el resto de la selección,
 sin que haga falta repetir `mcp grant`.
 
@@ -289,22 +337,23 @@ real en `InstallGuidesSayABareInstallIsRefusedTest`
 (`tests/test_install_guides_command_surface.py`).
 
 ```sh
-pegasus update --cli opencode --dry-run --json
+pegasus update --cli <cli> --dry-run --json
 ```
 
 Mostrale el plan a la persona (o resumíselo) antes de aplicar. Con su confirmación, repetí sin
 `--dry-run`:
 
 ```sh
-pegasus update --cli opencode --json
+pegasus update --cli <cli> --json
 ```
 
 **Si el JSON trae `"status": "failed"`, no reintentes con otros flags -- `update` no tiene ninguno más
 que ayude.** Mirá `error` y actuá según cuál de estos dos mensajes es:
 
-- `"opencode has nothing installed to update; run install instead"` -- no hay nada instalado ahí
+- `"<cli> has nothing installed to update; run install instead"` -- no hay nada instalado ahí
   todavía. No es un fallo tuyo: contale a la persona que no hay instalación previa para esa CLI y, si
-  quiere una, seguí la sección "Instalar en OpenCode y elegir MCPs" de arriba (`install`, no `update`).
+  quiere una, seguí la sección "Instalar en el CLI elegido y elegir MCPs" de arriba (`install`, no
+  `update`).
 
 - Un mensaje que empieza con `"... has bound mcp server(s) ... whose server key was never recorded"`
   -- `update` se niega a adivinar la clave de un servidor atado que quedó registrado antes de que
@@ -363,11 +412,12 @@ que arregle ninguno de estos:
 No fuerces colisiones: Pegasus las informa y preserva los archivos o claves existentes. Después de
 instalar, revisá `pegasus doctor` y el journal en
 `$XDG_DATA_HOME/pegasus-harness/journal-v4.json` (o `~/.local/share/pegasus-harness/journal-v4.json`
-si esa variable no está definida). La persona puede usar las herramientas de OpenCode que elija para su
+si esa variable no está definida) -- el mismo journal para cualquier CLI, todas sus instalaciones
+registradas ahí adentro. La persona puede usar las herramientas del CLI elegido que prefiera para su
 propia configuración, pero el agente no debe pedir, leer ni reproducir su contenido.
 
 Si hace falta deshacer algo, usá únicamente `pegasus restore` (vuelve a la generación anterior) o
-`pegasus uninstall --cli opencode` (retira sólo lo que el journal reclama como propio). No borres
+`pegasus uninstall --cli <cli>` (retira sólo lo que el journal reclama como propio). No borres
 configuración ajena a mano.
 
 No le prometas a la persona que una edición suya sobre un archivo instalado se preserva: no se
