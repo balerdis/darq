@@ -2,7 +2,7 @@
 name: sdd-verify
 description: Sole authority for declaring an SDD change ready to archive
 mode: subagent
-requires_tools: [read, write, bash]
+requires_tools: [read, write, bash, grep, glob]
 may_delegate_to: [pegasus-general]
 model_configurable: true
 ---

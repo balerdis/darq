@@ -1630,6 +1630,36 @@ class ShippedContentTest(unittest.TestCase):
                 self.assertNotIn("skill", agent.requires_tools + agent.optional_tools)
                 self.assertNotIn("ask", agent.requires_tools + agent.optional_tools)
 
+    def test_an_agent_with_bash_does_not_lack_grep_or_glob(self):
+        """A shell reaches `grep` and `find` trivially, so an agent already
+        holding `bash` loses nothing real when `grep` or `glob` is withheld --
+        it only has to spell the same search out as a shell command instead of
+        calling the native tool for it. A denial that a granted tool routes
+        around is friction, not containment: it does not shrink what the agent
+        can do, it just taxes the doing of it, and it dresses up as a
+        restriction while restricting nothing.
+
+        `sdd-verify`, whose whole job is gathering the evidence a verdict
+        rests on, and `sdd-archive` are graded here alongside every other
+        shipped agent, not carved out for it -- the same craft their
+        phase-less twin `pegasus-verifier` already does with
+        `[read, bash, grep, glob]`, with no reason on record for either of
+        them to need a clumsier route to the same place.
+        """
+        violators = []
+        for agent in self.content.agents:
+            granted = agent.requires_tools + agent.optional_tools
+            if "bash" not in granted:
+                continue
+            missing = [tool for tool in ("grep", "glob") if tool not in granted]
+            if missing:
+                violators.append(f"{agent.name} (missing {', '.join(missing)})")
+        self.assertEqual(
+            violators,
+            [],
+            "agents with bash but missing grep/glob: " + "; ".join(violators),
+        )
+
     def test_the_orchestrator_is_the_agent_a_session_starts_in(self):
         starting = [agent.name for agent in self.content.agents if agent.default]
         self.assertEqual(starting, [content.SESSION_STARTS_IN])
