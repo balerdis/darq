@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Instala Pegasus en una cuenta Linux limpia: nvm + Node LTS, OpenCode y el
-# binario de pegasus, en ese orden, y deja el resultado listo para trabajar.
+# Instala Pegasus en una cuenta Linux limpia: nvm + Node LTS, el CLI que elijas
+# y el binario de pegasus, en ese orden, y deja el resultado listo para trabajar.
 #
 # Pensado para correrse así, como asset de un release (bash lee la tubería de
 # a poco, por eso todo el script vive adentro de funciones — ver el comentario
@@ -9,12 +9,17 @@
 #   curl -fsSL <url de la página de releases>/latest/download/install.sh | bash
 #
 #   ./install.sh                     detecta, muestra el preflight, pide confirmación e instala
+#   ./install.sh --cli ID            elige qué CLI instalar sin preguntar (ver más abajo, o el
+#                                     mensaje de error de --cli, para la lista de ids válidos).
+#                                     Sin este flag: si hay una terminal, se pregunta cuál
+#                                     instalar; si no la hay, el script falla en vez de elegir
+#                                     uno por su cuenta.
 #   ./install.sh --verify            informa el estado, no cambia nada
 #   ./install.sh --yes               salta la confirmación
 #   ./install.sh --no-run            instala lo que falte, pero no lanza nada al final; dice qué habría lanzado
 #   ./install.sh --bin-dir DIR       instala el binario de pegasus en DIR en vez de ~/.local/bin
-#   ./install.sh --opencode-version X   fija la versión de OpenCode a instalar
-#   ./install.sh --opencode-ultima      instala la última versión de OpenCode publicada
+#   ./install.sh --opencode-version X   si el CLI elegido es OpenCode, fija la versión a instalar
+#   ./install.sh --opencode-ultima      si el CLI elegido es OpenCode, instala la última versión publicada
 #
 set -euo pipefail
 
@@ -61,18 +66,69 @@ PRODUCT_PROGRAM_NAME='pegasus'
 PRODUCT_RELEASE_BASE_URL_DEFAULT='https://github.com/balerdis/pegasus-harness/releases/latest/download'
 # ============================================================================
 
+# Catálogo de CLIs que este motor sabe instalar, generado por
+# tools/build_installer.py a partir del registro de adapters del motor -- nunca
+# a mano. Agregar un adapter nuevo y volver a correr build_installer alcanza
+# para que aparezca acá, en el menú de elección (ver resolver_cli_elegido) y
+# en la lista de ids válidos de cada mensaje de error, sin que nadie tenga que
+# acordarse de tocar este archivo. Formato: pares "id:Nombre" separados por
+# coma; el nombre puede tener espacios (a diferencia del id) pero no coma ni
+# dos puntos -- build_installer.py lo valida antes de generar esto.
+CLI_CATALOGO='claudecode:Claude Code,opencode:OpenCode'
+CLI_IDS=()
+CLI_NOMBRES=()
+IFS=',' read -r -a _cli_pares <<< "$CLI_CATALOGO"
+for _cli_par in "${_cli_pares[@]}"; do
+  CLI_IDS+=("${_cli_par%%:*}")
+  CLI_NOMBRES+=("${_cli_par#*:}")
+done
+unset _cli_par _cli_pares
+
+# Binario a buscar con `command -v` para cada id del catálogo -- también
+# generado por build_installer.py, leyendo el atributo público `binary` de
+# cada adapter (ver Adapter.binary en opencode/adapter.py y
+# claudecode/adapter.py). Se deriva porque es un hecho DEL ADAPTER: el mismo
+# nombre que su propio detect() ya busca. verificar_catalogo_cli, más abajo,
+# es la red de seguridad si algún día este archivo y CLI_CATALOGO quedan
+# desincronizados (por ejemplo, un build viejo sin regenerar).
+declare -A CLI_BINARIO=([claudecode]='claude' [opencode]='opencode')
+
+# Dónde deja su binario el instalador OFICIAL de cada CLI -- a diferencia de
+# CLI_BINARIO, esto NO se deriva de available(): es un hecho sobre el
+# instalador de terceros de cada CLI (el script en opencode.ai/install, el de
+# claude.ai/install.sh), no sobre el adapter -- ningún adapter lo sabe, ni
+# tendría por qué. Manual a propósito, igual que instalar_opencode /
+# instalar_claude: un CLI nuevo siempre va a necesitar su propia entrada acá,
+# tan manual como escribir esa función.
+declare -A CLI_BIN_DIR=([opencode]="$HOME/.opencode/bin" [claudecode]="$HOME/.local/bin")
+
+# Invariante entre el catálogo derivado (CLI_CATALOGO/CLI_IDS) y el mapa de
+# binarios que también genera build_installer.py (CLI_BINARIO, ver arriba):
+# todo id del catálogo tiene que tener una entrada acá. Sin esta guarda, un
+# build viejo que todavía no regeneró CLI_BINARIO para un adapter nuevo
+# fallaría recién adentro de detectar_clis, con un "unbound variable" de bash
+# que no dice nada de la causa real -- se corta ACÁ, nombrando TODOS los ids
+# que faltan de una.
+verificar_catalogo_cli() {
+  local id faltantes=()
+  for id in "${CLI_IDS[@]}"; do
+    [[ -v CLI_BINARIO[$id] ]] || faltantes+=("$id")
+  done
+  ((${#faltantes[@]} == 0)) \
+    || fallar "CLI_BINARIO no tiene entrada para: ${faltantes[*]} (install.sh quedó desincronizado con su catálogo -- volvé a generarlo con tools/build_installer.py)."
+}
+
+# El CLI que esta corrida va a instalar. Nunca se adivina en función de qué
+# hay presente cuando la situación es ambigua -- ver el comentario grande
+# junto a resolver_cli_elegido, más abajo, para las cuatro reglas exactas.
+CLI_ELEGIDO=''
+
 # --- Valores por defecto, ajustables por flag ---
 
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 MODO='instalar'
 NO_RUN=0
 CONFIRMAR=1
-
-# Donde el instalador oficial de OpenCode deja el binario -- ver el
-# comentario dentro de instalar_opencode. Se fija acá, una sola vez, porque
-# tanto instalar_opencode como la guía de PATH del final necesitan el mismo
-# valor.
-OPENCODE_BIN_DIR="$HOME/.opencode/bin"
 
 # El PATH tal como llegó, antes de que cualquier "export PATH=..." de este
 # script lo toque. La guía de PATH del final (ver mostrar_guia_path) tiene
@@ -132,6 +188,45 @@ advertir() { printf 'ADVERTENCIA: %s\n' "$*" >&2; }
 titulo() { printf '\n=== %s ===\n' "$*"; }
 ok()     { printf '  ✔ %s\n' "$*"; }
 info()   { printf '  %s\n' "$*"; }
+
+# --- Catálogo de CLIs: lecturas puras sobre CLI_IDS/CLI_NOMBRES ---
+#
+# Tres funciones chicas, ninguna de las cuales elige nada por su cuenta --
+# eso es trabajo de resolver_cli_elegido, más abajo -- para que un mensaje de
+# error y el menú de elección nunca puedan listar cosas distintas.
+
+cli_soportado() {
+  local candidato=$1 id
+  for id in "${CLI_IDS[@]}"; do
+    [[ "$id" == "$candidato" ]] && return 0
+  done
+  return 1
+}
+
+nombre_de_cli() {
+  local candidato=$1 i
+  for ((i = 0; i < ${#CLI_IDS[@]}; i++)); do
+    if [[ "${CLI_IDS[i]}" == "$candidato" ]]; then
+      printf '%s' "${CLI_NOMBRES[i]}"
+      return 0
+    fi
+  done
+  printf '%s' "$candidato"
+}
+
+lista_ids_cli() {
+  # "${arr[*]}" con IFS a secas sólo une con su PRIMER carácter -- ", " de dos
+  # caracteres se vería truncado a sólo ",". Se arma a mano, un id a la vez.
+  local salida='' id
+  for id in "${CLI_IDS[@]}"; do
+    if [[ -z "$salida" ]]; then
+      salida="$id"
+    else
+      salida="$salida, $id"
+    fi
+  done
+  printf '%s' "$salida"
+}
 
 # --- Descargas: única costura de red de este script ---
 #
@@ -270,6 +365,16 @@ parsear_argumentos() {
         (($# >= 2)) || fallar '--opencode-version necesita un numero'
         VERSION_OPENCODE=$2; shift 2 ;;
       --opencode-ultima) VERSION_OPENCODE=''; shift ;;
+      --cli)
+        (($# >= 2)) || fallar '--cli necesita un id'
+        CLI_ELEGIDO=$2
+        # Validado ACÁ, antes de instalar nada -- no en resolver_cli_elegido,
+        # que sólo corre cuando este flag falta -- para que un id mal
+        # tipeado corte al toque, con la misma lista de válidos que ve
+        # quien no puso ningún --cli y terminó preguntándosele.
+        cli_soportado "$CLI_ELEGIDO" \
+          || fallar "--cli desconocido: '$CLI_ELEGIDO'. Válidos: $(lista_ids_cli)."
+        shift 2 ;;
       --help|-h) uso; exit 0 ;;
       *) fallar "argumento no soportado: $1" ;;
     esac
@@ -350,20 +455,29 @@ detectar_node() {
   fi
 }
 
-OPENCODE_PRESENTE=0
-OPENCODE_VERSION=''
+# Presencia y versión de CADA CLI soportado -- no sólo del que termine
+# eligiéndose -- porque resolver_cli_elegido (más abajo) necesita mostrar
+# qué hay ya instalado en el menú de elección antes de saber cuál es el
+# elegido. Indexadas por id (CLI_IDS), no por posición: así instalar_opencode
+# / instalar_claude pueden mirar la suya sin tener que buscar su propio
+# índice en CLI_IDS primero.
+declare -A CLI_PRESENTE=()
+declare -A CLI_VERSION=()
 
-detectar_opencode() {
-  if command -v opencode >/dev/null 2>&1; then
-    OPENCODE_PRESENTE=1
-    # Ver el comentario en detectar_node: por qué no "| head -1", y por qué "|| true".
-    local salida_completa
-    salida_completa=$(opencode --version 2>&1) || true
-    OPENCODE_VERSION=${salida_completa%%$'\n'*}
-  else
-    OPENCODE_PRESENTE=0
-    OPENCODE_VERSION=''
-  fi
+detectar_clis() {
+  local id binario salida_completa
+  for id in "${CLI_IDS[@]}"; do
+    binario="${CLI_BINARIO[$id]}"
+    if command -v "$binario" >/dev/null 2>&1; then
+      CLI_PRESENTE[$id]=1
+      # Ver el comentario en detectar_node: por qué no "| head -1", y por qué "|| true".
+      salida_completa=$("$binario" --version 2>&1) || true
+      CLI_VERSION[$id]=${salida_completa%%$'\n'*}
+    else
+      CLI_PRESENTE[$id]=0
+      CLI_VERSION[$id]=''
+    fi
+  done
 }
 
 PRODUCTO_PRESENTE=0
@@ -489,7 +603,7 @@ detectar_todo() {
   detectar_python
   detectar_curl
   detectar_node
-  detectar_opencode
+  detectar_clis
   detectar_producto
   detectar_path
   detectar_shell
@@ -500,23 +614,23 @@ detectar_todo() {
 # NO sale de acá: sale de lo que la instalación hizo de verdad (ver
 # ALGO_SE_INSTALO más abajo), porque bajo --no-run sí se instala de verdad.
 FALTA_NODE=0
-FALTA_OPENCODE=0
+FALTA_CLI=0
 FALTA_PRODUCTO=0
 FALTA_ALGO=0
 
 calcular_faltantes() {
   ((NODE_PRESENTE)) && FALTA_NODE=0 || FALTA_NODE=1
-  ((OPENCODE_PRESENTE)) && FALTA_OPENCODE=0 || FALTA_OPENCODE=1
+  ((CLI_PRESENTE[$CLI_ELEGIDO])) && FALTA_CLI=0 || FALTA_CLI=1
   ((PRODUCTO_PRESENTE)) && FALTA_PRODUCTO=0 || FALTA_PRODUCTO=1
-  if ((FALTA_NODE || FALTA_OPENCODE || FALTA_PRODUCTO)); then
+  if ((FALTA_NODE || FALTA_CLI || FALTA_PRODUCTO)); then
     FALTA_ALGO=1
   else
     FALTA_ALGO=0
   fi
 }
 
-# Si el directorio del binario del producto y/o el de OpenCode van a faltar
-# en el PATH de la terminal real que llamó a este script -- ver
+# Si el directorio del binario del producto y/o el del CLI elegido van a
+# faltar en el PATH de la terminal real que llamó a este script -- ver
 # ORIGINAL_PATH, arriba, y por qué se compara contra ese valor y no contra el
 # PATH ya modificado del propio proceso. Una sola función para que
 # mostrar_guia_path y bloque_accion_requerida (ver más abajo) nunca puedan
@@ -529,20 +643,20 @@ calcular_faltantes() {
 # final SIEMPRE termina en el binario del producto (ver decidir_lanzamiento),
 # ese segundo caso necesita el mismo aviso que uno recién instalado -- si no,
 # la persona sale de la TUI a una terminal que sigue sin encontrarlo y nadie
-# se lo dijo. OpenCode no tiene este problema: detectar_opencode sólo lo
+# se lo dijo. El CLI elegido no tiene este problema: detectar_clis sólo lo
 # marca presente vía `command -v`, así que si está presente ya está en el
 # PATH.
 AVISO_PRODUCTO_DIR=0
-AVISO_OPENCODE_DIR=0
+AVISO_CLI_DIR=0
 
 calcular_avisos_path() {
   AVISO_PRODUCTO_DIR=0
-  AVISO_OPENCODE_DIR=0
+  AVISO_CLI_DIR=0
   local producto_solo_en_bin_dir=0
   [[ "$PRODUCTO_RUTA" == "$BIN_DIR/$PRODUCT_PROGRAM_NAME" ]] && producto_solo_en_bin_dir=1
   { ((FALTA_PRODUCTO)) || ((producto_solo_en_bin_dir)); } \
     && ! dir_en_path "$ORIGINAL_PATH" "$BIN_DIR" && AVISO_PRODUCTO_DIR=1
-  ((FALTA_OPENCODE)) && ! dir_en_path "$ORIGINAL_PATH" "$OPENCODE_BIN_DIR" && AVISO_OPENCODE_DIR=1
+  ((FALTA_CLI)) && ! dir_en_path "$ORIGINAL_PATH" "${CLI_BIN_DIR[$CLI_ELEGIDO]}" && AVISO_CLI_DIR=1
   return 0
 }
 
@@ -607,6 +721,20 @@ calcular_bloqueo() {
 
 # --- Preflight ---
 mostrar_preflight() {
+  # Nombra el CLI elegido de forma inconfundible, sea cual sea el motivo por
+  # el que se llegó a él (--cli, el único ya instalado, o lo que se
+  # respondió al preguntar en resolver_cli_elegido): esta línea es a la que
+  # se le engancha el consentimiento de la confirmación de más abajo (ver
+  # confirmar) -- quien la lea y confirme el preflight tiene que poder ver,
+  # sin adivinar, a qué CLI le está diciendo que sí. Va primero, antes que
+  # nada más, para que no se pueda leer el resto del preflight sin verla.
+  titulo 'CLI'
+  if ((CLI_PRESENTE[$CLI_ELEGIDO])); then
+    ok "$(nombre_de_cli "$CLI_ELEGIDO") ($CLI_ELEGIDO), ya instalado: ${CLI_VERSION[$CLI_ELEGIDO]}"
+  else
+    info "$(nombre_de_cli "$CLI_ELEGIDO") ($CLI_ELEGIDO), se va a instalar"
+  fi
+
   titulo 'Chequeo de requisitos'
 
   if ((PY_PRESENTE)); then
@@ -641,11 +769,13 @@ mostrar_preflight() {
     info "Node LTS, vía nvm $NVM_VERSION"
     algo_para_instalar=1
   fi
-  if ((FALTA_OPENCODE)); then
-    if [[ -n "$VERSION_OPENCODE" ]]; then
-      info "OpenCode $VERSION_OPENCODE"
+  if ((FALTA_CLI)); then
+    if [[ "$CLI_ELEGIDO" == 'opencode' && -n "$VERSION_OPENCODE" ]]; then
+      info "$(nombre_de_cli "$CLI_ELEGIDO") $VERSION_OPENCODE"
+    elif [[ "$CLI_ELEGIDO" == 'opencode' ]]; then
+      info "$(nombre_de_cli "$CLI_ELEGIDO"), última versión publicada"
     else
-      info 'OpenCode, última versión publicada'
+      info "$(nombre_de_cli "$CLI_ELEGIDO")"
     fi
     algo_para_instalar=1
   fi
@@ -661,7 +791,7 @@ mostrar_preflight() {
   titulo 'Ya presente'
   local algo_presente=0
   ((NODE_PRESENTE)) && { ok "node $NODE_VERSION"; algo_presente=1; }
-  ((OPENCODE_PRESENTE)) && { ok "opencode $OPENCODE_VERSION"; algo_presente=1; }
+  ((CLI_PRESENTE[$CLI_ELEGIDO])) && { ok "$CLI_ELEGIDO ${CLI_VERSION[$CLI_ELEGIDO]}"; algo_presente=1; }
   ((PRODUCTO_PRESENTE)) && { ok "$PRODUCT_PROGRAM_NAME $PRODUCTO_VERSION ($PRODUCTO_RUTA)"; algo_presente=1; }
   ((algo_presente)) || info 'nada todavía'
 
@@ -716,6 +846,68 @@ Este script no instala Python. Pistas (no ejecutadas por este script):
 # intento de abrir falla adentro del proceso principal.
 hay_terminal_controladora() {
   (exec 0</dev/tty) 2>/dev/null
+}
+
+# --- Elección de CLI ---
+#
+# Este instalador NUNCA elige un CLI a ciegas, pero tampoco pregunta dos
+# veces por algo que ya se le va a mostrar y confirmar a la persona. Cuatro
+# casos, ninguno más:
+#
+#   1. --cli ID ya vino (ver parsear_argumentos, que ya lo validó): listo, no
+#      se pregunta ni se revisa nada más.
+#   2. No vino, y hay EXACTAMENTE UN CLI soportado ya instalado en la
+#      máquina: se lo elige sin preguntar. Esto no es adivinar -- el
+#      preflight (ver mostrar_preflight) lo va a nombrar como el CLI elegido
+#      de forma explícita, y la confirmación de siempre (ver confirmar, más
+#      abajo) es exactamente el consentimiento para ese plan: la persona ve
+#      "se va a usar OpenCode" en el preflight y dice que sí, o dice que no.
+#      Agregar una segunda pregunta acá sería preguntar dos veces por lo
+#      mismo que el preflight ya muestra y la confirmación ya cubre.
+#   3. No vino, y la situación es AMBIGUA -- ninguno de los soportados está
+#      instalado (este script instala el que falte, así que "cuál" es una
+#      pregunta real), o hay más de uno instalado -- y hay una terminal
+#      controladora: acá sí hace falta preguntar, con la misma lectura de
+#      /dev/tty que usa `confirmar` -- ver el comentario grande ahí mismo
+#      para el porqué (stdin, bajo "curl | bash", ya está en EOF).
+#   4. Ambiguo (caso 3) y sin ninguna terminal: se corta. No hay a quién
+#      preguntarle, y sin nadie a quien preguntarle no se elige nada.
+resolver_cli_elegido() {
+  [[ -n "$CLI_ELEGIDO" ]] && return 0
+
+  local presentes=() id
+  for id in "${CLI_IDS[@]}"; do
+    ((CLI_PRESENTE[$id])) && presentes+=("$id")
+  done
+
+  if ((${#presentes[@]} == 1)); then
+    CLI_ELEGIDO="${presentes[0]}"
+    return 0
+  fi
+
+  if ! hay_terminal_controladora; then
+    fallar "no se indicó qué CLI instalar y no hay una terminal para preguntarlo (por ejemplo, corriendo sin tty o con stdin cerrado). Usá --cli ID para elegir uno sin preguntar. Válidos: $(lista_ids_cli)."
+  fi
+
+  titulo 'Elegí un CLI'
+  local i nombre estado
+  for ((i = 0; i < ${#CLI_IDS[@]}; i++)); do
+    id="${CLI_IDS[i]}"
+    nombre="${CLI_NOMBRES[i]}"
+    estado='no instalado'
+    ((CLI_PRESENTE[$id])) && estado="ya instalado: ${CLI_VERSION[$id]}"
+    printf '  %s (%s) -- %s\n' "$nombre" "$id" "$estado"
+  done
+
+  local respuesta
+  while true; do
+    read -r -p 'Elegí un id de la lista de arriba: ' respuesta < /dev/tty
+    if cli_soportado "$respuesta"; then
+      CLI_ELEGIDO="$respuesta"
+      return 0
+    fi
+    printf '  no reconozco "%s". Válidos: %s\n' "$respuesta" "$(lista_ids_cli)" >&2
+  done
 }
 
 confirmar() {
@@ -810,10 +1002,25 @@ instalar_node() {
   ok "Node $(node --version) instalado"
 }
 
+# Despacha al instalador del CLI elegido. El despacho en sí queda hardcodeado
+# a propósito -- a diferencia de CLI_IDS/CLI_NOMBRES (ver CLI_CATALOGO, que sí
+# se deriva del registro de adapters del motor), un CLI nuevo siempre va a
+# necesitar su propia función instalar_<cli> (mecanismo de descarga propio,
+# formato de versión propio, lo que sea), así que no hay nada genérico que
+# "derivar" acá: agregar la rama de abajo es tan manual como escribir esa
+# función.
+instalar_cli() {
+  case "$CLI_ELEGIDO" in
+    opencode) instalar_opencode ;;
+    claudecode) instalar_claude ;;
+    *) fallar "no hay un instalador conocido para el CLI elegido: $CLI_ELEGIDO" ;;
+  esac
+}
+
 instalar_opencode() {
-  titulo 'OpenCode'
-  if ((OPENCODE_PRESENTE)); then
-    info "ya instalado: $OPENCODE_VERSION"
+  titulo "$(nombre_de_cli opencode)"
+  if ((CLI_PRESENTE[opencode])); then
+    info "ya instalado: ${CLI_VERSION[opencode]}"
     return 0
   fi
   ALGO_SE_INSTALO=1
@@ -832,15 +1039,42 @@ instalar_opencode() {
       || fallar 'falló la instalación de OpenCode; si dice "Failed to fetch version information", es el límite de la API de GitHub: esperá o usá --opencode-version'
   fi
 
-  # El instalador oficial deja el binario en $OPENCODE_BIN_DIR y sólo lo
+  # El instalador oficial deja el binario en CLI_BIN_DIR[opencode] y sólo lo
   # agrega a ~/.bashrc; esta shell ya arrancó, así que hace falta lo mismo
   # acá.
-  export PATH="$OPENCODE_BIN_DIR:$PATH"
+  export PATH="${CLI_BIN_DIR[opencode]}:$PATH"
   command -v opencode >/dev/null 2>&1 \
     || fallar 'OpenCode se instaló pero no quedó en el PATH; revisá ~/.bashrc'
   # Ver el comentario en detectar_node: por qué no "| head -1", y por qué "|| true".
   local salida_completa
   salida_completa=$(opencode --version 2>&1) || true
+  ok "instalado: ${salida_completa%%$'\n'*}"
+}
+
+instalar_claude() {
+  titulo "$(nombre_de_cli claudecode)"
+  if ((CLI_PRESENTE[claudecode])); then
+    info "ya instalado: ${CLI_VERSION[claudecode]}"
+    return 0
+  fi
+  ALGO_SE_INSTALO=1
+
+  info "instalando $(nombre_de_cli claudecode) con el mecanismo oficial..."
+  descargar_y_ejecutar https://claude.ai/install.sh \
+    "no se pudo descargar el instalador de $(nombre_de_cli claudecode)" \
+    || fallar "falló la instalación de $(nombre_de_cli claudecode)"
+
+  # El instalador oficial deja el binario en CLI_BIN_DIR[claudecode]
+  # (~/.local/bin, sin depender de --bin-dir: esa opción es sólo para el
+  # binario del producto, ver parsear_argumentos) y sólo lo agrega a
+  # ~/.bashrc; esta shell ya arrancó, así que hace falta lo mismo acá -- mismo
+  # motivo que instalar_opencode, un escalón más arriba.
+  export PATH="${CLI_BIN_DIR[claudecode]}:$PATH"
+  command -v claude >/dev/null 2>&1 \
+    || fallar "$(nombre_de_cli claudecode) se instaló pero no quedó en el PATH; revisá ~/.bashrc"
+  # Ver el comentario en detectar_node: por qué no "| head -1", y por qué "|| true".
+  local salida_completa
+  salida_completa=$(claude --version 2>&1) || true
   ok "instalado: ${salida_completa%%$'\n'*}"
 }
 
@@ -1003,9 +1237,9 @@ $linea"
 # Reemplaza el aviso que antes daba asegurar_path a mitad de instalación.
 # Dos programas pueden haber quedado fuera del PATH de la terminal real
 # (la que sigue viva del otro lado de un "curl ... | bash"): el binario del
-# producto, en $BIN_DIR, y el de OpenCode, en $OPENCODE_BIN_DIR -- éste
-# último lo instala el mecanismo oficial de OpenCode, que sólo agrega la
-# línea a ~/.bashrc, igual que nvm hace con el suyo.
+# producto, en $BIN_DIR, y el del CLI elegido, en CLI_BIN_DIR[$CLI_ELEGIDO]
+# -- éste último lo instala el mecanismo oficial de ese CLI, que sólo agrega
+# la línea a ~/.bashrc, igual que nvm hace con el suyo.
 #
 # Se nombra sólo el/los que de verdad aplican a esta corrida (lo que se
 # instaló y, además, no estaba ya en el PATH con el que arrancó el script --
@@ -1051,7 +1285,16 @@ EXPORT_LINEA=''
 calcular_export_linea() {
   local dirs=()
   ((AVISO_PRODUCTO_DIR)) && dirs+=("$BIN_DIR")
-  ((AVISO_OPENCODE_DIR)) && dirs+=("$OPENCODE_BIN_DIR")
+  if ((AVISO_CLI_DIR)); then
+    local cli_dir="${CLI_BIN_DIR[$CLI_ELEGIDO]}"
+    # Evita duplicar el mismo directorio cuando el CLI elegido cae en el
+    # mismo BIN_DIR que el producto -- Claude Code, por default, instala en
+    # ~/.local/bin, igual que el producto. Un "export PATH=...:..." con el
+    # mismo directorio repetido no rompe nada, pero es ruido de más.
+    if ! ((AVISO_PRODUCTO_DIR)) || [[ "$cli_dir" != "$BIN_DIR" ]]; then
+      dirs+=("$cli_dir")
+    fi
+  fi
   local combinado
   combinado=$(IFS=:; printf '%s' "${dirs[*]}")
   EXPORT_LINEA="export PATH=\"$combinado:\$PATH\""
@@ -1059,12 +1302,12 @@ calcular_export_linea() {
 
 mostrar_guia_path() {
   calcular_avisos_path
-  ((AVISO_PRODUCTO_DIR || AVISO_OPENCODE_DIR)) || return 0
+  ((AVISO_PRODUCTO_DIR || AVISO_CLI_DIR)) || return 0
   calcular_export_linea
 
   titulo 'PATH'
   ((AVISO_PRODUCTO_DIR)) && info "$PRODUCT_PROGRAM_NAME, en $BIN_DIR: todavía no está en el PATH de esta terminal."
-  ((AVISO_OPENCODE_DIR)) && info "opencode, en $OPENCODE_BIN_DIR: todavía no está en el PATH de esta terminal."
+  ((AVISO_CLI_DIR)) && info "$CLI_ELEGIDO, en ${CLI_BIN_DIR[$CLI_ELEGIDO]}: todavía no está en el PATH de esta terminal."
 
   if ((PERSISTIR_PATH_RC)) && ((PATH_RC_ESCRITO)); then
     info "Para esta terminal: source $SHELL_RC_FILE"
@@ -1083,15 +1326,15 @@ mostrar_guia_path() {
     info "Para esta terminal: $EXPORT_LINEA"
   else
     info 'Para esta terminal: source ~/.profile'
-    if ((AVISO_PRODUCTO_DIR && AVISO_OPENCODE_DIR)); then
-      info '(no "source ~/.bashrc" sola: esa trae lo que instaló OpenCode, pero no'
+    if ((AVISO_PRODUCTO_DIR && AVISO_CLI_DIR)); then
+      info "(no \"source ~/.bashrc\" sola: esa trae lo que instaló $(nombre_de_cli "$CLI_ELEGIDO"), pero no"
       info 'agrega el bin del producto. ~/.profile hace las dos cosas: de paso vuelve'
       info 'a leer ~/.bashrc, y además agrega ~/.local/bin, que recién se creó.)'
     elif ((AVISO_PRODUCTO_DIR)); then
       info '(agrega ~/.local/bin al PATH, ahora que el directorio existe.)'
     else
       info '(vuelve a leer ~/.bashrc, donde quedó la línea que agregó el instalador'
-      info 'de OpenCode.)'
+      info "de $(nombre_de_cli "$CLI_ELEGIDO").)"
     fi
     info "$EXPORT_LINEA"
     info 'Una sesión nueva ya la tiene sola, sin hacer nada de esto.'
@@ -1115,7 +1358,7 @@ mostrar_guia_path() {
 # derecho que alinear, así que no hay nada que romper.
 bloque_accion_requerida() {
   calcular_avisos_path
-  ((AVISO_PRODUCTO_DIR || AVISO_OPENCODE_DIR)) || return 0
+  ((AVISO_PRODUCTO_DIR || AVISO_CLI_DIR)) || return 0
 
   # Sin `seq` ni ningún otro comando externo: este bloque existe justamente
   # para rescatar un PATH que todavía no sirve, y es lo último que se imprime
@@ -1129,7 +1372,7 @@ bloque_accion_requerida() {
   raya=${raya// /─}
 
   printf '\n%s\n' "$raya"
-  printf '  ANTES DE CORRER %s U opencode, en esta terminal:\n\n' "$PRODUCT_PROGRAM_NAME"
+  printf '  ANTES DE CORRER %s U %s, en esta terminal:\n\n' "$PRODUCT_PROGRAM_NAME" "$CLI_ELEGIDO"
   if ((PERSISTIR_PATH_RC)) && ! ((PATH_RC_ESCRITO)); then
     # escribir_path_rc no pudo dejar la línea (ver mostrar_guia_path):
     # "source $SHELL_RC_FILE" no arreglaría nada, porque ese archivo no
@@ -1168,7 +1411,7 @@ decidir_lanzamiento() {
 
   LANZAR="$PRODUCT_PROGRAM_NAME"
   if ((se_instalo)); then
-    MOTIVO='se instaló algo nuevo: todavía hay que elegir MCPs y confirmar la instalación en OpenCode'
+    MOTIVO="se instaló algo nuevo: todavía hay que elegir MCPs y confirmar la instalación en $(nombre_de_cli "$CLI_ELEGIDO")"
   else
     MOTIVO='tu entorno ya tenía todo instalado; lo abrimos para ver si hay actualizaciones'
   fi
@@ -1223,9 +1466,11 @@ lanzar() {
 }
 
 main() {
+  verificar_catalogo_cli
   parsear_argumentos "$@"
   rechazar_root
   detectar_todo
+  resolver_cli_elegido
   calcular_faltantes
   calcular_avisos_path
   calcular_persistencia_path
@@ -1252,13 +1497,13 @@ main() {
   if ((FALTA_ALGO)); then
     confirmar
     ((FALTA_NODE)) && instalar_node
-    ((FALTA_OPENCODE)) && instalar_opencode
+    ((FALTA_CLI)) && instalar_cli
     ((FALTA_PRODUCTO)) && instalar_producto
   fi
 
   # Antes esto vivía adentro del "if FALTA_ALGO" de arriba: alcanzaba,
-  # porque el lanzamiento final elegía opencode (siempre ya en el PATH por
-  # cómo lo detecta detectar_opencode) cuando no hacía falta instalar nada.
+  # porque el lanzamiento final elegía el CLI (siempre ya en el PATH por
+  # cómo lo detecta detectar_clis) cuando no hacía falta instalar nada.
   # Ahora que decidir_lanzamiento SIEMPRE elige el binario del producto,
   # hace falta correr esto también cuando no faltaba instalar nada: ese
   # binario puede estar presente sólo por existir en $BIN_DIR (ver

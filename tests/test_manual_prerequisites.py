@@ -166,7 +166,11 @@ class ManualSaysWhoInstallsOpenCodeTest(_RealHomeTestCase):
         behind would make this a test that installs things.
         """
         return subprocess.run(
-            [BASH, str(INSTALLER), "--verify"],
+            # install.sh now supports more than one CLI and refuses to pick one on its own
+            # (see `tests/test_install_script.py::CliSelectionTest`); this whole class is
+            # specifically about the host CLI this paragraph names, so it targets it
+            # explicitly rather than leaving it to whatever install.sh would ask or refuse.
+            [BASH, str(INSTALLER), "--verify", "--cli", CLI],
             env={"HOME": str(self.home), "PATH": f"{self.stubs}:{SYSTEM_PATH}"},
             cwd=str(REPOSITORY),
             text=True,

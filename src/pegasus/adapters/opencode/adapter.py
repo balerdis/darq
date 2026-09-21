@@ -162,6 +162,13 @@ class Adapter:
 
     id = manifest_module.CLI_ID
     display_name = manifest_module.DISPLAY_NAME
+    # Exposed alongside `id`/`display_name` for the same reason those are: a
+    # consumer outside this module (`tools/build_installer.py`, deriving the
+    # shell installer's per-CLI detection command) needs the executable name
+    # this adapter's `detect()` already looks up via `BINARY`, without
+    # reaching past the public `Adapter` surface into a module-private
+    # constant.
+    binary = BINARY
 
     def tier(self) -> SupportTier:
         return SupportTier.FULL

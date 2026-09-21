@@ -122,7 +122,23 @@ class InstallScriptTestCase(unittest.TestCase):
         path: str | None = None,
         extra_env: dict[str, str] | None = None,
         start_new_session: bool = False,
+        cli: str | None = "opencode",
     ) -> subprocess.CompletedProcess:
+        """Drive `install.sh`.
+
+        `cli="opencode"` by default: install.sh now refuses to pick a CLI on its own (see
+        `CliSelectionTest` below), and this whole file predates that -- every test in it was
+        written against a single, implicitly-OpenCode installer. Rather than thread `--cli
+        opencode` through ~90 call sites (a mechanical change that would drown the actual
+        change in this diff), it is injected here, once, exactly the way a person would type
+        it -- so every existing scenario keeps exercising the same behaviour it always did.
+        Pass `cli=None` to get the bare argument list (needed by tests that specifically
+        exercise the "nothing said, nothing asked" refusal or the `--cli` validation itself),
+        or put `--cli ...` directly in `args` (the injection then backs off and leaves it
+        alone, so a test can still choose Claude Code explicitly).
+        """
+        if cli is not None and "--cli" not in args and "--help" not in args:
+            args = ("--cli", cli, *args)
         env = {
             "HOME": str(self.home),
             "PATH": path if path is not None else f"{self.stub_bin}:{SYSTEM_PATH}",
@@ -686,7 +702,7 @@ class ConfirmationPromptTest(InstallScriptTestCase):
             "PEGASUS_INSTALL_BASE_URL": base_url,
             "TERM": "xterm",
         }
-        session = _InstallPtySession(env=env, args=["--no-run"])
+        session = _InstallPtySession(env=env, args=["--cli", "opencode", "--no-run"])
         self.addCleanup(session.close)
 
         session.wait_for("[y/N]")
@@ -742,7 +758,7 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
             "PEGASUS_INSTALL_BASE_URL": base_url,
             "TERM": "xterm",
         }
-        session = _InstallPtySession(env=env, args=[])
+        session = _InstallPtySession(env=env, args=["--cli", "opencode"])
         self.addCleanup(session.close)
 
         session.wait_for("[y/N]")
@@ -781,7 +797,7 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
             "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",
             "TERM": "xterm",
         }
-        session = _InstallPtySession(env=env, args=[])
+        session = _InstallPtySession(env=env, args=["--cli", "opencode"])
         self.addCleanup(session.close)
 
         output = session.wait_for("PEGASUS-LAUNCHED-WITH-TERMINAL", timeout=15.0)
@@ -818,7 +834,7 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
             "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",
             "TERM": "xterm",
         }
-        session = _InstallPtySession(env=env, args=[])
+        session = _InstallPtySession(env=env, args=["--cli", "opencode"])
         self.addCleanup(session.close)
 
         output = session.wait_for("PEGASUS-LAUNCHED-WITH-TERMINAL", timeout=15.0)
@@ -1524,6 +1540,271 @@ class NvmDirectoryParentTest(InstallScriptTestCase):
         self.assertEqual(self.marker("nvm-parent").read_text(encoding="utf-8").strip(), "existe")
 
 
+class CliSelectionTest(InstallScriptTestCase):
+    """Coverage for the four-case rule this change adds:
+
+      1. `--cli ID` picks that CLI outright, no question asked.
+      2. No flag, and EXACTLY ONE supported CLI is already installed: it is
+         targeted without a separate question. This is not a silent guess --
+         `mostrar_preflight` names it explicitly (see the new "=== CLI ==="
+         section), and the ordinary confirmation prompt (`confirmar`, unrelated
+         to CLI choice) is the consent for that visible plan.
+      3. No flag, and the situation is genuinely ambiguous -- nothing
+         supported installed, or more than one is -- with a controlling
+         terminal: it asks, via `/dev/tty`, the same way `confirmar` does.
+      4. Ambiguous, and no controlling terminal at all: refuses, naming
+         `--cli` and the valid ids. Never guesses.
+
+    An earlier draft of this rule refused case 2 as well ("not even when only
+    one CLI is present"), reasoning that this installer also installs a
+    missing CLI, so presence alone cannot prove intent. That was overridden
+    before this file was finished: the preflight already surfaces exactly
+    what it found and asks for confirmation before touching anything, so
+    when there is only one candidate, showing it and confirming IS the
+    choice -- a second, separate question would ask the same thing twice.
+    """
+
+    def _stub_python_node_present(self):
+        self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
+        self.stub("node", 'echo "v20.11.0"\n')
+
+    def test_cli_flag_selects_that_cli_without_asking(self):
+        """`--cli claudecode`, with only OpenCode present on PATH, must still
+        target Claude Code -- proving this is a real choice, not a fallback
+        to whatever happens to already be installed."""
+        self._stub_python_node_present()
+        self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
+
+        result = self.run_install("--verify", cli="claudecode")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Claude Code", result.stdout)
+        self.assertIn("confirmar la instalación en Claude Code", result.stdout)
+
+    def test_exactly_one_cli_installed_is_targeted_without_a_second_question(self):
+        """Case 2, the corrected rule's core case. Only OpenCode is present,
+        no `--cli` is given, and there is no controlling terminal either --
+        if this still asked (or refused) the way pure ambiguity does, this
+        would fail exactly like the no-terminal case below. It must instead
+        proceed on its own, with the preflight's own "=== CLI ===" section
+        naming OpenCode as the unmistakable target the confirmation attaches
+        to, and the final message naming it too."""
+        self._stub_python_node_present()
+        self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
+
+        result = self.run_install("--verify", cli=None, start_new_session=True)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("=== CLI ===", result.stdout)
+        self.assertIn("OpenCode (opencode)", result.stdout)
+        self.assertIn("confirmar la instalación en OpenCode", result.stdout)
+
+    def test_exactly_one_cli_installed_real_run_installs_into_it(self):
+        """The behavioural half of case 2: a real (non-`--verify`) run, only
+        OpenCode present, no `--cli`, `--yes` to cross the ordinary
+        confirmation. Claude Code's installer must never run (nothing here
+        stubs `claude.ai/install.sh`, so if it were invoked for real this
+        would hang or fail against the network), and the final message must
+        launch pegasus with OpenCode named as the reason -- exactly what the
+        preflight showed and the confirmation just agreed to."""
+        self._stub_python_node_present()
+        self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
+        fixture_dir = Path(self.tmp.name) / "single-cli-fixture"
+        base_url = _make_release_fixture(fixture_dir)
+
+        result = self.run_install(
+            "--yes", "--no-run", cli=None,
+            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        installed = self.home / ".local" / "bin" / "pegasus"
+        self.assertTrue(installed.is_file(), result.stdout + result.stderr)
+        self.assertIn("Se habría lanzado: pegasus", result.stdout)
+        self.assertIn("confirmar la instalación en OpenCode", result.stdout)
+
+    def test_none_installed_and_no_controlling_terminal_refuses_instead_of_choosing(self):
+        """Case 4, exercised through the case most easily missed: AMBIGUITY
+        by having NOTHING installed, not by having several. With nothing
+        said and nobody to ask, this installer must fail -- naming --cli and
+        the valid ids -- rather than install whichever supported CLI it
+        happens to consider first. `start_new_session=True` detaches the
+        child from any controlling terminal entirely -- see
+        `ConfirmationPromptTest`'s equivalent test, on `confirmar`'s own
+        prompt, for why a merely piped stdin is not enough on its own to
+        prove this."""
+        self._stub_python_node_present()
+
+        result = self.run_install("--verify", cli=None, start_new_session=True)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--cli", result.stderr)
+        self.assertIn("opencode", result.stderr)
+        self.assertIn("claudecode", result.stderr)
+        self.assertNotIn("Chequeo de requisitos", result.stdout)
+
+    def test_both_installed_and_no_controlling_terminal_refuses_instead_of_choosing(self):
+        """The other shape of ambiguity: everything supported is ALREADY
+        installed. Still refuses without a terminal -- "more than one
+        candidate" is exactly as unresolved as "zero candidates", never
+        resolved by picking the first one in the catalog."""
+        self._stub_python_node_present()
+        self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
+        self.stub('claude', 'if [ "$1" = "--version" ]; then echo "1.2.3 (Claude Code)"; exit 0; fi\n')
+
+        result = self.run_install("--verify", cli=None, start_new_session=True)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--cli", result.stderr)
+        self.assertIn("opencode", result.stderr)
+        self.assertIn("claudecode", result.stderr)
+
+    def test_ambiguous_with_a_real_terminal_asks_and_proceeds_on_the_answer(self):
+        """Case 3, driven end to end over a real pty (see `_InstallPtySession`
+        and `ConfirmationPromptTest`'s equivalent coverage of `confirmar`):
+        nothing installed, no `--cli`, but a real controlling terminal this
+        time. The script must ask -- never silently pick the first
+        catalog entry -- and must proceed with whatever id is typed."""
+        self._stub_python_node_present()
+
+        env = {
+            "HOME": str(self.home),
+            "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",
+            "TERM": "xterm",
+        }
+        session = _InstallPtySession(env=env, args=["--verify"])
+        self.addCleanup(session.close)
+
+        session.wait_for("Elegí un id de la lista de arriba")
+        session.press("opencode\n")
+        output = session.drain(timeout=15.0)
+
+        self.assertIn("confirmar la instalación en OpenCode", output)
+
+    def test_unknown_cli_value_fails_listing_the_valid_ones(self):
+        """A typo'd `--cli` must fail immediately -- before any detection or
+        network activity -- naming what was typed and what would have
+        worked instead."""
+        result = self.run_install("--verify", "--cli", "bogus", cli=None)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("bogus", result.stderr)
+        self.assertIn("opencode", result.stderr)
+        self.assertIn("claudecode", result.stderr)
+
+    def _stub_curl_that_fakes_the_claude_installer(self):
+        """Mirrors `ClosingPathGuidanceTest._stub_curl_that_fakes_the_opencode_installer`,
+        standing in for https://claude.ai/install.sh: writes, to the `-o`
+        destination the script asks for, a script that creates a fake
+        `claude` binary at ~/.local/bin -- exactly where the real official
+        installer lands it (see `instalar_claude`). Any other curl
+        invocation (the pegasus download, which passes a `file://` URL) is
+        delegated to the real `curl` from SYSTEM_PATH."""
+        self.stub(
+            "curl",
+            "dest=''\n"
+            "prev=''\n"
+            'for arg in "$@"; do\n'
+            '  if [ "$prev" = "-o" ]; then dest="$arg"; fi\n'
+            '  prev="$arg"\n'
+            "done\n"
+            "case \"$*\" in\n"
+            "  *claude.ai/install.sh*)\n"
+            "    cat > \"$dest\" <<'EOS'\n"
+            'mkdir -p "$HOME/.local/bin"\n'
+            "cat > \"$HOME/.local/bin/claude\" <<'BIN'\n"
+            "#!/bin/sh\n"
+            'if [ "$1" = "--version" ]; then echo "1.2.3 (Claude Code)"; exit 0; fi\n'
+            "BIN\n"
+            'chmod +x "$HOME/.local/bin/claude"\n'
+            "EOS\n"
+            "    ;;\n"
+            "  *)\n"
+            '    exec /usr/bin/curl "$@"\n'
+            "    ;;\n"
+            "esac\n",
+        )
+
+    def test_chosen_cli_is_what_gets_installed_and_named_at_the_end(self):
+        """End-to-end: `--cli claudecode`, nothing present, `--yes --no-run`.
+        Must download and install `claude` (never touching OpenCode's own
+        installer), leave the binary exactly where `instalar_claude` says it
+        will, and name Claude Code -- not OpenCode -- in the final launch
+        message."""
+        self._stub_python_node_present()
+        self._stub_curl_that_fakes_the_claude_installer()
+        fixture_dir = Path(self.tmp.name) / "claude-cli-fixture"
+        base_url = _make_release_fixture(fixture_dir)
+
+        result = self.run_install(
+            "--yes", "--no-run", cli="claudecode",
+            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        installed = self.home / ".local" / "bin" / "claude"
+        self.assertTrue(installed.is_file(), result.stdout + result.stderr)
+        self.assertIn("Claude Code", result.stdout)
+        self.assertIn("confirmar la instalación en Claude Code", result.stdout)
+        self.assertNotIn("OpenCode", result.stdout)
+
+
+class CliCatalogBinaryGuardTest(InstallScriptTestCase):
+    """`CLI_BINARIO` is generated by `tools/build_installer.py` from each
+    adapter's own `binary` attribute (see `_load_adapters_catalog` there), in
+    the same build pass as `CLI_CATALOGO` -- but a stale, un-regenerated
+    `install.sh` could still ship the two out of sync (a template edited by
+    hand, or an old build predating a new adapter). `verificar_catalogo_cli`
+    is the runtime guard against exactly that: every id `CLI_CATALOGO` lists
+    must have an entry in `CLI_BINARIO`, checked before anything else runs,
+    naming every missing id in one message.
+
+    Exercised against a deliberately corrupted COPY of the real install.sh --
+    never the checked-in file itself, which must always pass its own guard
+    (and does: see `test_the_real_install_sh_passes_its_own_guard` below, and
+    `tests/test_install_identity.py`'s byte-for-byte reproduction test)."""
+
+    def _corrupted_copy(self, *, drop: str) -> Path:
+        text = INSTALL_SH.read_text(encoding="utf-8")
+        match = re.search(r"^declare -A CLI_BINARIO=\(.*\)$", text, re.MULTILINE)
+        assert match, "could not find the CLI_BINARIO assignment in install.sh"
+        original_line = match.group(0)
+        pattern = re.compile(rf"\[{re.escape(drop)}\]='[^']*' ?")
+        corrupted_line, replaced = pattern.subn("", original_line)
+        assert replaced == 1, f"could not find a {drop!r} entry to drop in: {original_line!r}"
+        corrupted_text = text.replace(original_line, corrupted_line, 1)
+        assert corrupted_text != text
+        corrupted_path = Path(self.tmp.name) / "install-corrupted.sh"
+        corrupted_path.write_text(corrupted_text, encoding="utf-8")
+        corrupted_path.chmod(0o755)
+        return corrupted_path
+
+    def test_missing_binario_entry_fails_before_anything_else_runs(self):
+        corrupted = self._corrupted_copy(drop="claudecode")
+
+        result = subprocess.run(
+            [BASH, str(corrupted), "--verify", "--cli", "claudecode"],
+            env={"HOME": str(self.home), "PATH": f"{self.stub_bin}:{SYSTEM_PATH}"},
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("CLI_BINARIO", result.stderr)
+        self.assertIn("claudecode", result.stderr)
+        self.assertNotIn("Chequeo de requisitos", result.stdout)
+
+    def test_the_real_install_sh_passes_its_own_guard(self):
+        """Sanity check on the guard itself, against the real, uncorrupted
+        script: it must not be a false-positive trap that fails a script
+        that is actually in sync."""
+        result = self.run_install("--verify", cli="opencode")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class RootRefusalTest(InstallScriptTestCase):
     def test_refuses_to_run_as_root(self):
         """EUID 0 must be refused before anything else runs: files it would then
@@ -1895,7 +2176,7 @@ class InterruptedDownloadLeavesNoTempDirTest(InstallScriptTestCase):
         tmpdir.mkdir()
 
         proceso = subprocess.Popen(
-            [BASH, str(INSTALL_SH), "--yes", "--no-run"],
+            [BASH, str(INSTALL_SH), "--cli", "opencode", "--yes", "--no-run"],
             env={
                 "HOME": str(self.home),
                 "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",

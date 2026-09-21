@@ -34,6 +34,10 @@ class Adapter:
 
     id = manifest_module.CLI_ID
     display_name = manifest_module.DISPLAY_NAME
+    # See the identical field on the OpenCode adapter for why this is public:
+    # `tools/build_installer.py` needs the executable name to derive the
+    # shell installer's per-CLI detection command.
+    binary = BINARY
 
     def tier(self) -> SupportTier:
         return SupportTier.PARTIAL

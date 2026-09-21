@@ -55,8 +55,8 @@ _ASSIGNMENT = {
 #: (not "_"-prefixed) so `tests/test_install_identity.py` can import the exact same
 #: pattern rather than re-deriving the same shape a second time.
 USAGE_INTRO = re.compile(
-    r"^# Instala .+ en una cuenta Linux limpia: nvm \+ Node LTS, OpenCode y el\n"
-    r"# binario de .+, en ese orden, y deja el resultado listo para trabajar\.$",
+    r"^# Instala .+ en una cuenta Linux limpia: nvm \+ Node LTS, el CLI que elijas\n"
+    r"# y el binario de .+, en ese orden, y deja el resultado listo para trabajar\.$",
     re.MULTILINE,
 )
 
@@ -66,6 +66,19 @@ USAGE_BIN_DIR_LINE = re.compile(
     r"^(#   \./install\.sh --bin-dir DIR\s+instala el binario de ).+?( en DIR en vez de ~/\.local/bin)$",
     re.MULTILINE,
 )
+
+#: The single-quoted `CLI_CATALOGO=...` assignment: the list of CLI ids and display names
+#: this engine ships, as "id:Name" pairs separated by commas -- see the comment above it in
+#: the template. Lives just *after* the identity header block (it is engine data, not a
+#: distribution's own identity), so it is matched and replaced separately from `_ASSIGNMENT`,
+#: which only ever touches the header itself.
+CLI_CATALOGO_ASSIGNMENT = re.compile(r"^CLI_CATALOGO='.*'$", re.MULTILINE)
+
+#: The `declare -A CLI_BINARIO=(...)` line: which executable `command -v` should look for, per
+#: CLI id -- read from each adapter's own public `binary` attribute (see `_load_adapters_catalog`).
+#: A bash associative-array literal, not a single-quoted scalar, so it gets its own pattern
+#: rather than reusing `CLI_CATALOGO_ASSIGNMENT`'s shape.
+CLI_BINARIO_ASSIGNMENT = re.compile(r"^declare -A CLI_BINARIO=\(.*\)$", re.MULTILINE)
 
 
 def _load_identity_module(source: Path) -> types.ModuleType:
@@ -106,6 +119,105 @@ def _load_identity_module(source: Path) -> types.ModuleType:
     return module
 
 
+def _load_adapters_catalog(package_source: Path) -> tuple[tuple[str, str, str], ...]:
+    """`(cli_id, display_name, binary)` for every adapter `<package_source>/adapters/__init__.py`'s
+    `available()` registers, in the registry's own (sorted) order.
+
+    `binary` is the adapter's own public `binary` attribute (see `Adapter.binary` on the
+    OpenCode and Claude Code adapters) -- the exact executable name that adapter's own
+    `detect()` already looks up. It is read here, not hardcoded in `install.sh`, for the same
+    reason `display_name` is: which command `command -v` should look for is a fact about the
+    adapter, and `install.sh`'s `CLI_BINARIO` map exists only to give the shell side a copy of
+    a fact the adapter already owns.
+
+    Unlike `core/identity.py`, `adapters/__init__.py` imports by absolute name --
+    `from pegasus.adapters.claudecode import Adapter` -- so it cannot be loaded by bare file
+    path the way `_load_identity_module` loads identity: those absolute imports resolve
+    against `sys.modules['pegasus']`, not against `package_source`, and loading by path alone
+    would leave them resolving to whatever `pegasus` this process already has imported (the
+    real engine under test, when this runs from inside the test suite) rather than the tree
+    this build was actually pointed at -- exactly the failure mode `_load_identity_module`
+    documents at length for its own, simpler case.
+
+    Since the absolute imports are spelled `pegasus.*` literally, the only way to make them
+    resolve against `package_source` is to import it AS `pegasus`: this evicts any
+    `pegasus`/`pegasus.*` entries already cached in `sys.modules`, adds `package_source`'s
+    parent to the front of `sys.path`, imports fresh, and restores both `sys.path` and the
+    evicted `sys.modules` entries in a `finally` -- so nothing of this transient import lingers
+    afterward, and a build run from inside the test suite still validates against the tree it
+    was actually pointed at.
+    """
+    adapters_init = package_source / "adapters" / "__init__.py"
+    if not adapters_init.is_file():
+        raise ValueError(f"{package_source} has no adapters/__init__.py; it cannot list supported CLIs")
+    if package_source.name != "pegasus":
+        raise ValueError(
+            f"--package-source must be a directory named 'pegasus' (its adapters import "
+            f"'pegasus.adapters...' by absolute name, which only resolves against a tree "
+            f"importable as 'pegasus'); got {package_source}"
+        )
+
+    parent = str(package_source.parent)
+    saved_modules = {
+        name: module for name, module in sys.modules.items()
+        if name == "pegasus" or name.startswith("pegasus.")
+    }
+    for name in saved_modules:
+        del sys.modules[name]
+
+    sys.path.insert(0, parent)
+    try:
+        adapters_module = importlib.import_module("pegasus.adapters")
+        registry = adapters_module.available()
+        catalog = []
+        for cli_id in registry.ids():
+            adapter = registry.get(cli_id)
+            binary = getattr(adapter, "binary", "")
+            if not binary:
+                raise ValueError(
+                    f"adapter {cli_id!r} has no non-empty 'binary' attribute; "
+                    f"install.sh's CLI_BINARIO needs it to know what to run `command -v` on"
+                )
+            catalog.append((cli_id, adapter.display_name, binary))
+        return tuple(catalog)
+    finally:
+        sys.path.remove(parent)
+        for name in list(sys.modules):
+            if name == "pegasus" or name.startswith("pegasus."):
+                del sys.modules[name]
+        sys.modules.update(saved_modules)
+
+
+def _format_cli_catalogo(catalog: tuple[tuple[str, str, str], ...]) -> str:
+    """Render `[(cli_id, display_name, binary), ...]` as install.sh's `CLI_CATALOGO` format:
+    "id:Name" pairs separated by commas -- see the comment above that assignment in the
+    template. A display name is free-form prose (unlike a `cli_id`), so a comma or colon
+    inside one would silently corrupt this format on the shell side; caught here, at build
+    time, rather than shipping an installer whose CLI menu is quietly wrong.
+    """
+    for cli_id, display_name, _binary in catalog:
+        if "," in display_name or ":" in display_name:
+            raise ValueError(
+                f"CLI {cli_id!r} display name {display_name!r} contains a ',' or ':', which "
+                f"install.sh's CLI_CATALOGO format cannot represent"
+            )
+    return ",".join(f"{cli_id}:{display_name}" for cli_id, display_name, _binary in catalog)
+
+
+def _format_cli_binario(catalog: tuple[tuple[str, str, str], ...]) -> str:
+    """Render `[(cli_id, display_name, binary), ...]` as install.sh's whole `CLI_BINARIO`
+    line: a bash associative-array literal, `declare -A CLI_BINARIO=([id]='binary' ...)`.
+
+    Keeps `CLI_CATALOGO` and `CLI_BINARIO` from ever drifting apart the way a hand-maintained
+    `CLI_BINARIO` could: every id the catalog carries gets an entry here from the same
+    `catalog` list, in the same build pass -- see `install.sh`'s own `verificar_catalogo_cli`
+    for the runtime guard that catches it if an old, un-regenerated `install.sh` ever disagrees
+    with a newer `CLI_CATALOGO` anyway.
+    """
+    pares = " ".join(f"[{cli_id}]='{_quote_single(binary)}'" for cli_id, _display_name, binary in catalog)
+    return f"declare -A CLI_BINARIO=({pares})"
+
+
 def parse_identity(package_source: Path, identity: Path) -> object:
     """Parse and fully validate `identity` with the exact rules the built artifact itself runs.
 
@@ -133,7 +245,7 @@ def _quote_single(value: str) -> str:
     return value.replace("'", "'\\''")
 
 
-def render(template_text: str, identity: object) -> str:
+def render(template_text: str, identity: object, package_source: Path) -> str:
     """Replace the four identity header assignments in `template_text`, leaving every other
     character of the template untouched.
 
@@ -144,6 +256,14 @@ def render(template_text: str, identity: object) -> str:
     the way GitHub does, and even for GitHub itself `releases/latest/download/<asset>` and
     `releases/download/latest/<asset>` are different paths, so `asset_url_template` could not
     produce it either way.
+
+    `CLI_CATALOGO` and `CLI_BINARIO`, unlike the four values above, are not distribution
+    identity at all -- they are engine data (which CLIs `package_source`'s own
+    `pegasus.adapters.available()` ships, and what each one's own `binary` attribute says to
+    run `command -v` on), the same for Pegasus's own build as for any other distribution built
+    off the same engine. Both still get replaced on every build rather than left as whatever
+    the template happened to carry, so a third adapter shows up in both the day it registers
+    rather than when someone remembers to hand-edit `install.sh`.
     """
     values = {
         "PRODUCT_ID": identity.product_id,
@@ -164,8 +284,8 @@ def render(template_text: str, identity: object) -> str:
         raise ValueError("template's usage comment has no product-naming intro paragraph to replace")
     before = USAGE_INTRO.sub(
         lambda match: (
-            f"# Instala {identity.display_name} en una cuenta Linux limpia: nvm + Node LTS, OpenCode y el\n"
-            f"# binario de {identity.program_name}, en ese orden, y deja el resultado listo para trabajar."
+            f"# Instala {identity.display_name} en una cuenta Linux limpia: nvm + Node LTS, el CLI que elijas\n"
+            f"# y el binario de {identity.program_name}, en ese orden, y deja el resultado listo para trabajar."
         ),
         before,
         count=1,
@@ -183,13 +303,25 @@ def render(template_text: str, identity: object) -> str:
             raise ValueError(f"template's identity header has no {name}=... assignment to replace")
         replaced = pattern.sub(f"{name}='{_quote_single(value)}'", replaced, count=1)
 
+    catalog = _load_adapters_catalog(package_source)
+
+    if not CLI_CATALOGO_ASSIGNMENT.search(after):
+        raise ValueError("template has no CLI_CATALOGO=... assignment to replace")
+    catalogo = _format_cli_catalogo(catalog)
+    after = CLI_CATALOGO_ASSIGNMENT.sub(f"CLI_CATALOGO='{_quote_single(catalogo)}'", after, count=1)
+
+    if not CLI_BINARIO_ASSIGNMENT.search(after):
+        raise ValueError("template has no declare -A CLI_BINARIO=... assignment to replace")
+    binario_linea = _format_cli_binario(catalog)
+    after = CLI_BINARIO_ASSIGNMENT.sub(lambda match: binario_linea, after, count=1)
+
     return before + HEADER_BANNER + replaced + HEADER_BANNER + after
 
 
 def build(template: Path, identity_path: Path, package_source: Path, output: Path) -> None:
     identity = parse_identity(package_source, identity_path)
     template_text = template.read_text(encoding="utf-8")
-    rendered = render(template_text, identity)
+    rendered = render(template_text, identity, package_source)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered, encoding="utf-8")
     mode = output.stat().st_mode
