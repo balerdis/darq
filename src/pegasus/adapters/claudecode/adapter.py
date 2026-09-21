@@ -42,23 +42,45 @@ class Adapter:
         return manifest_module.MANIFEST
 
     def activation_steps(self) -> tuple[str, ...]:
-        """Tell the user to restart, because the alternative is a claim we
-        cannot back up either way.
+        """Nothing: this CLI reads what was written without being restarted.
 
-        `settings.json` and skills are documented as hot-reloaded, but
-        whether an already-running session picks up a newly written agent or
-        command file is not documented, and could not be measured: a probe
-        using `claude -p --continue` starts a fresh process each time, which
-        proves nothing about a live one. Telling the user to restart is true
-        whichever way that turns out to be -- an empty tuple here would claim
-        a certainty this adapter does not have.
+        That is the one condition the port names for returning an empty
+        tuple, and it is returned here on measurement rather than on
+        optimism. This step used to say to restart, and said so honestly:
+        the documentation covers `settings.json` and skills as hot-reloaded
+        and is silent about agent and command files, and silence is not
+        permission to claim either answer.
+
+        Measuring it needed something no automated probe here could supply.
+        `claude -p` starts a fresh process per invocation -- `--continue`
+        included, which resumes a conversation rather than a process -- so
+        every such probe proves only that a new process reads new files,
+        which was never in doubt. A relocated config directory cannot stand
+        in either: it relocates credentials with everything else, so the
+        session it starts is logged out. What settled it was a person
+        holding one live interactive session open while the files beneath it
+        were edited from outside.
+
+        Three arms, each keyed on a random sentinel no model could have
+        produced from context, all positive. An existing sub-agent's
+        definition is re-read on the next delegation: the same agent that
+        had just answered it had no codeword returned the sentinel, in the
+        same session. The shared instruction file under `rules/` is re-read
+        by the main session itself, answering without delegating. And a
+        slash command file that did not exist when the session opened was
+        indexed and answered on first use -- covering both halves of what
+        the retired text called into doubt, a command file and a newly
+        written one. None of the three needed a restart-and-retry control:
+        a control arm disambiguates a *negative* result, and a sentinel that
+        reaches the transcript can only have come from the file it was
+        written into minutes earlier.
+
+        The OpenCode adapter's own restart step is measured too, in the
+        opposite direction, and stays. The difference between the two is now
+        a fact on both sides rather than a fact on one and a precaution on
+        the other.
         """
-        return (
-            "Restart your Claude Code session. Whether an already-running "
-            "session picks up a newly written agent or slash command file "
-            "is not documented, so restarting is the only way to be sure "
-            "the change has taken effect.",
-        )
+        return ()
 
     # --- Detection: PATH and the filesystem only, never execution ---
 

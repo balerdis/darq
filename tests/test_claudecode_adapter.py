@@ -126,11 +126,31 @@ class DetectionTest(unittest.TestCase):
 
 
 class ActivationStepsTest(unittest.TestCase):
-    def test_is_not_empty(self):
-        self.assertTrue(Adapter().activation_steps())
+    def test_there_is_nothing_left_for_the_user_to_do(self):
+        """Empty because this CLI was measured picking changes up on its own,
+        which is the one condition the port names for returning nothing.
 
-    def test_mentions_restarting(self):
-        self.assertTrue(any("restart" in step.lower() for step in Adapter().activation_steps()))
+        This started out non-empty, and honestly so: the text said whether an
+        already-running session reads a newly written agent or command file
+        was undocumented, which it was. It was then measured against a real
+        installation, with a person holding a live interactive session open
+        while the files under it were edited from outside -- the one thing a
+        `-p` probe cannot simulate, since each of those starts a fresh
+        process and so proves nothing about a live one. Three arms, each
+        keyed on a random sentinel the model could not have guessed, all
+        positive: an existing sub-agent's definition is re-read on the next
+        delegation, the shared rules file is re-read by the main session
+        itself, and a slash command file that did not exist when the session
+        opened is picked up and answers. A positive result needs no control
+        arm to be trusted -- a sentinel that reaches the transcript can only
+        have come from the file it was written into.
+
+        So the restart line was not made redundant by a design change; it was
+        retired by evidence, and keeping it would now be the unsupported
+        claim. Contrast the OpenCode adapter, whose own restart step is
+        equally measured in the other direction and stays.
+        """
+        self.assertEqual(Adapter().activation_steps(), ())
 
 
 class SkillRenderTest(unittest.TestCase):
