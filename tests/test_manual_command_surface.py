@@ -374,15 +374,16 @@ class ManualSaysHowAGrantedDirectoryIsRenderedTest(RealHomeTestCase):
 
     def test_a_grant_is_not_a_prompt(self):
         """Still never a prompt -- but for a different reason than when this
-        test was written. The baseline itself is `"allow"` now (a workaround
-        for upstream #39112, see `_permission`'s own docstring), so a granted
-        directory's own entry is the *same* value as the baseline it is
-        written after, not a different one that out-ranks it. Asserting
-        equality here, not inequality, is the point: it is exactly what makes
-        granting a directory dormant rather than useful right now -- the
-        entry is still written and still survives every `install`/`update`,
-        and it regains its own meaning the moment the baseline reverts to
-        `"ask"`, without anyone having to grant it again.
+        test was written. The baseline itself is `"allow"` now, a deliberate
+        product decision surfaced by upstream #39112 (see `_permission`'s
+        own docstring), so a granted directory's own entry is the *same*
+        value as the baseline it is written after, not a different one that
+        out-ranks it. Asserting equality here, not inequality, is the point:
+        it is exactly what makes granting a directory dormant rather than
+        useful right now -- the entry is still written and still survives
+        every `install`/`update`, and it would regain its own meaning
+        without anyone having to grant it again, should the baseline ever
+        become `"ask"` for some other reason.
         """
         for entry in self.maps:
             self.assertEqual(entry[f"{self.path}/*"], entry["*"])

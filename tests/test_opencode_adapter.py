@@ -582,10 +582,10 @@ class AgentRenderTest(unittest.TestCase):
         one-time no. `"ask"` for every agent, sub-agent included, is what
         keeps the door open for a person to approve it instead. That baseline
         has since moved a second time, from `"ask"` to `"allow"`, as a
-        workaround for upstream issue #39112: a depth-two sub-agent's
-        `"ask"` never renders in any TUI view and hangs forever, which is
-        worse than either alternative this entry has ever held. See
-        `_permission`'s own docstring for the full account.
+        deliberate product decision surfaced by upstream issue #39112: a
+        depth-two sub-agent's `"ask"` never renders in any TUI view and
+        hangs forever, which is worse than either alternative this entry has
+        ever held. See `_permission`'s own docstring for the full account.
         """
         agent = self.agent(requires_tools=("read",), mode=AgentMode.SUBAGENT)
         rule = self.value(agent)["permission"]["external_directory"]
@@ -601,8 +601,9 @@ class AgentRenderTest(unittest.TestCase):
     def test_a_primary_readers_external_directory_baseline_is_allow_not_ask(self):
         """A primary agent has a person present to answer a prompt, and even
         carries the `ask` tool itself -- but the baseline no longer relies on
-        that: it is `"allow"` for every agent regardless of depth, as a
-        workaround for upstream issue #39112 (see `_permission`'s docstring).
+        that: it is `"allow"` for every agent regardless of depth, a
+        deliberate product decision surfaced by upstream issue #39112 (see
+        `_permission`'s docstring).
         """
         agent = self.agent(requires_tools=("read",), mode=AgentMode.PRIMARY)
         rule = self.value(agent)["permission"]["external_directory"]
@@ -2040,9 +2041,10 @@ class ShippedContentRenderTest(unittest.TestCase):
 
     def test_every_shipped_agent_that_touches_a_path_is_allowed_out_with_a_deny_floor(self):
         """Every agent, primary or sub-agent alike, gets `"allow"` for a path
-        outside its worktree -- a workaround for upstream issue #39112, where
-        a depth-two sub-agent's `"ask"` never renders in any TUI view and
-        hangs forever (see `test_a_subagents_external_directory_baseline_is_allow_not_ask`
+        outside its worktree -- a deliberate product decision surfaced by
+        upstream issue #39112, where a depth-two sub-agent's `"ask"` never
+        renders in any TUI view and hangs forever (see
+        `test_a_subagents_external_directory_baseline_is_allow_not_ask`
         in `AgentRenderTest`, and `_permission`'s own docstring). The fixed,
         small deny floor in `EXTERNAL_DIRECTORY_DENY_FLOOR` must still resolve
         last for every one of them, since it is the only thing standing

@@ -202,11 +202,11 @@ def deny_floor_shadows(path: str) -> bool:
 
     A grant this shadows is never dormant the way an ordinary grant is while
     the baseline is `"allow"` (see `_permission`'s own docstring): an
-    ordinary grant regains its meaning the day the baseline goes back to
-    `"ask"`, because the floor is the only thing written after it today. A
-    floor-shadowed grant never regains anything -- the floor is written last
-    regardless of what the baseline is, so this grant can never win the
-    match, in this release or after any revert.
+    ordinary grant would regain its meaning if the baseline were ever
+    `"ask"` again, because the floor is the only thing written after it
+    today. A floor-shadowed grant never regains anything -- the floor is
+    written last regardless of what the baseline is, so this grant can never
+    win the match, no matter what the baseline becomes.
 
     `path` is expected already normalized by `content.validate_granted_directory`
     (absolute, free of glob metacharacters and of `..`) -- the same value
@@ -833,10 +833,12 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     test assert it directly.
 
     That inner baseline has since moved again, from `"ask"` to `"allow"`, and
-    this second move is a workaround for a named upstream bug, not a second
-    round of the same reasoning as the paragraph above -- that reasoning is
-    not repudiated, it is superseded at one depth and left standing at two
-    others. The bug is upstream issue #39112 ("Sub-sub-agents (depth: 2)
+    this second move is the product's own deliberate choice, surfaced by a
+    named upstream bug rather than dictated by it -- not a second round of
+    the same reasoning as the paragraph above; that reasoning is not
+    repudiated, it is superseded at one depth and left standing at two
+    others. The bug that forced the choice into the open is upstream issue
+    #39112 ("Sub-sub-agents (depth: 2)
     'ask' permission doesn't surface to user and stalls"), still open, plus
     the same-shaped #43996 and #44747, and one predecessor, #30635, that
     OpenCode closed by fixing only one level of the problem. The cause lives
@@ -916,27 +918,31 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     now either proceeds or is refused outright, and there is nothing left in
     this configuration for a person to be asked to approve.
 
-    To revert once #39112 (and its siblings) are fixed upstream: restore
-    `"*": "ask"` as the baseline below. Whether `EXTERNAL_DIRECTORY_DENY_FLOOR`
-    stays or goes is a separate call -- the floor was written to survive the
-    baseline that fails open, but a project may still want it kept as
-    defense in depth once `"ask"` (which already denies-by-hang, never
-    allows, when nobody answers) is safe to restore; nothing about the fix
-    upstream forces the floor's removal, only the baseline's.
+    This baseline is not a stopgap awaiting an upstream fix. Keeping
+    `external_directory` permissive by default is a deliberate product
+    decision: the product's own reason for it is that having it enabled by
+    default is an advantage in daily use, and that reason holds regardless
+    of what happens to #39112 upstream. The analysis above of #39112 and its
+    siblings is not a pending-revert clause attached to this baseline -- it
+    stays because it explains how Pegasus arrived here, and fixing the bug
+    upstream does not by itself argue for undoing the choice.
+    `EXTERNAL_DIRECTORY_DENY_FLOOR` remains a separate question either way:
+    nothing here, upstream fix or not, decides it one way or the other.
 
-    One more thing that revert has to get right: `item.granted_directories`
-    keeps being written into this dict for the whole life of this workaround,
-    even though its own entry is now a no-op everywhere the baseline already
-    says `"allow"`. That is deliberate, not an oversight to clean up while
-    the baseline is flipped -- a directory a person granted through `pegasus
+    One more thing worth being explicit about: `item.granted_directories`
+    keeps being written into this dict for as long as the baseline itself is
+    `"allow"`, even though its own entry is now a no-op everywhere the
+    baseline already grants the same thing. That is deliberate, not an
+    oversight to clean up -- a directory a person granted through `pegasus
     directory grant` stays recorded in the journal and keeps being rendered
-    here, dormant rather than useless, so that the instant the baseline goes
-    back to `"ask"` every existing grant regains its full meaning without
-    anyone having to run `directory grant` again. Removing `granted_directories`
-    from this map while the baseline is `"allow"` would look like a harmless
-    simplification -- it changes nothing observable today -- and would
-    silently discard every grant on file, which nobody would notice until the
-    day of the revert, when it would be too late to notice why access broke.
+    here, dormant rather than useless, so that grant is never silently lost:
+    this dict does not depend on anyone remembering to re-run `directory
+    grant` for it to mean something again, whatever the baseline does in the
+    future. Removing `granted_directories` from this map while the baseline
+    is `"allow"` would look like a harmless simplification -- it changes
+    nothing observable today -- and would silently discard every grant on
+    file, which nobody would notice until the day the baseline ever did
+    change, when it would be too late to notice why access broke.
     """
     names = (*item.requires_tools, *item.optional_tools)
     unknown = [name for name in names if name not in PERMISSION_NAME]
