@@ -321,6 +321,109 @@ class ListTest(RealHomeTestCase):
         self.assertEqual(report["status"], "failed")
 
 
+class CapabilityRefusalTest(RealHomeTestCase):
+    """`models set`/`unset`/`list` refuse outright against any adapter that
+    never declared `per_agent_model` -- derived from `available()` itself,
+    never a hardcoded adapter id, so a third adapter without the capability
+    is covered the day it registers, the same way this suite already pins
+    its *positive* fixture (`CLI = "opencode"`) rather than assuming which
+    adapter comes first.
+
+    `_resolve_model_overrides` already asks this question in the render
+    path and returns `{}` silently when the capability is absent -- so a
+    preference recorded through `models set` against such an adapter is
+    accepted, remembered, and reported back by `models list`, yet never
+    reaches any agent's file. Refusing on all three command surfaces is the
+    fix: with `set` blocked no such preference can exist, so `list` has
+    nothing false left to report.
+    """
+
+    NO_PER_AGENT_MODEL = tuple(
+        cli_id
+        for cli_id in available().ids()
+        if not available().get(cli_id).capabilities().declares(cli.Capability.PER_AGENT_MODEL)
+    )
+
+    def install_cli(self, cli_id: str) -> None:
+        """A real installation of `cli_id`, so the refusal under test is the
+        capability refusal itself, never the unrelated "nothing installed"
+        refusal that `models set`/`unset` would otherwise hit first and that
+        would make this sweep pass for the wrong reason."""
+        layout = available().get(cli_id).layout(Environment(home=self.home))
+        layout.config_dir.mkdir(parents=True, exist_ok=True)
+        code, report = self.run_cli("install", "--cli", cli_id)
+        self.assertEqual(code, 0, f"fixture could not install {cli_id}: {report}")
+
+    def test_every_adapter_without_the_capability_refuses_on_all_three_commands(self):
+        self.assertTrue(self.NO_PER_AGENT_MODEL, "fixture assumption broken: no adapter lacks the capability")
+        failures = []
+        for cli_id in self.NO_PER_AGENT_MODEL:
+            self.install_cli(cli_id)
+
+            code, report = self.run_cli(
+                "models", "set", "--cli", cli_id, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+            )
+            if (
+                code == 0
+                or report.get("status") != "failed"
+                or cli_id not in report.get("error", "")
+                or "installed" in report.get("error", "")
+            ):
+                failures.append(f"{cli_id}: models set did not refuse on capability (code={code}, report={report})")
+
+            code, report = self.run_cli("models", "unset", "--cli", cli_id, "--agent", CONFIGURABLE_AGENT)
+            if (
+                code == 0
+                or report.get("status") != "failed"
+                or cli_id not in report.get("error", "")
+                or "installed" in report.get("error", "")
+            ):
+                failures.append(f"{cli_id}: models unset did not refuse on capability (code={code}, report={report})")
+
+            code, report = self.run_cli("models", "list", "--cli", cli_id)
+            if code == 0 or report.get("status") != "failed" or cli_id not in report.get("error", ""):
+                failures.append(f"{cli_id}: models list did not refuse (code={code}, report={report})")
+
+        self.assertFalse(failures, "\n".join(failures))
+
+    def test_the_refusal_names_the_cli_and_says_why_in_the_tui_voice(self):
+        cli_id = self.NO_PER_AGENT_MODEL[0]
+        self.install_cli(cli_id)
+        code, report = self.run_cli(
+            "models", "set", "--cli", cli_id, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(cli_id, report["error"])
+        self.assertIn("per-agent model", report["error"])
+        self.assertIn("model catalog", report["error"])
+
+    def test_the_refusal_is_checked_before_argument_validation(self):
+        """A missing capability is not fixable by editing the rest of the
+        command line -- correct every argument and the command still cannot
+        do this here -- so it is checked ahead of a mistyped `--assign`, the
+        same way `models_set`'s own docstring orders "nothing installed"
+        ahead of a mistyped argument for the analogous reason."""
+        cli_id = self.NO_PER_AGENT_MODEL[0]
+        code, report = self.run_cli(
+            "models", "set", "--cli", cli_id, "--assign", "nonexistent-agent=not-a-valid-spec",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(cli_id, report["error"])
+        self.assertNotIn("nonexistent-agent", report["error"])
+
+    def test_setting_still_works_for_an_adapter_that_declares_the_capability(self):
+        """The positive case this fix must not break -- already covered by
+        `SetTest.test_setting_a_configurable_agent_succeeds_and_reports_it`
+        above, exercised again here for locality with the refusal tests."""
+        self.assertNotIn(CLI, self.NO_PER_AGENT_MODEL)
+        self.install()
+        code, report = self.run_cli(
+            "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "set")
+
+
 class ProseTest(RealHomeTestCase):
     def test_set_reads_as_prose(self):
         self.install()

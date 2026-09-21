@@ -77,12 +77,11 @@ detalles internos:
   prompt es el cuerpo del propio archivo del agente, un solo artifact en vez de dos.
 - **`per_agent_model`**: bajo OpenCode, `pegasus models set` asigna un modelo distinto por agente,
   leyendo el catálogo real de modelos y credenciales de esa instalación, y ese modelo queda escrito en
-  la configuración del agente. Claude Code no tiene un catálogo de modelos en disco que leer —
-  resuelve modelo y proveedor en el momento, no desde un archivo—, así que aunque `models set --cli
-  claudecode` corre, guarda la preferencia y sale en `0`, esa preferencia nunca llega a escribirse en
-  ningún agente: no hay `render_agent` que sepa qué hacer con ella. Verificado corriendo el comando
-  contra una instalación real: `models list` recuerda la asignación, pero el archivo del agente no
-  trae ningún campo de modelo.
+  la configuración del agente. Claude Code no tiene un catálogo de modelos en disco que leer — resuelve
+  modelo y proveedor en el momento, no desde un archivo—, así que su adapter no declara esta capacidad.
+  Los tres subcomandos de `models` (`set`, `unset`, `list`) lo comprueban antes que cualquier otra cosa
+  y se niegan a correr contra `--cli claudecode`, nombrando el CLI y explicando por qué: no hay
+  catálogo de modelos que leer, y por lo tanto nada que este comando pueda escribir o reportar.
 
 Y una que corre al revés de lo que uno esperaría: instalar o actualizar bajo Claude Code no pide
 reiniciar nada — lee la configuración tal como quedó escrita, sin ningún paso de activación. Bajo

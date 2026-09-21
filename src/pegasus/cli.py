@@ -2083,6 +2083,12 @@ def models_set(
     Install menu entry, and so through an MCP selection screen that has
     nothing to do with models.
 
+    `_require_per_agent_model` runs first, ahead of every check below: an
+    argument the person just mistyped is more actionable than a fact about
+    the machine, which is the ordering the rest of this docstring follows --
+    but a missing `per_agent_model` capability is not fixable by editing the
+    rest of the command line at all, so it belongs even earlier than that.
+
     Every item is validated -- through `install`'s own `model_assignments`
     batch handling -- before anything is recorded: an agent nothing will ever
     read a model for, or a model spelling this release cannot parse, refuses
@@ -2103,6 +2109,7 @@ def models_set(
     the previous install's own set forward unchanged.
     """
     adapter = _adapter(cli_id)
+    _require_per_agent_model(adapter)
     if not assignments:
         raise CommandError("models set needs at least one --assign AGENT=PROVIDER/MODEL")
     # Validated here too, ahead of the "nothing installed" refusal below --
@@ -2159,6 +2166,7 @@ def models_unset(cli_id: str, agents: list[str], runtime: Runtime) -> dict[str, 
     before `install` is called at all.
     """
     adapter = _adapter(cli_id)
+    _require_per_agent_model(adapter)
     if not agents:
         raise CommandError("models unset needs at least one --agent")
     seen: set[str] = set()
@@ -2279,9 +2287,17 @@ def models_apply(
 
 
 def models_list(runtime: Runtime, *, cli_id: str | None = None) -> dict[str, Any]:
-    """Current assignments, optionally narrowed to one CLI."""
+    """Current assignments, optionally narrowed to one CLI.
+
+    Refuses outright when `cli_id` names an adapter that never declared
+    `per_agent_model`: any assignment this store still holds for it is
+    inert (see `_require_per_agent_model`), so reporting it back would let
+    a person read it as a preference in effect. With `set` and `unset`
+    already refusing, no *new* one can exist -- this closes the last gap,
+    a stale one recorded before this refusal existed.
+    """
     if cli_id is not None:
-        _adapter(cli_id)
+        _require_per_agent_model(_adapter(cli_id))
     assignments = model_assignment_store(runtime).load()
     return {
         "action": "list",
@@ -2749,6 +2765,34 @@ def _declared_mcp_keys(runtime: Runtime, adapter) -> frozenset[str]:
         return frozenset()
     servers = document.get("mcp") if isinstance(document, dict) else None
     return frozenset(str(key) for key in servers.keys()) if isinstance(servers, dict) else frozenset()
+
+
+def _require_per_agent_model(adapter) -> None:
+    """Refuse outright when `adapter` never declared `Capability.
+    PER_AGENT_MODEL` -- before anything else `models_set`, `models_unset`,
+    and `models_list` check, including their own argument validation.
+
+    Mirrors `_require_configurable_agent`'s shape for the same kind of
+    precondition, but this one sits even earlier. `models_set`'s own
+    docstring states the ordering principle the rest of this module follows:
+    an argument the person just mistyped is more actionable than a fact
+    about the machine, so a bad `--assign` is checked before "nothing
+    installed". A missing capability is not that kind of fact -- it is not
+    fixable by editing the rest of the command line at all. Correct every
+    argument and there is still no model catalog on this CLI to write a
+    preference into. So it is checked first, ahead of every argument check
+    and every other precondition.
+
+    The message matches the `Placeholder` `tui.session`'s own models screen
+    already shows for this exact absence (added in `e747b9f`): a person who
+    meets this refusal in the TUI and then on the command line should read
+    the same explanation, not two different ones invented independently.
+    """
+    if not adapter.capabilities().declares(Capability.PER_AGENT_MODEL):
+        raise CommandError(
+            f"{adapter.id} never declared support for per-agent models -- its adapter carries no "
+            "model catalog at all, so there is nothing here to set, unset, or list."
+        )
 
 
 def _require_configurable_agent(agent: str) -> None:
