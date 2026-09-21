@@ -7,7 +7,7 @@ execution: isolated
 
 Use the `session-context` skill in save mode.
 
-Generate or update `context.md` at the project root so this work can be continued in a new OpenCode session.
+Generate or update `context.md` at the project root so this work can be continued in a new session.
 
 Purpose:
 

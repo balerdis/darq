@@ -2,7 +2,6 @@
 name: session-handoff
 description: "Trigger: save, load, resume, or restore session context. Manage a brief handoff.md using live context, OpenSpec, Engram, git, code, and tests."
 license: Apache-2.0
-compatibility: opencode
 metadata:
   author: gentleman-programming
   version: "1.6"

@@ -22,7 +22,7 @@ WORKFLOW:
 
 CONTEXT:
 
-- Working directory: before doing anything else, run `git rev-parse --show-toplevel 2>/dev/null || pwd` with your bash tool and use the returned path as the authoritative workspace. In OpenCode Desktop (Electron) the parse-time interpolation resolves to the app data directory, not the project.
+- Working directory: before doing anything else, run `git rev-parse --show-toplevel 2>/dev/null || pwd` with your bash tool and use the returned path as the authoritative workspace. In some desktop/Electron-hosted environments, parse-time interpolation resolves to the application's data directory, not the project.
 - Current project: the `basename` of the detected workspace above.
 - Change name: $ARGUMENTS
 - Execution mode: ask/cache per orchestrator

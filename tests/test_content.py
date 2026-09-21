@@ -371,6 +371,19 @@ class SkillTest(TemporaryContent):
             content.load(self.root)
         self.assertIn("beta", str(raised.exception))
 
+    def test_compatibility_field_is_refused(self):
+        """`compatibility:` gates content per CLI in name only -- nothing in the
+        loader ever read it, so a skill declaring it must be refused loudly
+        instead of silently rendering into every CLI unchanged."""
+        write(
+            self.root,
+            "skills/alpha/SKILL.md",
+            SKILL.replace("---\n\n", "compatibility: opencode\n---\n\n", 1),
+        )
+        with self.assertRaises(ContentError) as raised:
+            content.load(self.root)
+        self.assertIn("compatibility", str(raised.exception))
+
 
 class AgentTest(TemporaryContent):
     def load_agent(self, text):

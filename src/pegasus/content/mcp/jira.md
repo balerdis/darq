@@ -80,7 +80,7 @@ the ticket is about the thing itself — describe the failure, not the secret.
 Authentication for this server belongs to the runtime, not to this project: no
 credential travels in this descriptor, and nothing here can log in on your behalf. It
 also does not happen on its own — a person has to run the runtime's own one-time
-authorisation for this server (under OpenCode, `opencode mcp auth jira`) before any
+authorisation for this server (the host CLI's own MCP authorisation command) before any
 tool here answers. Until then every call fails the same way, and installing the server
 again will not change it.
 

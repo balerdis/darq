@@ -32,7 +32,7 @@ explicit id in `/org/project` or `/org/project/version` form.
 
 - Ask one concept per call. Split a question that spans several, unless the question is
   precisely about how they interact.
-- Be specific. "How to configure MCP servers in opencode.json" earns an answer; "mcp"
+- Be specific. "How to configure route-level middleware in Next.js" earns an answer; "mcp"
   does not.
 - When this project pins a dependency, query that pinned version's docs. Documentation for
   a version you are not running is a plausible answer to the wrong question.

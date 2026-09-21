@@ -970,20 +970,23 @@ def grant_directories(
     )
 
 
-#: Every front matter key a skill's `SKILL.md` may declare. `license`,
-#: `metadata`, `compatibility`, `disable-model-invocation` and
-#: `user-invocable` are not read by this loader -- nothing here consumes them
+#: Every front matter key a skill's `SKILL.md` may declare. `license` and
+#: `metadata` are not read by this loader -- nothing here consumes them
 #: today -- but every skill this project ships already carries at least one
 #: of them, so refusing them as unknown would refuse the project's own
 #: shipped content. Accepted and ignored, same as an adapter that reads its
-#: own subset of a shared descriptor.
+#: own subset of a shared descriptor. `disable-model-invocation` and
+#: `user-invocable` are likewise accepted and ignored today, but are real
+#: fields in Claude Code's own SKILL.md schema and will stop being inert once
+#: that adapter lands. `compatibility` is deliberately absent: it claimed to
+#: gate content per CLI, but nothing here ever consumed it, so it rendered
+#: into every CLI unchanged -- a lie a loader must not go on accepting.
 _SKILL_FIELDS = frozenset(
     {
         "name",
         "description",
         "license",
         "metadata",
-        "compatibility",
         "disable-model-invocation",
         "user-invocable",
     }

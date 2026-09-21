@@ -1,7 +1,6 @@
 ---
 name: session-context
-description: Save or load a lightweight project session snapshot using context.md. Use when the user wants to preserve current work across OpenCode sessions without a formal SDD/OpenSpec workflow.
-compatibility: opencode
+description: Save or load a lightweight project session snapshot using context.md. Use when the user wants to preserve current work across sessions without a formal SDD/OpenSpec workflow.
 ---
 
 # Session Context Skill
@@ -240,4 +239,4 @@ For normal usage, keep `context.md` local and lightweight.
 
 `context.md` is not a spec, not documentation and not long-term memory.
 
-It is a quick operational snapshot for continuing work in another OpenCode session.
+It is a quick operational snapshot for continuing work in another session.

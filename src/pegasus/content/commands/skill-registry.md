@@ -1,6 +1,6 @@
 ---
 name: skill-registry
-description: Rebuild the OpenCode skill registry for the current project and installed skills
+description: Rebuild the skill registry for the current project and installed skills
 runs_as: orchestrator
 execution: isolated
 ---
