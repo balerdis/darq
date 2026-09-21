@@ -24,7 +24,16 @@ from pegasus.adapters import available
 from pegasus.core import codecs, content as content_module, pointer
 from pegasus.core import journal as journal_module
 from pegasus.core import model_assignments as model_assignments_module
-from pegasus.core.types import Codec, Environment
+from pegasus.core.registry import Registry
+from pegasus.core.types import (
+    Capability,
+    CapabilityManifest,
+    Codec,
+    Detection,
+    Environment,
+    Layout,
+    SupportTier,
+)
 from pegasus.infra.fs_posix import PosixFileSystem
 from pegasus.infra.journal_store_file import journal_path
 from pegasus.infra.snapshot_store_file import MANIFEST_FILENAME, snapshots_root
@@ -32,6 +41,7 @@ from pegasus.tui import navigator as navigator_module
 from pegasus.tui import session
 from pegasus.tui.navigator import (
     Action,
+    CliOption,
     GrantMcpResultScreen,
     GrantMcpScreen,
     GrantMcpTarget,
@@ -1416,6 +1426,106 @@ class NothingInstalledTest(ModelsScreenTestCase):
         navigator = self.to_models_screen(self.runtime())
         self.assertIsInstance(navigator.current, ModelsScreen)
         self.assertTrue(navigator.current.rows)
+
+
+class _NeverDeclaresPerAgentModel:
+    """An adapter honest about declaring no capabilities at all -- in
+    particular, never `per_agent_model` -- and therefore, per
+    `registry._check_capabilities`, carrying no `model_catalog` attribute
+    whatsoever. Registrable on its own terms: `Registry.register` also walks
+    `id`, manifest/layout agreement, `own_artifacts` territory and
+    `activation_steps`, so this fake answers all four the same minimal way
+    `test_registry.FakeAdapter` does, rather than only the one capability
+    this test cares about."""
+
+    id = "probe-no-models"
+    display_name = "Probe No Models"
+
+    def __init__(self):
+        self._manifest = CapabilityManifest(cli_id=self.id)
+
+    def tier(self):
+        return SupportTier.FULL
+
+    def capabilities(self):
+        return self._manifest
+
+    def detect(self, environment):
+        layout = self.layout(environment)
+        return Detection(config_dir=layout.config_dir, config_found=True)
+
+    def layout(self, environment):
+        return Layout(config_dir=Path(environment.home) / ".config" / "probe-no-models")
+
+    def own_artifacts(self, layout, orchestrator_name, identity, delegation_targets):
+        return []
+
+    def activation_steps(self):
+        return ()
+
+
+class NoPerAgentModelCapabilityTest(ModelsScreenTestCase):
+    """The most fundamental of the three explanations this screen can show:
+    a CLI whose adapter never declared per-agent models has nothing here to
+    configure whether or not Pegasus is installed into it -- so this is
+    checked ahead of the installation state, not after it."""
+
+    def _installed_cli_option(self, adapter, runtime):
+        """Records a fabricated install for `adapter`'s CLI, so
+        `journal_module.install_for` finds one -- the state under which the
+        old, unguarded code reached `model_catalog` and raised
+        `AttributeError`. Real work only what this test needs: a `Journal`
+        entry, never a whole `cli.install` run against a fake adapter that
+        cannot render anything."""
+        layout = adapter.layout(runtime.environment)
+        install = journal_module.Install(
+            cli=adapter.id,
+            installed_at="2026-08-14T00:00:00+00:00",
+            config_dir=layout.config_dir,
+            release={},
+        )
+        store = cli.journal_store(runtime)
+        store.save(journal_module.with_install(store.load(), install))
+        return CliOption(
+            id=adapter.id,
+            display_name=adapter.display_name,
+            config_dir=str(layout.config_dir),
+            tier=adapter.tier().value,
+        )
+
+    def test_a_cli_that_never_declared_the_capability_gets_an_explanation(self):
+        adapter = _NeverDeclaresPerAgentModel()
+        registry = Registry(adapter)
+        runtime = self.runtime()
+        cli_option = self._installed_cli_option(adapter, runtime)
+        with unittest.mock.patch.object(session, "available", return_value=registry):
+            screen = session._models_screen(cli_option, runtime)
+        self.assertIsInstance(screen, Placeholder)
+        note = screen.note
+        self.assertIn(adapter.display_name, note)
+        self.assertIn("per-agent model", note.lower())
+
+    def test_it_wins_over_the_installation_explanation(self):
+        """Not installed *and* incapable at once still reads as the
+        capability explanation -- the more fundamental of the two -- never
+        the installation one, which would tell the person to do something
+        (install) that could never make this screen configurable."""
+        adapter = _NeverDeclaresPerAgentModel()
+        registry = Registry(adapter)
+        cli_option = CliOption(
+            id=adapter.id,
+            display_name=adapter.display_name,
+            config_dir=str(adapter.layout(Environment(home=self.home)).config_dir),
+            tier=adapter.tier().value,
+        )
+        runtime = self.runtime()
+        # no journal entry exists for this CLI at all: nothing installed.
+        with unittest.mock.patch.object(session, "available", return_value=registry):
+            screen = session._models_screen(cli_option, runtime)
+        self.assertIsInstance(screen, Placeholder)
+        note = screen.note.lower()
+        self.assertIn("per-agent model", note)
+        self.assertNotIn("main menu's install entry", note)
 
 
 class AssignmentListTest(ModelsScreenTestCase):

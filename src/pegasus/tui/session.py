@@ -21,6 +21,7 @@ from pegasus.adapters import available
 from pegasus.core import content as content_module
 from pegasus.core import journal as journal_module
 from pegasus.core import model_assignments as model_assignments_module
+from pegasus.core.types import Capability
 from pegasus.tui.navigator import (
     CANCEL,
     Action,
@@ -537,10 +538,17 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
     reasoning `_uninstall_preview` and `_restore_preview` already follow for
     their own read-only screens.
 
-    Two states have an explanation instead of a wizard, and the installation
-    is asked about first because it is the more fundamental of the two:
-    confirming this screen's staged changes writes straight into the
-    rendered configuration (`cli.models_apply` reapplies it the way
+    Three states have an explanation instead of a wizard, checked in order
+    from the most fundamental to the least. Whether the adapter declared
+    `per_agent_model` at all comes first: an adapter that never declared it
+    has no `model_catalog` to call in the first place (`registry
+    ._check_capabilities` refuses to register one that implements it without
+    declaring it, and the reverse just as surely leaves it with no such
+    method) -- so there is nothing here to configure whether or not Pegasus
+    is installed into this CLI, and asking about the installation first
+    would explain the less fundamental thing. Whether Pegasus is installed
+    comes next: confirming this screen's staged changes writes straight into
+    the rendered configuration (`cli.models_apply` reapplies it the way
     `cli.mcp_grant` always has), so a CLI with nothing installed has nothing
     for any staged change on this screen to reach. Refused here, when the
     screen opens, rather than at Confirm: `_models_write` is a whole sitting
@@ -549,8 +557,18 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
     menu for exactly this reason; this answers the same refusal one step
     later because the models menu offers every *detected* CLI -- its model
     catalog is a per-CLI read this screen is the first to make -- so the CLI
-    is still reachable and has to be told why.
+    is still reachable and has to be told why. Whether the catalog it reads
+    turns out empty is the last and least fundamental of the three: it can
+    only be known once the first two are settled.
     """
+    adapter = available().get(cli_option.id)
+    if not adapter.capabilities().declares(Capability.PER_AGENT_MODEL):
+        return Placeholder(
+            f"Configure models · {cli_option.display_name}",
+            f"{cli_option.display_name} never declared support for per-agent models -- its adapter "
+            f"carries no model catalog at all, so there is nothing here for this screen to configure, "
+            f"whether or not {runtime.identity.display_name} is installed into {cli_option.display_name}.",
+        )
     if journal_module.install_for(cli.journal_store(runtime).load(), cli_option.id) is None:
         return Placeholder(
             f"Configure models · {cli_option.display_name}",
@@ -559,7 +577,7 @@ def _models_screen(cli_option: CliOption, runtime: cli.Runtime) -> Menu | Placeh
             f"nothing here for one to reach. Install into {cli_option.display_name} first, from the "
             f"main menu's Install entry, then come back.",
         )
-    catalog = available().get(cli_option.id).model_catalog(runtime.environment)
+    catalog = adapter.model_catalog(runtime.environment)
     if not catalog.providers:
         return Placeholder(
             f"Configure models · {cli_option.display_name}",
