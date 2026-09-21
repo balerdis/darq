@@ -59,8 +59,26 @@ from real_home import RealHomeTestCase as _RealHomeTestCase
 from recording_filesystem import RecordingFileSystem
 
 AT = "2026-08-14T00:00:00+00:00"
-CLI = available().ids()[0]
+# Pinned to OpenCode, not "whichever adapter is registered first": this
+# suite exercises capabilities (mcp, per_agent_model, subagents declared
+# inside the settings file, ...) that only OpenCode declares today. Since
+# Claude Code registered, "available().ids()[0]" resolves alphabetically
+# to "claudecode" instead, which cannot support what this file tests.
+CLI = "opencode"
 NO_BINARY = {"PATH": ""}
+
+
+def cli_entry(report, cli_id: str = CLI):
+    """`report["clis"][index]`'s entry for `cli_id`, never a positional index.
+
+    `doctor`'s report lists every registered adapter, sorted by id, so index
+    0 stopped meaning "the CLI this test just installed" the moment a second
+    adapter registered: it now names whichever id sorts first alphabetically,
+    which need not be `CLI`. Every `doctor` test that installs one CLI and
+    inspects its own entry goes through this helper instead, so it keeps
+    naming the right entry regardless of how many adapters register.
+    """
+    return next(entry for entry in report["clis"] if entry["cli"] == cli_id)
 
 
 class RealHomeTestCase(_RealHomeTestCase):
@@ -613,8 +631,8 @@ class InstallTest(RealHomeTestCase):
 
         restore_writable()
         _, report = self.run_cli("doctor")
-        self.assertEqual(report["clis"][0]["missing"], [])
-        self.assertEqual(report["clis"][0]["drifted"], [])
+        self.assertEqual(cli_entry(report)["missing"], [])
+        self.assertEqual(cli_entry(report)["drifted"], [])
 
     def test_the_rollback_admits_the_settings_file_it_could_not_take_back(self):
         """The documented residue, said out loud instead of reported as a clean undo."""
@@ -1564,6 +1582,9 @@ class DoctorTest(RealHomeTestCase):
         self.present()
         self.run_cli("install", "--cli", CLI)
 
+    def entry_for(self, report, cli_id: str = CLI):
+        return cli_entry(report, cli_id)
+
     def test_doctor_lists_every_supported_cli(self):
         _, report = self.run_cli("doctor")
         self.assertEqual([entry["cli"] for entry in report["clis"]], list(available().ids()))
@@ -1584,16 +1605,16 @@ class DoctorTest(RealHomeTestCase):
     def test_doctor_reports_a_clean_home_as_not_installed(self):
         self.present()
         _, report = self.run_cli("doctor")
-        self.assertFalse(report["clis"][0]["pegasus_installed"])
+        self.assertFalse(self.entry_for(report)["pegasus_installed"])
 
     def test_doctor_reports_an_absent_cli_as_undetected(self):
         _, report = self.run_cli("doctor")
-        self.assertFalse(report["clis"][0]["detected"])
+        self.assertFalse(self.entry_for(report)["detected"])
 
     def test_doctor_counts_what_is_installed_and_finds_no_drift(self):
         self.install()
         _, report = self.run_cli("doctor")
-        entry = report["clis"][0]
+        entry = self.entry_for(report)
         self.assertTrue(entry["pegasus_installed"])
         self.assertGreater(entry["artifacts"], 0)
         self.assertEqual(entry["drifted"], [])
@@ -1643,7 +1664,7 @@ class DoctorTest(RealHomeTestCase):
         code, report = self.run_cli("doctor")
 
         self.assertEqual(code, 0)
-        entry = report["clis"][0]
+        entry = self.entry_for(report)
         self.assertNotIn("dependency:probe", entry["unreadable"])
         self.assertNotIn("dependency:probe", entry["drifted"])
         self.assertNotIn("dependency:probe", entry["missing"])
@@ -1654,7 +1675,7 @@ class DoctorTest(RealHomeTestCase):
 
         _, report = self.run_cli("doctor")
 
-        self.assertIn("dependency:probe", report["clis"][0]["missing"])
+        self.assertIn("dependency:probe", self.entry_for(report)["missing"])
 
     def test_doctor_reports_a_dependency_tree_whose_program_is_untouched_as_healthy(self):
         """The program named by `program_relpath` still hashes to
@@ -1676,7 +1697,7 @@ class DoctorTest(RealHomeTestCase):
         code, report = self.run_cli("doctor")
 
         self.assertEqual(code, 0)
-        entry = report["clis"][0]
+        entry = self.entry_for(report)
         self.assertNotIn("dependency:probe", entry["drifted"])
         self.assertNotIn("dependency:probe", entry["missing"])
         self.assertNotIn("dependency:probe", entry["unreadable"])
@@ -1702,7 +1723,7 @@ class DoctorTest(RealHomeTestCase):
 
         _, report = self.run_cli("doctor")
 
-        self.assertIn("dependency:probe", report["clis"][0]["drifted"])
+        self.assertIn("dependency:probe", self.entry_for(report)["drifted"])
 
     def test_doctor_reports_an_absent_program_as_missing_even_though_the_tree_is_there(self):
         """The tree directory itself still exists -- only the one file inside
@@ -1722,21 +1743,21 @@ class DoctorTest(RealHomeTestCase):
 
         _, report = self.run_cli("doctor")
 
-        self.assertIn("dependency:probe", report["clis"][0]["missing"])
+        self.assertIn("dependency:probe", self.entry_for(report)["missing"])
 
     def test_doctor_names_an_artifact_the_user_edited(self):
         self.install()
         edited = next(e for e in self.installed_entries() if e.kind == "file")
         edited.target.write_bytes(b"changed by hand")
         _, report = self.run_cli("doctor")
-        self.assertEqual(report["clis"][0]["drifted"], [edited.id])
+        self.assertEqual(self.entry_for(report)["drifted"], [edited.id])
 
     def test_doctor_names_an_artifact_that_went_missing(self):
         self.install()
         gone = next(e for e in self.installed_entries() if e.kind == "file")
         gone.target.unlink()
         _, report = self.run_cli("doctor")
-        self.assertEqual(report["clis"][0]["missing"], [gone.id])
+        self.assertEqual(self.entry_for(report)["missing"], [gone.id])
 
     def test_doctor_notices_a_configuration_key_the_user_removed(self):
         self.install()
@@ -1745,7 +1766,7 @@ class DoctorTest(RealHomeTestCase):
         del document["agent" if "agent" in key.pointer else key.pointer.strip("/").split("/")[0]]
         key.target.write_bytes(json.dumps(document).encode("utf-8"))
         _, report = self.run_cli("doctor")
-        self.assertIn(key.id, report["clis"][0]["missing"])
+        self.assertIn(key.id, self.entry_for(report)["missing"])
 
     def test_doctor_names_an_artifact_whose_state_could_not_be_determined(self):
         """An entry `exists` cannot probe is neither missing nor drifted —
@@ -1754,7 +1775,7 @@ class DoctorTest(RealHomeTestCase):
         unreadable = next(e for e in self.installed_entries() if e.kind == "file")
         self.refuse_to_probe_once_it_exists(unreadable.target)
         _, report = self.run_cli("doctor")
-        entry = report["clis"][0]
+        entry = self.entry_for(report)
         self.assertEqual(entry["unreadable"], [unreadable.id])
         self.assertNotIn(unreadable.id, entry["missing"])
         self.assertNotIn(unreadable.id, entry["drifted"])
@@ -1766,7 +1787,7 @@ class DoctorTest(RealHomeTestCase):
         self.refuse_to_probe_once_it_exists(unreadable.target)
         code, report = self.run_cli("doctor")
         self.assertEqual(code, 0)
-        self.assertEqual(report["clis"][0]["artifacts"], len(entries))
+        self.assertEqual(self.entry_for(report)["artifacts"], len(entries))
 
     def test_doctor_prose_mentions_what_could_not_be_determined(self):
         self.install()
@@ -2404,12 +2425,12 @@ class ActivationTest(RealHomeTestCase):
         self.present()
         self.run_cli("install", "--cli", CLI)
         _, report = self.run_cli("doctor")
-        self.assertTrue(report["clis"][0]["activation"])
+        self.assertTrue(cli_entry(report)["activation"])
 
     def test_doctor_stays_quiet_when_pegasus_is_not_installed(self):
         self.present()
         _, report = self.run_cli("doctor")
-        self.assertNotIn("activation", report["clis"][0])
+        self.assertNotIn("activation", cli_entry(report))
 
     def test_the_prose_carries_it_because_prose_is_never_a_subset(self):
         self.present()

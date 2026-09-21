@@ -34,7 +34,12 @@ class InstallAndRetireTest(_RealHomeTestCase):
         super().setUp()
         self.fs = self.filesystem
         self.registry = available()
-        self.cli = self.registry.ids()[0]
+        # Pinned to OpenCode, not "whichever adapter registers first": this
+        # suite's own end-to-end assertions (subagent_depth, the apply_patch
+        # scoping plugin, ...) exercise OpenCode-specific artifacts that
+        # Claude Code's adapter never renders. "ids()[0]" now resolves
+        # alphabetically to "claudecode" instead, which cannot support them.
+        self.cli = "opencode"
         self.adapter = self.registry.get(self.cli)
         self.environment = Environment(home=self.home, data_dir=self.fs.data_dir(self.home))
         self.layout = self.adapter.layout(self.environment)

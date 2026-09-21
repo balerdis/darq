@@ -189,7 +189,10 @@ class WordmarkRenderingTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
-        cli_id = available().ids()[0]
+        # Pinned rather than "whichever adapter is registered first":
+        # alphabetically that is now "claudecode", and nothing here needs
+        # to be CLI-specific, so pin the one this suite has always run against.
+        cli_id = "opencode"
         layout = available().get(cli_id).layout(Environment(home=self.home))
         layout.config_dir.mkdir(parents=True, exist_ok=True)
         runtime = cli.Runtime(
@@ -230,7 +233,10 @@ class LocalUpdateNoticeTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
-        cli_id = available().ids()[0]
+        # Pinned rather than "whichever adapter is registered first":
+        # alphabetically that is now "claudecode", and nothing here needs
+        # to be CLI-specific, so pin the one this suite has always run against.
+        cli_id = "opencode"
         layout = available().get(cli_id).layout(Environment(home=self.home))
         layout.config_dir.mkdir(parents=True, exist_ok=True)
         filesystem = PosixFileSystem(product_id="pegasus-harness")

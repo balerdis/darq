@@ -380,6 +380,12 @@ PRODUCT_IDENTITY_ALLOWLIST = frozenset(
         # default a `Layout` can answer on its own -- correct only for the
         # packaged distribution, and consulted for nothing but that.
         "pegasus-AGENTS.md",
+        # The same idea again, for the Claude Code adapter's own layout: its
+        # own identity-unaware default for the system prompt's filename,
+        # never consulted for what `render.system_prompt` actually writes
+        # (that function derives the real name from `Identity.program_name`
+        # directly, the same way OpenCode's `render.system_prompt` does).
+        "pegasus.md",
     }
 )
 

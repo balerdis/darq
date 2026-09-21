@@ -59,7 +59,12 @@ import check_docs_links as checker  # noqa: E402
 GUARD_MODULE = Path(__file__).relative_to(REPOSITORY).as_posix()
 
 AT = "2026-08-14T00:00:00+00:00"
-CLI = available().ids()[0]
+# Pinned to OpenCode, not "whichever adapter is registered first": this
+# suite exercises capabilities (mcp, per_agent_model, subagents declared
+# inside the settings file, ...) that only OpenCode declares today. Since
+# Claude Code registered, "available().ids()[0]" resolves alphabetically
+# to "claudecode" instead, which cannot support what this file tests.
+CLI = "opencode"
 
 #: The host CLI, spelled the way its own adapter spells it -- which is how
 #: the plan below names it too, so the manual is held to the product's word

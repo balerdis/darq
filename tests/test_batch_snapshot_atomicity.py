@@ -34,7 +34,12 @@ from pegasus.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
-CLI = available().ids()[0]
+# Pinned to OpenCode, not "whichever adapter is registered first": this
+# suite exercises capabilities (mcp, per_agent_model, subagents declared
+# inside the settings file, ...) that only OpenCode declares today. Since
+# Claude Code registered, "available().ids()[0]" resolves alphabetically
+# to "claudecode" instead, which cannot support what this file tests.
+CLI = "opencode"
 
 #: Two agents this release ships as configurable, so a batch can name more
 #: than one without inventing a fixture -- see `test_manual_figures.py`'s

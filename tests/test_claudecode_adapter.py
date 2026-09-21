@@ -1,0 +1,323 @@
+"""The Claude Code adapter: the second CLI adapter, and the only place its own
+vocabulary (`Read`, `Bash`, `Agent(...)`, `settings.json`'s `agent` key) is
+allowed to appear.
+"""
+from __future__ import annotations
+
+import unittest
+from pathlib import Path, PurePosixPath
+
+from pegasus import cli
+from pegasus.adapters.claudecode import Adapter
+from pegasus.adapters.claudecode import render as render_module
+from pegasus.core.content import (
+    Agent,
+    AgentMode,
+    Asset,
+    Command,
+    Execution,
+    RunsAs,
+    Skill,
+    SystemPrompt,
+)
+from pegasus.core import registry as registry_module
+from pegasus.core.registry import Registry
+from pegasus.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, ModelAssignment
+
+HOME = Path("/home/probe")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+CONFIG = HOME / ".claude"
+ORCHESTRATOR = "pegasus-orchestrator"
+IDENTITY = cli.default_identity()
+
+
+def only(artifacts, kind):
+    return [item for item in artifacts if isinstance(item, kind)]
+
+
+class RegistrationTest(unittest.TestCase):
+    def test_the_adapter_satisfies_the_registry(self):
+        registry = Registry()
+        registry.register(Adapter())
+        self.assertEqual(registry.ids(), ("claudecode",))
+
+    def test_declares_only_what_it_implements(self):
+        manifest = Adapter().capabilities()
+        self.assertEqual(
+            sorted(item.value for item in manifest.enabled),
+            ["skills", "slash_commands", "sub_agents", "system_prompt"],
+        )
+
+    def test_the_tier_is_partial(self):
+        from pegasus.core.types import SupportTier
+
+        self.assertEqual(Adapter().tier(), SupportTier.PARTIAL)
+
+
+class LayoutTest(unittest.TestCase):
+    def setUp(self):
+        self.layout = Adapter().layout(ENVIRONMENT)
+
+    def test_resolves_the_standard_configuration_root(self):
+        self.assertEqual(self.layout.config_dir, CONFIG)
+
+    def test_honours_an_absolute_claude_config_dir(self):
+        environment = Environment(home=HOME, variables={"CLAUDE_CONFIG_DIR": "/opt/claude"})
+        self.assertEqual(Adapter().layout(environment).config_dir, Path("/opt/claude"))
+
+    def test_ignores_a_relative_claude_config_dir(self):
+        environment = Environment(home=HOME, variables={"CLAUDE_CONFIG_DIR": "relative/cfg"})
+        self.assertEqual(Adapter().layout(environment).config_dir, CONFIG)
+
+    def test_does_not_honour_xdg_config_home(self):
+        """Claude Code does NOT honour XDG_CONFIG_HOME, unlike OpenCode."""
+        environment = Environment(home=HOME, variables={"XDG_CONFIG_HOME": "/opt/xdg"})
+        self.assertEqual(Adapter().layout(environment).config_dir, CONFIG)
+
+    def test_every_file_based_capability_has_its_path(self):
+        for capability in Adapter().capabilities().enabled & registry_module._NEEDS_ANCHOR:
+            self.assertIsNotNone(self.layout.anchor(capability), capability.value)
+
+    def test_agents_dir_is_a_real_anchor(self):
+        self.assertEqual(self.layout.agents_dir, CONFIG / "agents")
+
+    def test_prompts_dir_is_none(self):
+        self.assertIsNone(self.layout.prompts_dir)
+
+    def test_plugins_dir_is_none(self):
+        self.assertIsNone(self.layout.plugins_dir)
+
+    def test_skills_dir(self):
+        self.assertEqual(self.layout.skills_dir, CONFIG / "skills")
+
+    def test_commands_dir(self):
+        self.assertEqual(self.layout.commands_dir, CONFIG / "commands")
+
+    def test_settings_file(self):
+        self.assertEqual(self.layout.settings_file, CONFIG / "settings.json")
+
+    def test_dependencies_dir(self):
+        self.assertEqual(
+            self.layout.dependencies_dir, HOME / ".local" / "share" / "pegasus-harness" / "mcp"
+        )
+
+    def test_dependencies_dir_is_none_without_a_data_dir(self):
+        environment = Environment(home=HOME)
+        self.assertIsNone(Adapter().layout(environment).dependencies_dir)
+
+    def test_building_a_layout_touches_no_filesystem(self):
+        Adapter().layout(Environment(home=Path("/nonexistent/probe")))
+
+
+class DetectionTest(unittest.TestCase):
+    def test_reports_a_configuration_directory_that_does_not_exist(self):
+        detection = Adapter().detect(Environment(home=Path("/nonexistent/probe")))
+        self.assertFalse(detection.config_found)
+        self.assertEqual(detection.config_dir, Path("/nonexistent/probe/.claude"))
+
+    def test_an_empty_path_finds_no_binary(self):
+        detection = Adapter().detect(Environment(home=HOME, variables={"PATH": ""}))
+        self.assertFalse(detection.installed)
+        self.assertIsNone(detection.binary_path)
+
+
+class ActivationStepsTest(unittest.TestCase):
+    def test_is_not_empty(self):
+        self.assertTrue(Adapter().activation_steps())
+
+    def test_mentions_restarting(self):
+        self.assertTrue(any("restart" in step.lower() for step in Adapter().activation_steps()))
+
+
+class SkillRenderTest(unittest.TestCase):
+    def setUp(self):
+        self.layout = Adapter().layout(ENVIRONMENT)
+        self.skill = Skill(
+            name="alpha",
+            description="d",
+            assets=(
+                Asset(PurePosixPath("SKILL.md"), b"skill body {{skills_root}} unresolved"),
+                Asset(PurePosixPath("references/guide.md"), b"guide"),
+            ),
+            source=PurePosixPath("skills/alpha/SKILL.md"),
+        )
+
+    def test_travels_verbatim(self):
+        artifacts = Adapter().render_skill(self.layout, self.skill)
+        self.assertEqual(
+            [item.content for item in artifacts],
+            [b"skill body {{skills_root}} unresolved", b"guide"],
+        )
+
+    def test_lands_under_the_skill_directory(self):
+        artifacts = Adapter().render_skill(self.layout, self.skill)
+        self.assertEqual(
+            [item.path for item in artifacts],
+            [CONFIG / "skills/alpha/SKILL.md", CONFIG / "skills/alpha/references/guide.md"],
+        )
+
+
+class AgentRenderTest(unittest.TestCase):
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def agent(self, **overrides):
+        fields = dict(
+            name="sdd-verify",
+            description="Readiness authority",
+            body="Verify things. Skills live at {{skills_root}}.\n",
+            mode=AgentMode.SUBAGENT,
+            source=PurePosixPath("agents/sdd-verify.md"),
+        )
+        fields.update(overrides)
+        return Agent(**fields)
+
+    def render(self, **overrides):
+        artifacts = self.adapter.render_agent(self.layout, self.agent(**overrides))
+        return only(artifacts, FileArtifact)[0]
+
+    def test_lands_in_the_agents_directory(self):
+        artifact = self.render()
+        self.assertEqual(artifact.path, CONFIG / "agents" / "sdd-verify.md")
+
+    def test_frontmatter_names_the_agent(self):
+        content = self.render().content.decode()
+        self.assertIn('name: "sdd-verify"', content)
+        self.assertIn('description: "Readiness authority"', content)
+
+    def test_tools_use_claude_codes_exact_casing(self):
+        content = self.render(requires_tools=("read", "bash"), optional_tools=("grep",)).content.decode()
+        self.assertIn("Bash", content)
+        self.assertNotIn("bash", content)
+        self.assertIn("Read", content)
+        self.assertIn("Grep", content)
+
+    def test_an_unmapped_tool_raises(self):
+        with self.assertRaises(render_module.RenderError):
+            self.adapter.render_agent(self.layout, self.agent(requires_tools=("nope",)))
+
+    def test_may_delegate_to_becomes_an_agent_entry(self):
+        content = self.render(may_delegate_to=("sdd-apply", "sdd-tasks")).content.decode()
+        self.assertIn("Agent(sdd-apply, sdd-tasks)", content)
+
+    def test_no_delegation_targets_means_no_agent_entry(self):
+        content = self.render(may_delegate_to=()).content.decode()
+        self.assertNotIn("Agent(", content)
+
+    def test_the_body_is_filled_and_survives(self):
+        content = self.render().content.decode()
+        self.assertIn(f"Skills live at {CONFIG / 'skills'}.", content)
+        self.assertNotIn("{{skills_root}}", content)
+
+    def test_no_model_key_without_an_assignment(self):
+        content = self.render().content.decode()
+        self.assertNotIn("model:", content)
+
+    def test_an_assignment_renders_a_model_key(self):
+        assignment = ModelAssignment(provider_id="anthropic", model_id="claude-sonnet-5")
+        artifact = only(
+            self.adapter.render_agent(self.layout, self.agent(), assignment), FileArtifact
+        )[0]
+        self.assertIn('model: "claude-sonnet-5"', artifact.content.decode())
+
+
+class CommandRenderTest(unittest.TestCase):
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def rendered(self, **overrides):
+        fields = dict(
+            name="sdd-apply",
+            description="Implement SDD tasks",
+            body="Do the work.\n",
+            runs_as=RunsAs.ORCHESTRATOR,
+            execution=Execution.ISOLATED,
+            source=PurePosixPath("commands/sdd-apply.md"),
+        )
+        fields.update(overrides)
+        return self.adapter.render_command(self.layout, Command(**fields), "pegasus-orchestrator")[0].content.decode()
+
+    def test_lands_in_the_commands_directory(self):
+        artifact = self.adapter.render_command(
+            self.layout,
+            Command(
+                name="sdd-apply",
+                description="d",
+                body="b\n",
+                runs_as=RunsAs.DEFAULT,
+                execution=Execution.INLINE,
+                source=PurePosixPath("commands/sdd-apply.md"),
+            ),
+            "pegasus-orchestrator",
+        )[0]
+        self.assertEqual(artifact.path, CONFIG / "commands" / "sdd-apply.md")
+
+    def test_no_agent_field_for_any_runs_as(self):
+        for role in RunsAs:
+            content = self.rendered(runs_as=role)
+            self.assertNotIn("agent:", content)
+
+    def test_orchestrator_name_does_not_leak_into_the_file(self):
+        content = self.rendered(runs_as=RunsAs.ORCHESTRATOR)
+        self.assertNotIn("pegasus-orchestrator", content)
+
+    def test_the_body_survives(self):
+        self.assertTrue(self.rendered().endswith("Do the work.\n"))
+
+    def test_a_description_with_a_colon_stays_valid(self):
+        rendered = self.rendered(description="Trigger: do it now")
+        self.assertIn('description: "Trigger: do it now"', rendered)
+
+
+class SystemPromptRenderTest(unittest.TestCase):
+    def render(self, prompt: SystemPrompt):
+        return self.adapter.render_system_prompt(self.layout, prompt, IDENTITY)
+
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def test_ships_one_file_at_rules_program_name(self):
+        artifacts = self.render(SystemPrompt(body="# Rules\n", source=PurePosixPath("system-prompt/AGENTS.md")))
+        self.assertEqual(len(artifacts), 1)
+        artifact = only(artifacts, FileArtifact)[0]
+        self.assertEqual(artifact.path, CONFIG / "rules" / f"{IDENTITY.program_name}.md")
+
+    def test_no_settings_wiring_is_needed(self):
+        """Unlike OpenCode, `~/.claude/rules/*.md` auto-loads; nothing to append."""
+        artifacts = self.render(SystemPrompt(body="# Rules\n", source=PurePosixPath("system-prompt/AGENTS.md")))
+        self.assertEqual(only(artifacts, ConfigKeyArtifact), [])
+
+    def test_body_survives(self):
+        artifacts = self.render(SystemPrompt(body="# Rules\n", source=PurePosixPath("system-prompt/AGENTS.md")))
+        self.assertEqual(only(artifacts, FileArtifact)[0].content.decode(), "# Rules\n")
+
+
+class OwnArtifactsTest(unittest.TestCase):
+    def setUp(self):
+        self.adapter = Adapter()
+        self.layout = self.adapter.layout(ENVIRONMENT)
+
+    def test_exactly_one_artifact(self):
+        artifacts = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())
+        self.assertEqual(len(artifacts), 1)
+
+    def test_it_is_a_config_key_at_settings_pointing_at_agent(self):
+        artifact = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())[0]
+        self.assertIsInstance(artifact, ConfigKeyArtifact)
+        self.assertEqual(artifact.path, CONFIG / "settings.json")
+        self.assertEqual(artifact.pointer, "/agent")
+
+    def test_the_value_is_the_content_declared_orchestrator_not_a_literal(self):
+        artifact = self.adapter.own_artifacts(self.layout, "king-pegasus-two", IDENTITY, ())[0]
+        self.assertEqual(artifact.value, "king-pegasus-two")
+
+    def test_stays_inside_config_dir(self):
+        for artifact in self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ()):
+            self.assertTrue(artifact.path.is_relative_to(self.layout.config_dir))
+
+
+if __name__ == "__main__":
+    unittest.main()

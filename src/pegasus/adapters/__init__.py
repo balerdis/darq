@@ -5,10 +5,11 @@ directory here and adding one line below.
 """
 from __future__ import annotations
 
+from pegasus.adapters.claudecode import Adapter as ClaudeCodeAdapter
 from pegasus.adapters.opencode import Adapter as OpenCodeAdapter
 from pegasus.core.registry import Registry
 
-ADAPTERS = (OpenCodeAdapter,)
+ADAPTERS = (OpenCodeAdapter, ClaudeCodeAdapter)
 
 
 def available() -> Registry:
