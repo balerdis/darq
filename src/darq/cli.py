@@ -1461,7 +1461,7 @@ def _manual_upgrade_command(destination: Path, release: upgrade_module.ReleaseSo
 _NUMERIC_VERSION = re.compile(r"\A\d+(\.\d+)*\Z")
 r"""The one shape `_numeric_version_key` can order: one or more dot-separated
 runs of digits, nothing else -- `"6.0.0"`, `"2024.03"`, `"10"`. `SAFE_VERSION`
-(`pegasus.core.identity`) is far wider than this on purpose, because
+(`darq.core.identity`) is far wider than this on purpose, because
 `identity.version` is not semver -- a distribution may call its version
 `"beta"`, `"1.0-rc2"`, or anything else `SAFE_VERSION` allows. None of those
 match here, and that is intentional: this pattern exists to tell `upgrade`
