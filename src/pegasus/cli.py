@@ -2015,6 +2015,19 @@ def uninstall(cli_id: str, runtime: Runtime) -> dict[str, Any]:
 
 def _models(arguments, runtime: Runtime) -> dict[str, Any]:
     if arguments.models_command == "set":
+        # `_require_per_agent_model` runs here, ahead of `_model_assignment_specs`,
+        # not inside `models_set` alone: `_model_assignment_specs` does its own
+        # shape validation on the raw `--assign`/`--effort` strings (a duplicate
+        # agent, a spec missing '=', an orphan `--effort`) and can raise before
+        # `models_set` is ever called. Left unchecked here, a mistyped argument
+        # against a CLI with no per-agent model capability at all would win the
+        # race and report the wrong reason -- contradicting `models_set`'s own
+        # docstring, which states the capability is checked "ahead of every
+        # check below". `models_set` still calls the same guard itself right
+        # after, so a caller that reaches it directly (as `models_apply` calls
+        # its own copy) is held to the identical rule; this is only about which
+        # refusal a person typing a command line sees first.
+        _require_per_agent_model(_adapter(arguments.cli))
         specs = _model_assignment_specs(arguments.assign, arguments.effort)
         return models_set(arguments.cli, specs, runtime)
     if arguments.models_command == "unset":
@@ -2088,6 +2101,13 @@ def models_set(
     the machine, which is the ordering the rest of this docstring follows --
     but a missing `per_agent_model` capability is not fixable by editing the
     rest of the command line at all, so it belongs even earlier than that.
+    Called again here so any caller that reaches this function directly --
+    not only `models set` on the command line -- is held to the same rule.
+    The command line itself checks it once more, even earlier still, in
+    `_models`'s own dispatch, before `--assign`/`--effort` are even parsed
+    into `ModelAssignmentSpec`s: that parsing has shape errors of its own
+    (a duplicate agent, a malformed spec, an orphan `--effort`) that used to
+    win the race against this refusal when the capability was absent.
 
     Every item is validated -- through `install`'s own `model_assignments`
     batch handling -- before anything is recorded: an agent nothing will ever
@@ -2235,8 +2255,18 @@ def models_apply(
     nothing to apply -- but either alone is enough, so a sitting that staged
     only removals, or only assignments, still reaches here rather than
     needing its own call for that case.
+
+    Calls `_require_per_agent_model` first, exactly where `models_set` and
+    `models_unset` call it, and for the same reason: this is the function
+    that actually writes the assignment, so it is the one place a missing
+    guard would matter most. Today its only caller (`_models_screen` in the
+    TUI) already filters on the capability before ever reaching this point,
+    which made the absence latent rather than harmless -- reachable by any
+    future caller (a script, a plugin, a TUI refactor, a test) that calls it
+    directly, the same way an adversarial review did.
     """
     adapter = _adapter(cli_id)
+    _require_per_agent_model(adapter)
     if not assignments and not removals:
         raise CommandError("models apply needs at least one assignment or removal")
     seen_agents: set[str] = set()
@@ -2293,20 +2323,60 @@ def models_list(runtime: Runtime, *, cli_id: str | None = None) -> dict[str, Any
     `per_agent_model`: any assignment this store still holds for it is
     inert (see `_require_per_agent_model`), so reporting it back would let
     a person read it as a preference in effect. With `set` and `unset`
-    already refusing, no *new* one can exist -- this closes the last gap,
-    a stale one recorded before this refusal existed.
+    already refusing, no *new* one can exist against that CLI going
+    forward.
+
+    The unfiltered listing (`cli_id is None`) cannot lean on that refusal --
+    it exists precisely to show every CLI at once -- so it cannot simply
+    skip this check the way it used to. It does not refuse either: refusing
+    an unfiltered listing over one inert entry among possibly many live ones
+    would throw out everything to hide one thing. Instead every entry
+    belonging to a CLI without `per_agent_model` (including a CLI this
+    release no longer recognizes at all, which is the same kind of stale
+    record) is reported with `"in_effect": False` and a `"note"` explaining
+    why, rather than silently omitted: a person who remembers setting it
+    deserves to see why it does nothing, and a record that just vanishes is
+    its own small mystery. Every other entry carries `"in_effect": True` for
+    the same reason `mcp list`'s own entries are never left to imply a
+    status by their mere presence.
     """
     if cli_id is not None:
         _require_per_agent_model(_adapter(cli_id))
+    registry = available()
     assignments = model_assignment_store(runtime).load()
-    return {
-        "action": "list",
-        "assignments": [
-            {"cli": entry.cli, "agent": entry.agent, "model": entry.assignment.full_id, "effort": entry.assignment.effort}
-            for entry in assignments.entries
-            if cli_id is None or entry.cli == cli_id
-        ],
-    }
+    rows: list[dict[str, Any]] = []
+    for entry in assignments.entries:
+        if cli_id is not None and entry.cli != cli_id:
+            continue
+        active, note = _model_assignment_in_effect(registry, entry.cli)
+        row: dict[str, Any] = {
+            "cli": entry.cli,
+            "agent": entry.agent,
+            "model": entry.assignment.full_id,
+            "effort": entry.assignment.effort,
+            "in_effect": active,
+        }
+        if note is not None:
+            row["note"] = note
+        rows.append(row)
+    return {"action": "list", "assignments": rows}
+
+
+def _model_assignment_in_effect(registry, cli_id: str) -> tuple[bool, str | None]:
+    """Whether a stored entry for `cli_id` is honoured by anything today.
+
+    Used only by the unfiltered branch of `models_list`: the filtered
+    branch already refused outright through `_require_per_agent_model` if
+    `cli_id` lacked the capability, so every row it returns is trivially in
+    effect and never reaches here with a false result.
+    """
+    if cli_id not in registry:
+        return False, f"{cli_id!r} is not a CLI this release recognizes; this assignment is not in effect."
+    if not registry.get(cli_id).capabilities().declares(Capability.PER_AGENT_MODEL):
+        return False, (
+            f"{cli_id!r} never declared support for per-agent models; this assignment is not in effect."
+        )
+    return True, None
 
 
 def _mcp(arguments, runtime: Runtime) -> dict[str, Any]:
@@ -2770,7 +2840,8 @@ def _declared_mcp_keys(runtime: Runtime, adapter) -> frozenset[str]:
 def _require_per_agent_model(adapter) -> None:
     """Refuse outright when `adapter` never declared `Capability.
     PER_AGENT_MODEL` -- before anything else `models_set`, `models_unset`,
-    and `models_list` check, including their own argument validation.
+    `models_apply`, and a `--cli`-scoped `models_list` check, including
+    their own argument validation.
 
     Mirrors `_require_configurable_agent`'s shape for the same kind of
     precondition, but this one sits even earlier. `models_set`'s own
@@ -2781,7 +2852,16 @@ def _require_per_agent_model(adapter) -> None:
     fixable by editing the rest of the command line at all. Correct every
     argument and there is still no model catalog on this CLI to write a
     preference into. So it is checked first, ahead of every argument check
-    and every other precondition.
+    and every other precondition -- on the command line, `_models`'s own
+    dispatch calls this ahead of even building the `--assign`/`--effort`
+    batch for `models set`, since that batch's own shape validation
+    (`_model_assignment_specs`) can otherwise raise its own error first.
+
+    `models_list` calls this only when narrowed to one CLI: an unfiltered
+    listing has no single adapter to check against and reports every CLI at
+    once, including one lacking this capability -- marked as not in effect,
+    never refused outright, since refusing the whole listing over one inert
+    entry would hide every live one alongside it.
 
     The message matches the `Placeholder` `tui.session`'s own models screen
     already shows for this exact absence (added in `e747b9f`): a person who
@@ -3839,11 +3919,15 @@ def _models_prose(report: dict[str, Any]) -> str:
     if action == "list":
         if not report["assignments"]:
             return "No model assignments."
-        return "\n".join(
-            f"{entry['cli']}/{entry['agent']}: {entry['model']}"
-            + (f" (effort {entry['effort']})" if entry.get("effort") else "")
-            for entry in report["assignments"]
-        )
+        lines = []
+        for entry in report["assignments"]:
+            line = f"{entry['cli']}/{entry['agent']}: {entry['model']}"
+            if entry.get("effort"):
+                line += f" (effort {entry['effort']})"
+            if not entry.get("in_effect", True):
+                line += f" -- not in effect: {entry.get('note', 'this CLI has no per-agent model capability')}"
+            lines.append(line)
+        return "\n".join(lines)
     return "models: nothing to report."
 
 

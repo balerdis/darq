@@ -424,6 +424,143 @@ class CapabilityRefusalTest(RealHomeTestCase):
         self.assertEqual(report["status"], "set")
 
 
+class UnfilteredListingReportsPhantomEntriesTest(RealHomeTestCase):
+    """`models list` without `--cli` must not report an assignment held for
+    a CLI that never declared `per_agent_model` as if it were in effect.
+
+    Reproduces the adversarial finding directly: a phantom entry written
+    straight into the assignment store, as an earlier release (before
+    `f0771bc`'s guard existed) could have left behind, naming a CLI
+    (`claudecode`) that has no `per_agent_model` capability at all. The
+    filtered path (`--cli claudecode`) already refuses; this covers the
+    unfiltered path, which must not let that refusal be bypassed just by
+    omitting `--cli`.
+    """
+
+    PHANTOM_CLI = "claudecode"
+
+    def write_phantom_entry(self) -> None:
+        from pegasus.core import model_assignments as model_assignments_module
+        from pegasus.core.types import ModelAssignment
+
+        store = cli.model_assignment_store(self.runtime())
+        assignments = model_assignments_module.with_assignment(
+            store.load(),
+            self.PHANTOM_CLI,
+            CONFIGURABLE_AGENT,
+            ModelAssignment.parse("anthropic/claude-sonnet-5"),
+        )
+        store.save(assignments)
+
+    def test_unfiltered_listing_does_not_report_the_phantom_entry_as_in_effect(self):
+        self.write_phantom_entry()
+        code, report = self.run_cli("models", "list")
+        self.assertEqual(code, 0)
+        phantom = [
+            entry for entry in report["assignments"] if entry["cli"] == self.PHANTOM_CLI and entry["agent"] == CONFIGURABLE_AGENT
+        ]
+        self.assertTrue(phantom, "the phantom entry vanished instead of being reported as inert")
+        self.assertFalse(
+            phantom[0].get("in_effect", True),
+            f"the phantom entry was reported without any marker that it is not in effect: {phantom[0]}",
+        )
+
+    def test_filtered_listing_still_refuses(self):
+        self.write_phantom_entry()
+        code, report = self.run_cli("models", "list", "--cli", self.PHANTOM_CLI)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(report["status"], "failed")
+
+
+class ModelsApplyGuardTest(RealHomeTestCase):
+    """`models_apply` is the function that writes to the store -- unlike
+    `set`/`unset`/`list`, it never called `_require_per_agent_model` at all.
+    Called directly, as any future caller (script, plugin, TUI refactor,
+    test) might, it must refuse before writing anything, exactly like its
+    siblings.
+    """
+
+    def test_models_apply_refuses_for_a_cli_without_the_capability(self):
+        ModelAssignmentSpec = cli.ModelAssignmentSpec
+
+        cli_id = "claudecode"
+        self.assertFalse(
+            available().get(cli_id).capabilities().declares(cli.Capability.PER_AGENT_MODEL)
+        )
+        layout = available().get(cli_id).layout(Environment(home=self.home))
+        layout.config_dir.mkdir(parents=True, exist_ok=True)
+        code, report = self.run_cli("install", "--cli", cli_id)
+        self.assertEqual(code, 0)
+
+        spec = ModelAssignmentSpec(agent=CONFIGURABLE_AGENT, model="anthropic/claude-sonnet-5", effort=None)
+        runtime = self.runtime()
+        with self.assertRaises(cli.CommandError) as context:
+            cli.models_apply(cli_id, [spec], [], runtime)
+        self.assertIn(cli_id, str(context.exception))
+
+        loaded = cli.model_assignment_store(runtime).load()
+        from pegasus.core import model_assignments as model_assignments_module
+
+        self.assertIsNone(model_assignments_module.get(loaded, cli_id, CONFIGURABLE_AGENT))
+
+
+class CapabilityCheckedBeforeArgumentParsingTest(RealHomeTestCase):
+    """`models_set`'s own docstring, and `_require_per_agent_model`'s,
+    state that the capability refusal runs ahead of *every* argument
+    check -- but `_models`'s dispatcher builds the `ModelAssignmentSpec`
+    list, via `_model_assignment_specs`, *before* calling `models_set` at
+    all. Any shape error `_model_assignment_specs` raises therefore wins
+    the race against a capability that was never there to begin with,
+    which is exactly backwards from what the docstrings promise.
+
+    Each of these four inputs was demonstrated, against `--cli claudecode`,
+    to raise its own argument-shape error instead of the capability
+    refusal.
+    """
+
+    CLI_ID = "claudecode"
+
+    def test_duplicate_assign_is_still_refused_on_capability(self):
+        code, report = self.run_cli(
+            "models", "set", "--cli", self.CLI_ID,
+            "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+            "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-haiku",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(self.CLI_ID, report["error"])
+        self.assertNotIn("more than once", report["error"])
+
+    def test_malformed_assign_is_still_refused_on_capability(self):
+        code, report = self.run_cli(
+            "models", "set", "--cli", self.CLI_ID,
+            "--assign", "sdd-apply-sin-igual",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(self.CLI_ID, report["error"])
+        self.assertNotIn("AGENT=PROVIDER/MODEL", report["error"])
+
+    def test_orphan_effort_is_still_refused_on_capability(self):
+        code, report = self.run_cli(
+            "models", "set", "--cli", self.CLI_ID,
+            "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+            "--effort", "otro-agente=high",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(self.CLI_ID, report["error"])
+        self.assertNotIn("otro-agente", report["error"])
+
+    def test_duplicate_effort_is_still_refused_on_capability(self):
+        code, report = self.run_cli(
+            "models", "set", "--cli", self.CLI_ID,
+            "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
+            "--effort", f"{CONFIGURABLE_AGENT}=high",
+            "--effort", f"{CONFIGURABLE_AGENT}=low",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn(self.CLI_ID, report["error"])
+        self.assertNotIn("more than once", report["error"])
+
+
 class ProseTest(RealHomeTestCase):
     def test_set_reads_as_prose(self):
         self.install()
