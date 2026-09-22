@@ -1,6 +1,20 @@
 # ADR 0002 — DARQ es marca y contenido, no un segundo producto
 
-Estado: aceptada
+Estado: **retirada** (2026-09-22). Su premisa desapareció con el fork.
+
+Esta ADR prohibía que DARQ agregara capacidades propias al motor. Esa regla no era
+sólo una disciplina: era la consecuencia inevitable de la ADR 0001, que dejaba a DARQ
+sin una copia del motor sobre la que implementar nada. La ADR 0005 revirtió aquello, y
+DARQ ahora tiene motor propio y calendario propio — que es, precisamente, la razón por
+la que el fork existe. Sostener una prohibición cuya causa ya no está habría puesto este
+documento en contradicción con el propósito declarado del proyecto.
+
+Lo que esta ADR argumenta sigue siendo cierto como *costo*, y por eso se conserva el
+cuerpo entero sin reescribirlo: cada capacidad que DARQ agregue por su cuenta es
+superficie que hay que diseñar, versionar y mantener, y aleja a DARQ de poder seguir
+transportando mejoras genéricas de Pegasus a mano. Eso ya no es una regla: es lo que hay
+que pesar en cada caso. Lo que sigue abajo describe una restricción que estuvo vigente
+entre el 7 y el 22 de septiembre de 2026; leerla como norma del presente es un error.
 
 ## Contexto
 
