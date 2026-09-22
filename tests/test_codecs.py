@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 import unittest
 
-from pegasus.core import codecs
-from pegasus.core.types import Codec
+from darq.core import codecs
+from darq.core.types import Codec
 
 
 class JsonCodecTest(unittest.TestCase):

@@ -8,9 +8,9 @@ change, exactly what the distribution build path exists to prevent. Instead the 
 `cli.py`'s composition root -- and this script regenerates just that block from a given
 `identity.json`, leaving every other line of the template byte-for-byte untouched.
 
-    python3 tools/build_installer.py --identity src/pegasus/identity.json --out dist/install.sh
+    python3 tools/build_installer.py --identity src/darq/identity.json --out dist/install.sh
 
-Pegasus's own release build runs this with its own `src/pegasus/identity.json`, exactly like any
+Pegasus's own release build runs this with its own `src/darq/identity.json`, exactly like any
 other distribution: there is no default identity, so forgetting `--identity` is an `argparse`
 error, never a silent fallback that ships a distribution branded as Pegasus.
 """
@@ -27,7 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "install.sh"
-PACKAGE_SOURCE = ROOT / "src" / "pegasus"
+PACKAGE_SOURCE = ROOT / "src" / "darq"
 
 #: The banner line bracketing the identity header block in the template. Exactly two of these
 #: must appear in the template: the header lives strictly between the first and the second.
@@ -84,8 +84,8 @@ CLI_BINARIO_ASSIGNMENT = re.compile(r"^declare -A CLI_BINARIO=\(.*\)$", re.MULTI
 def _load_identity_module(source: Path) -> types.ModuleType:
     """Load `<source>/core/identity.py` as a standalone module, by file path.
 
-    Not `sys.path.insert(0, source.parent); import pegasus.core.identity`: that only works when
-    `source` is itself named `pegasus`, and it would silently resolve to whatever `pegasus`
+    Not `sys.path.insert(0, source.parent); import darq.core.identity`: that only works when
+    `source` is itself named `darq`, and it would silently resolve to whatever `darq`
     package is already imported (the real engine under test, when this runs from inside the test
     suite) rather than the one actually being built against. Loading the file directly validates
     against the exact source tree this script is pointed at, regardless of its directory name --
@@ -131,17 +131,17 @@ def _load_adapters_catalog(package_source: Path) -> tuple[tuple[str, str, str], 
     a fact the adapter already owns.
 
     Unlike `core/identity.py`, `adapters/__init__.py` imports by absolute name --
-    `from pegasus.adapters.claudecode import Adapter` -- so it cannot be loaded by bare file
+    `from darq.adapters.claudecode import Adapter` -- so it cannot be loaded by bare file
     path the way `_load_identity_module` loads identity: those absolute imports resolve
-    against `sys.modules['pegasus']`, not against `package_source`, and loading by path alone
-    would leave them resolving to whatever `pegasus` this process already has imported (the
+    against `sys.modules['darq']`, not against `package_source`, and loading by path alone
+    would leave them resolving to whatever `darq` this process already has imported (the
     real engine under test, when this runs from inside the test suite) rather than the tree
     this build was actually pointed at -- exactly the failure mode `_load_identity_module`
     documents at length for its own, simpler case.
 
-    Since the absolute imports are spelled `pegasus.*` literally, the only way to make them
-    resolve against `package_source` is to import it AS `pegasus`: this evicts any
-    `pegasus`/`pegasus.*` entries already cached in `sys.modules`, adds `package_source`'s
+    Since the absolute imports are spelled `darq.*` literally, the only way to make them
+    resolve against `package_source` is to import it AS `darq`: this evicts any
+    `darq`/`darq.*` entries already cached in `sys.modules`, adds `package_source`'s
     parent to the front of `sys.path`, imports fresh, and restores both `sys.path` and the
     evicted `sys.modules` entries in a `finally` -- so nothing of this transient import lingers
     afterward, and a build run from inside the test suite still validates against the tree it
@@ -150,24 +150,24 @@ def _load_adapters_catalog(package_source: Path) -> tuple[tuple[str, str, str], 
     adapters_init = package_source / "adapters" / "__init__.py"
     if not adapters_init.is_file():
         raise ValueError(f"{package_source} has no adapters/__init__.py; it cannot list supported CLIs")
-    if package_source.name != "pegasus":
+    if package_source.name != "darq":
         raise ValueError(
-            f"--package-source must be a directory named 'pegasus' (its adapters import "
-            f"'pegasus.adapters...' by absolute name, which only resolves against a tree "
-            f"importable as 'pegasus'); got {package_source}"
+            f"--package-source must be a directory named 'darq' (its adapters import "
+            f"'darq.adapters...' by absolute name, which only resolves against a tree "
+            f"importable as 'darq'); got {package_source}"
         )
 
     parent = str(package_source.parent)
     saved_modules = {
         name: module for name, module in sys.modules.items()
-        if name == "pegasus" or name.startswith("pegasus.")
+        if name == "darq" or name.startswith("darq.")
     }
     for name in saved_modules:
         del sys.modules[name]
 
     sys.path.insert(0, parent)
     try:
-        adapters_module = importlib.import_module("pegasus.adapters")
+        adapters_module = importlib.import_module("darq.adapters")
         registry = adapters_module.available()
         catalog = []
         for cli_id in registry.ids():
@@ -183,7 +183,7 @@ def _load_adapters_catalog(package_source: Path) -> tuple[tuple[str, str, str], 
     finally:
         sys.path.remove(parent)
         for name in list(sys.modules):
-            if name == "pegasus" or name.startswith("pegasus."):
+            if name == "darq" or name.startswith("darq."):
                 del sys.modules[name]
         sys.modules.update(saved_modules)
 
@@ -259,7 +259,7 @@ def render(template_text: str, identity: object, package_source: Path) -> str:
 
     `CLI_CATALOGO` and `CLI_BINARIO`, unlike the four values above, are not distribution
     identity at all -- they are engine data (which CLIs `package_source`'s own
-    `pegasus.adapters.available()` ships, and what each one's own `binary` attribute says to
+    `darq.adapters.available()` ships, and what each one's own `binary` attribute says to
     run `command -v` on), the same for Pegasus's own build as for any other distribution built
     off the same engine. Both still get replaced on every build rather than left as whatever
     the template happened to carry, so a third adapter shows up in both the day it registers
@@ -333,7 +333,7 @@ def main() -> int:
     parser.add_argument("--template", type=Path, default=TEMPLATE, help="the install.sh template to fill in")
     parser.add_argument(
         "--package-source", type=Path, default=PACKAGE_SOURCE,
-        help="a pegasus package tree providing core/identity.py, used only to validate --identity",
+        help="a darq package tree providing core/identity.py, used only to validate --identity",
     )
     parser.add_argument("--identity", type=Path, required=True, help="identity.json to build the installer from")
     parser.add_argument("--out", type=Path, required=True, help="where to write the generated install.sh")

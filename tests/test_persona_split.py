@@ -27,9 +27,9 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.core import content as content_module
+from darq.core import content as content_module
 
-ROOT = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content"
+ROOT = Path(__file__).resolve().parents[1] / "src" / "darq" / "content"
 BASELINE = ROOT / "system-prompt" / "AGENTS.md"
 PERSONA = ROOT / "agents" / "king-pegasus.md"
 ENGRAM = ROOT / "mcp" / "engram.md"

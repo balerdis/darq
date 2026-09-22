@@ -2,7 +2,7 @@
 """Generate the artifact catalog for one CLI from the content core.
 
 The catalog is a derived artifact. Nobody edits it by hand: it is regenerated
-from `src/pegasus/content/` and the CLI's adapter, and its digest is what a
+from `src/darq/content/` and the CLI's adapter, and its digest is what a
 release uses to prove it distributed what it declared.
 
     python3 tools/build_catalog.py --cli opencode
@@ -17,10 +17,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from pegasus.adapters import available  # noqa: E402
-from pegasus.core import catalog as catalog_module  # noqa: E402
-from pegasus.core import content as content_module  # noqa: E402
-from pegasus.cli import default_identity  # noqa: E402
+from darq.adapters import available  # noqa: E402
+from darq.core import catalog as catalog_module  # noqa: E402
+from darq.core import content as content_module  # noqa: E402
+from darq.cli import default_identity  # noqa: E402
 
 # The catalog carries its own canonical frame, so this tool has no home to pick:
 # targets stay relative to each CLI's configuration root and nothing about the

@@ -31,7 +31,7 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.adapters.opencode import render as render_module
+from darq.adapters.opencode import render as render_module
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANUAL = REPOSITORY / "MANUAL.md"

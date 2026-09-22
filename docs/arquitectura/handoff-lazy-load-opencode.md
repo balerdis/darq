@@ -155,7 +155,7 @@ adapter layout, or the generated macros are not portable.
 
 ### Third hazard — ownership gap
 
-`src/pegasus/content/agents/` currently ships only `pegasus-orchestrator.md` and
+`src/darq/content/agents/` currently ships only `pegasus-orchestrator.md` and
 `sdd-verify.md`. The other 9 phase prompts came from gentle-ai. If v4 is to replace the
 live install it must own all 11 prompts. The 10 rewritten macros are working drafts.
 
@@ -271,7 +271,7 @@ Eleven command files under `commands/sdd-*.md` assert:
 **No file anywhere defined what preflight is, and no "exact orchestrator preflight prompt"
 existed.** Every command asserted a precondition nobody owned.
 
-> **Homonym warning for v4:** `docs/arquitectura/arquitectura.md` and `src/pegasus/cli.py`
+> **Homonym warning for v4:** `docs/arquitectura/arquitectura.md` and `src/darq/cli.py`
 > also use the word "preflight", but that is the CLI installer's `ensure_writable()`
 > journal check — an unrelated concept. Grepping for "preflight" in v4 docs finds the
 > wrong thing.

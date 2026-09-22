@@ -43,9 +43,9 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.adapters.opencode import adapter as adapter_module
-from pegasus.adapters.opencode import render as render_module
-from pegasus.core import content as content_module
+from darq.adapters.opencode import adapter as adapter_module
+from darq.adapters.opencode import render as render_module
+from darq.core import content as content_module
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 ARCHITECTURE = REPOSITORY / "docs" / "arquitectura" / "arquitectura.md"

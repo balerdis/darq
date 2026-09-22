@@ -19,12 +19,12 @@ from unittest.mock import patch
 from fakes import FakeDownloader
 from test_dependencies import make_archive
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core import ownership
-from pegasus.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core import ownership
+from darq.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -97,7 +97,7 @@ class RealHomeTestCase(_RealHomeTestCase):
         return self.target() / "probe-linux-x64"
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class InstallDownloadTest(RealHomeTestCase):
     def test_naming_the_server_fetches_and_places_it(self, _load):
         self.present()
@@ -156,7 +156,7 @@ class InstallDownloadTest(RealHomeTestCase):
         self.assertEqual(downloader.calls, [PROBE.endpoint])
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class UninstallDownloadTest(RealHomeTestCase):
     def test_uninstalling_removes_the_whole_materialized_tree(self, _load):
         self.present()
@@ -210,7 +210,7 @@ ARCHIVE_PROBE = Mcp(
 ARCHIVE_CONTENT = Content(mcp=(ARCHIVE_PROBE,), agents=(_ORCHESTRATOR,))
 
 
-@patch("pegasus.core.content.load", return_value=ARCHIVE_CONTENT)
+@patch("darq.core.content.load", return_value=ARCHIVE_CONTENT)
 class InstallArchiveDownloadTest(RealHomeTestCase):
     """The same install path, proven against a real archive on the real
     POSIX filesystem: `tarfile`'s extraction and the real executable bit are

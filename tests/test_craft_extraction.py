@@ -18,7 +18,7 @@ from pathlib import Path
 
 from test_phase_less_specialists import PHASE_MARKERS
 
-SKILLS = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills"
+SKILLS = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "skills"
 
 #: The phase-result headings, derived from the set the specialist guard already
 #: forbids in a phase-less agent body rather than retyped here -- a future phase

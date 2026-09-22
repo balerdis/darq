@@ -1,6 +1,6 @@
 """Fetching, verifying, and placing a newly published `pegasus` binary.
 
-Mirrors `pegasus.core.dependencies`'s own discipline: fetch, verify a digest,
+Mirrors `darq.core.dependencies`'s own discipline: fetch, verify a digest,
 only then write -- and never at the final destination until the verified
 bytes already sit next to it.
 """
@@ -11,9 +11,9 @@ from pathlib import Path
 
 from fakes import EXECUTABLE_MODE, FakeDownloader, FakeFileSystem
 
-from pegasus.core import ownership, upgrade
-from pegasus.core.identity import ReleaseSource
-from pegasus.ports.downloader import DownloaderError
+from darq.core import ownership, upgrade
+from darq.core.identity import ReleaseSource
+from darq.ports.downloader import DownloaderError
 
 DESTINATION = Path("/home/probe/.local/bin/pegasus")
 VERSION = "5.11.0"

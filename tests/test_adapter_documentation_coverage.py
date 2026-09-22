@@ -4,7 +4,7 @@ Pegasus shipped a second CLI (Claude Code) alongside the original one
 (OpenCode) without updating any of the four user-facing documents -- 89
 mentions of OpenCode and zero of Claude Code, `README.md` stating outright
 that OpenCode was the only client. Nothing caught that because nothing
-compared the documented surface against `pegasus.adapters.available()`. This
+compared the documented surface against `darq.adapters.available()`. This
 file is that comparison, derived from the registry -- never a hardcoded list
 of adapter ids -- so a third adapter that registers tomorrow fails this test
 the day it registers, instead of going silently undocumented like the second
@@ -47,8 +47,8 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.adapters import available
-from pegasus.core.types import Capability
+from darq.adapters import available
+from darq.core.types import Capability
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -116,7 +116,7 @@ def _bool_cell(value: bool) -> str:
 
 
 class EveryRegisteredAdapterIsDocumentedTest(unittest.TestCase):
-    """Names every adapter `pegasus.adapters.available()` registers, and
+    """Names every adapter `darq.adapters.available()` registers, and
     checks it against the docs -- never the other way around. The registry
     is the source of truth; a document is either in agreement with it or it
     is wrong.
@@ -134,7 +134,7 @@ class EveryRegisteredAdapterIsDocumentedTest(unittest.TestCase):
                     failures.append(
                         f"{doc_name}: does not mention {display_name!r} "
                         f"(adapter id {cli_id!r}, registered in "
-                        f"pegasus.adapters.available())"
+                        f"darq.adapters.available())"
                     )
         self.assertFalse(failures, "\n" + "\n".join(failures))
 

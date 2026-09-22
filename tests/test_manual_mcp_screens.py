@@ -27,9 +27,9 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from pegasus import cli  # noqa: F401  (imported first: `tui.view` imports it back)
-from pegasus.tui import navigator, view
-from pegasus.tui.navigator import CliOption, McpOption, McpSelectionScreen
+from darq import cli  # noqa: F401  (imported first: `tui.view` imports it back)
+from darq.tui import navigator, view
+from darq.tui.navigator import CliOption, McpOption, McpSelectionScreen
 
 MANUAL = Path(__file__).resolve().parents[1] / "MANUAL.md"
 

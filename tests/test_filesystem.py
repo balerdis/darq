@@ -12,9 +12,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pegasus.infra import fs_posix
-from pegasus.infra.fs_posix import PosixFileSystem
-from pegasus.ports.filesystem import FileSystem, FileSystemError
+from darq.infra import fs_posix
+from darq.infra.fs_posix import PosixFileSystem
+from darq.ports.filesystem import FileSystem, FileSystemError
 from platform_conditions import make_unwritable
 from real_home import _scratch_root
 

@@ -24,9 +24,9 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.core import content as content_module
+from darq.core import content as content_module
 
-CONTENT = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content"
+CONTENT = Path(__file__).resolve().parents[1] / "src" / "darq" / "content"
 SKILLS = CONTENT / "skills"
 AGENTS = CONTENT / "agents"
 MCP = CONTENT / "mcp"

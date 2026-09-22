@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.adapters.opencode import render as render_module
+from darq.adapters.opencode import render as render_module
 
 
 class DenyFloorShadowsCanonicalNamesTest(unittest.TestCase):

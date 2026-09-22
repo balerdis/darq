@@ -12,17 +12,17 @@ import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
-from pegasus.core.snapshot import Entry, Manifest, SnapshotError
-from pegasus.infra.journal_store_file import DATA_DIR_MODE
-from pegasus.infra.snapshot_store_file import (
+from darq.core.snapshot import Entry, Manifest, SnapshotError
+from darq.infra.journal_store_file import DATA_DIR_MODE
+from darq.infra.snapshot_store_file import (
     MANIFEST_FILENAME,
     FileSnapshotStore,
     capture_paths,
     snapshots_root,
 )
 from real_home import RealHomeTestCase as _RealHomeTestCase
-from pegasus.ports.filesystem import FileSystemError
-from pegasus.ports.snapshot_store import Capture, SnapshotStore, SnapshotStoreError
+from darq.ports.filesystem import FileSystemError
+from darq.ports.snapshot_store import Capture, SnapshotStore, SnapshotStoreError
 
 HOME = Path("/home/probe")
 TARGET = HOME / ".config" / "some-cli" / "settings.json"
@@ -464,7 +464,7 @@ class FileSnapshotStoreTest(unittest.TestCase):
         capacity, and checks the actual surviving set by number -- proving
         the constant this store is called with, not merely quoting it back.
         """
-        from pegasus import cli as cli_module
+        from darq import cli as cli_module
 
         filesystem = FakeFileSystem()
         subject = store(filesystem)

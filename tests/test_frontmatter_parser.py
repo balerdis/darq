@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.core import frontmatter
+from darq.core import frontmatter
 
 
 class ScalarTest(unittest.TestCase):

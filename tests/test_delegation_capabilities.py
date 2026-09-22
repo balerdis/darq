@@ -28,15 +28,15 @@ import dataclasses
 import unittest
 from pathlib import Path, PurePosixPath
 
-from pegasus import cli
-from pegasus.adapters.opencode import Adapter
-from pegasus.core import catalog as catalog_module
-from pegasus.core import content as content_module
-from pegasus.core.content import Agent, AgentMode, Content, Distribution, Mcp
-from pegasus.core.types import Environment, FileArtifact
+from darq import cli
+from darq.adapters.opencode import Adapter
+from darq.core import catalog as catalog_module
+from darq.core import content as content_module
+from darq.core.content import Agent, AgentMode, Content, Distribution, Mcp
+from darq.core.types import Environment, FileArtifact
 
 ROOT = Path(__file__).resolve().parents[1]
-AGENTS_DIR = ROOT / "src" / "pegasus" / "content" / "agents"
+AGENTS_DIR = ROOT / "src" / "darq" / "content" / "agents"
 
 HOME = Path("/home/probe")
 ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
@@ -165,7 +165,7 @@ class RespectsMcpPruningTest(unittest.TestCase):
     def test_a_deselected_server_does_not_appear_anywhere_in_the_generated_file(self):
         full_content = content_module.load()
         # `jira` reaches `pegasus-explorer`, a real delegation target, in the
-        # shipped content -- see `src/pegasus/content/mcp/jira.md`. Selecting
+        # shipped content -- see `src/darq/content/mcp/jira.md`. Selecting
         # only `context7` must prune it away before this file is ever built.
         selected = content_module.select_mcp(full_content, ["context7"])
         still_optional = {mcp_id for agent in selected.agents for mcp_id in agent.optional_mcp}

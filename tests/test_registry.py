@@ -4,13 +4,13 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from pegasus.core.registry import (
+from darq.core.registry import (
     AdapterScopeError,
     DuplicateAdapterError,
     ManifestMismatchError,
     Registry,
 )
-from pegasus.core.types import (
+from darq.core.types import (
     Capability,
     CapabilityManifest,
     Detection,

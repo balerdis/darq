@@ -16,11 +16,11 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from pegasus import cli
-from pegasus.tui import app as app_module
-from pegasus.tui.app import accent_choice, action_for, draw
-from pegasus.tui.navigator import Action, BehindInstall, CliOption, InstallPlanScreen, Navigator, UpdateNotice
-from pegasus.tui.view import Line, Span, Style
+from darq import cli
+from darq.tui import app as app_module
+from darq.tui.app import accent_choice, action_for, draw
+from darq.tui.navigator import Action, BehindInstall, CliOption, InstallPlanScreen, Navigator, UpdateNotice
+from darq.tui.view import Line, Span, Style
 
 
 class KeyMappingTest(unittest.TestCase):

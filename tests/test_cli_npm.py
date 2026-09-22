@@ -18,11 +18,11 @@ from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 from fakes import FakeNpmInstaller
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -125,7 +125,7 @@ class RealHomeTestCase(_RealHomeTestCase):
         return self.layout().dependencies_dir / "probe" / "1.2.3"
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class InstallNpmTest(RealHomeTestCase):
     def test_naming_the_server_writes_a_lockfile_and_runs_npm_ci(self, _load):
         self.present()
@@ -218,7 +218,7 @@ class InstallNpmTest(RealHomeTestCase):
         self.assertEqual(report["status"], "planned")
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class UninstallNpmTest(RealHomeTestCase):
     def test_uninstalling_removes_the_whole_materialized_tree(self, _load):
         self.present()
@@ -253,7 +253,7 @@ class UninstallNpmTest(RealHomeTestCase):
         self.assertTrue(self.layout().config_dir.is_dir())
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class RestoreDependencyTreeTest(RealHomeTestCase):
     """`restore` putting back a dependency tree an install left behind.
 

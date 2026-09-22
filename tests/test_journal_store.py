@@ -13,11 +13,11 @@ import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
-from pegasus.core import journal as journal_module
-from pegasus.core.journal import Install, Record
-from pegasus.infra.journal_store_file import FileJournalStore, journal_path
-from pegasus.ports.filesystem import FileSystemError
-from pegasus.ports.journal_store import JournalStore, JournalStoreError
+from darq.core import journal as journal_module
+from darq.core.journal import Install, Record
+from darq.infra.journal_store_file import FileJournalStore, journal_path
+from darq.ports.filesystem import FileSystemError
+from darq.ports.journal_store import JournalStore, JournalStoreError
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 HOME = Path("/home/probe")

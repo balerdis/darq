@@ -1,10 +1,10 @@
 """The content core renders into every CLI adapter identically -- so it must
 name none of them.
 
-`src/pegasus/content/` is the half of Pegasus every adapter renders; a file in
+`src/darq/content/` is the half of Pegasus every adapter renders; a file in
 there that says "OpenCode" is prose leaking a fact the architecture already
 promises not to depend on. The forbidden names are derived from the adapter
-registry itself (`pegasus.adapters.available()`), not hardcoded, so this guard
+registry itself (`darq.adapters.available()`), not hardcoded, so this guard
 starts covering a future Claude Code adapter the moment it registers, with no
 edit here.
 
@@ -42,10 +42,10 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.adapters import available
+from darq.adapters import available
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT / "src" / "pegasus" / "content"
+CONTENT = ROOT / "src" / "darq" / "content"
 
 #: What may sit between the words of a multi-word CLI name and still count as
 #: that name. See "Why the whole file, not one line at a time" above.

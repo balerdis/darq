@@ -6,8 +6,8 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from pegasus import cli
-from pegasus.tui.navigator import (
+from darq import cli
+from darq.tui.navigator import (
     AgentRow,
     CliOption,
     Entry,
@@ -29,8 +29,8 @@ from pegasus.tui.navigator import (
     StatusScreen,
     UninstallResultScreen,
 )
-from pegasus.tui import view, wordmark
-from pegasus.tui.view import Line, Span, Style, render, render_busy, render_progress
+from darq.tui import view, wordmark
+from darq.tui.view import Line, Span, Style, render, render_busy, render_progress
 
 SAMPLE = CliOption(id="demo", display_name="Demo CLI", config_dir="/home/x/.demo", tier="full")
 #: Stands in for `session._upgrade_preview`'s own `CliOption`, built at

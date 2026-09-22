@@ -84,7 +84,7 @@ donde la persona tiene que tomar una decisión explícita por cada servidor.
 ## 1. Ubicar el checkout y confirmar la cuenta
 
 ```sh
-test -f pyproject.toml -a -d src/pegasus
+test -f pyproject.toml -a -d src/darq
 id -u
 ```
 

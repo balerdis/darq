@@ -14,15 +14,15 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import catalog as catalog_module
-from pegasus.core import content as content_module
-from pegasus.core import journal as journal_module
-from pegasus.core import ownership
-from pegasus.core import planner
-from pegasus.core.types import Environment, FileArtifact
-from pegasus.infra.journal_store_file import FileJournalStore
+from darq import cli
+from darq.adapters import available
+from darq.core import catalog as catalog_module
+from darq.core import content as content_module
+from darq.core import journal as journal_module
+from darq.core import ownership
+from darq.core import planner
+from darq.core.types import Environment, FileArtifact
+from darq.infra.journal_store_file import FileJournalStore
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"

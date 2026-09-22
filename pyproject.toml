@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pegasus-harness"
+name = "darq"
 version = "6.0.0"
 description = "Additive harness of prompts, agents, skills and commands for AI coding CLIs"
 readme = "README.md"
@@ -12,12 +12,12 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-pegasus = "pegasus.cli:main"
+pegasus = "darq.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"pegasus" = ["identity.json"]
-"pegasus.content" = ["**/*"]
-"pegasus.adapters" = ["**/assets/**/*"]
+"darq" = ["identity.json"]
+"darq.content" = ["**/*"]
+"darq.adapters" = ["**/assets/**/*"]

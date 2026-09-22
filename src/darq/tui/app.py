@@ -1,0 +1,524 @@
+"""The thin layer that actually touches a terminal.
+
+Everything above this module — :mod:`~darq.tui.navigator` and
+:mod:`~darq.tui.view` — is pure: given the same input it always returns
+the same value, and nothing in it can fail for lack of a terminal. This
+module is deliberately the opposite. It reads real keys and writes to a real
+window, decides which colour or attribute a :class:`~darq.tui.view.Style`
+becomes, and owns the worker thread an install runs on -- concurrency, the
+clock, and curses itself all live here and nowhere else. `action_for` is a
+lookup table, not a choice, and `draw` copies :class:`~darq.tui.view.Line`
+onto the screen exactly as handed.
+
+`draw` and the pure colour-fallback helper (`accent_choice`) are tested here
+against a fake window and fake curses facts, since what they hand `addstr`
+and how they choose a colour is real behaviour worth pinning down; the
+interactive loop itself (`run`) is not constructed by any test -- proving it
+needs a real terminal, and `test_tui_pty.py` drives the real binary through
+one instead.
+"""
+from __future__ import annotations
+
+import curses
+import io
+import threading
+import time
+from dataclasses import replace
+from typing import Callable
+
+from darq import cli
+from darq.tui import session
+from darq.tui.navigator import STARTUP_MESSAGE, Action, InstallPlanScreen, Navigator, UpdateNotice, busy_message_for
+from darq.tui.view import Line, Style, render, render_busy, render_progress
+
+KEYS: dict[int, Action] = {
+    curses.KEY_UP: Action.MOVE_UP,
+    ord("k"): Action.MOVE_UP,
+    curses.KEY_DOWN: Action.MOVE_DOWN,
+    ord("j"): Action.MOVE_DOWN,
+    curses.KEY_ENTER: Action.CHOOSE,
+    ord("\n"): Action.CHOOSE,
+    ord("\r"): Action.CHOOSE,  # what Enter sends on a terminal in raw mode.
+    27: Action.BACK,  # ESC has no curses constant of its own.
+    ord("q"): Action.QUIT,
+    ord("d"): Action.REMOVE,
+    ord(" "): Action.TOGGLE,
+}
+
+
+def action_for(key: int) -> Action | None:
+    """What a key code means, or ``None`` when it means nothing to this app."""
+    return KEYS.get(key)
+
+
+#: The installer's own colour, as a 256-colour index -- used when the
+#: terminal actually offers that many.
+ACCENT_COLOR_INDEX = 214
+_ACCENT_PAIR = 1
+
+
+def accent_choice(has_colors: bool, colors: int) -> tuple[str, int]:
+    """What `_init_colors` should do to render `Style.ACCENT`, decided from
+    plain facts about the terminal so the decision can be tested without one.
+
+    ``("color", n)`` names a colour index `_init_colors` still has to turn
+    into a pair; ``("attr", a)`` is a plain attribute needing no colour
+    support at all, for a terminal that offers none.
+    """
+    if not has_colors:
+        return ("attr", curses.A_BOLD)
+    if colors >= 256:
+        return ("color", ACCENT_COLOR_INDEX)
+    return ("color", curses.COLOR_YELLOW)
+
+
+def _init_colors() -> int:
+    """The attribute to OR onto a `Style.ACCENT` span, decided defensively:
+    `curses.has_colors()` may be false and `curses.COLORS` may be 8 or 16,
+    and this must still leave the TUI legible either way. Called once, from
+    `run`, since it is the one place actually touching a terminal.
+    """
+    kind, value = accent_choice(curses.has_colors(), curses.COLORS if curses.has_colors() else 0)
+    if kind == "attr":
+        return value
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(_ACCENT_PAIR, value, -1)
+    except curses.error:
+        # `accent_choice` decided from `has_colors()`/`COLORS` alone, but a
+        # terminal whose terminfo claims colour support can still lack a
+        # capability one of these calls needs -- falling back to the same
+        # plain attribute the no-colour branch already uses is safer than
+        # taking the whole TUI down before a single frame is drawn.
+        return curses.A_BOLD
+    return curses.color_pair(_ACCENT_PAIR)
+
+
+_STYLE_ATTRS = {Style.NORMAL: curses.A_NORMAL, Style.DIM: curses.A_DIM}
+
+
+def draw(window, lines: tuple[Line, ...], *, accent_attr: int = curses.A_BOLD) -> None:
+    """Put the rendered lines on the window, within whatever room there is.
+
+    How big the terminal is happens to be the one fact only this layer can
+    know, and `addstr` raises rather than clipping, so a window shorter or
+    narrower than the screen would end the program instead of showing less of
+    it. Dropping the rows that do not fit and cutting the text that does not
+    is not a decision about what to say — it is the surface being smaller
+    than the thing drawn on it. Each `Span` on a line gets its own `addstr`
+    call, so a row can mix emphases -- the wordmark's bicolor split, the
+    progress bar's accent-coloured cells beside its plain-styled neighbours.
+    """
+    window.erase()
+    height, width = window.getmaxyx()
+    for row, line in enumerate(lines[:height]):
+        base = curses.A_REVERSE if line.highlighted else curses.A_NORMAL
+        # The last cell of the last row cannot be written to without the
+        # cursor having to advance past it, which curses treats as an error.
+        room = width - 1 if row == height - 1 else width
+        column = 0
+        for span in line.spans:
+            if column >= room:
+                break
+            text = span.text[: room - column]
+            if text:
+                style_attr = accent_attr if span.style is Style.ACCENT else _STYLE_ATTRS.get(span.style, curses.A_NORMAL)
+                window.addstr(row, column, text, base | style_attr)
+            column += len(span.text)
+    window.refresh()
+
+
+#: How often the animation loop repaints while an install runs, in
+#: milliseconds -- fast enough for the spinner to read as moving, not so
+#: fast the loop burns a core waiting on a worker thread doing real disk and
+#: network work.
+PROGRESS_TICK_MS = 80
+
+
+def _no_progress_yet() -> cli.Progress:
+    """What the bar shows before the worker thread's first real `Progress`
+    arrives -- a defensible zero rather than nothing to render at all, since
+    some setup inside `cli.install` happens before the total is even known.
+    A function rather than a module-level constant: `cli` imports this
+    module before its own `Progress` class exists, so building one at import
+    time here would be a circular reference to a name not defined yet.
+    """
+    return cli.Progress(done=0, total=1, phase="", unit="")
+
+
+def _complete_progress() -> cli.Progress:
+    """The frame drawn once the worker thread has returned -- a full bar
+    regardless of what the last observed `Progress` said, so a finish that
+    raced the animation loop's last read still ends the person's own view of
+    it at 100%, matching the guarantee `cli.install` itself already keeps.
+    """
+    return cli.Progress(done=1, total=1, phase="", unit="")
+
+
+class _ProgressHolder:
+    """The one `Progress` value shared between the worker thread that calls
+    `on_progress` and the main thread that reads it to repaint. It is an
+    immutable value, so only the reference need be guarded -- a `Lock`
+    around a plain attribute is all concurrency this needs.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._progress = _no_progress_yet()
+
+    def update(self, progress: cli.Progress) -> None:
+        with self._lock:
+            self._progress = progress
+
+    def snapshot(self) -> cli.Progress:
+        with self._lock:
+            return self._progress
+
+
+class _DownloadRateTracker:
+    """Turns successive `Progress.bytes_downloaded` observations, arriving
+    live off the worker thread as real wall-clock time passes, into a
+    bytes/second rate for `view.render_progress` to show.
+
+    This is the one correct home for that arithmetic, and it is worth being
+    explicit about why, because nothing but convention stops a later change
+    from moving it somewhere that looks just as reasonable and is not:
+
+    - Not `core/` or `cli.py`. Both are the deterministic engine every other
+      consumer of `Progress` -- `--json`, a dry run, `test_cli_progress.py`
+      itself -- reads from too, and none of those replay time the way a
+      live animation loop does. A rate computed in there would make the
+      engine's own report depend on how much real time happened to elapse
+      while *this* caller was watching, which is a fact about the render
+      loop, not about the install.
+    - Not `view.py`, `navigator.py`, or `wordmark.py`. Every one of them
+      promises the same thing this whole TUI is proven against: the same
+      input always renders the same output, no clock, no thread, no
+      terminal required to check it. A clock read inside `render_progress`
+      would break that promise for exactly this one code path while leaving
+      every test claiming otherwise.
+    - `app.py`, on the other hand, already owns a real clock for its
+      animation frame loop just above (`time.monotonic()` driving
+      `PROGRESS_TICK_MS`), and it is the only layer that ever observes a
+      `Progress` *live*, off the worker thread through `_ProgressHolder`,
+      rather than replaying one from a finished report. So this is where
+      the one clock read this feature needs belongs, and `tests/test_architecture.py`
+      (`NoClockReadsInDeterministicModulesTest`) enforces that nothing above
+      it in `core/`, `cli.py`, or the pure `tui` trio can grow one instead.
+
+    The clock is injected (`now=time.monotonic` by default) so the arithmetic
+    itself is provable without ever sleeping a real test.
+    """
+
+    #: Below this many seconds between two observations, the arithmetic is
+    #: measuring rounding error more than a transfer rate -- two ticks a
+    #: fraction of a second apart can differ by a whole chunk's worth of
+    #: bytes for reasons that have nothing to do with how fast the network
+    #: actually is. Comfortably above `PROGRESS_TICK_MS` (80ms) so an
+    #: ordinary animation frame is not, by itself, "too soon".
+    _MIN_INTERVAL_SECONDS = 0.25
+
+    def __init__(self, *, now: Callable[[], float] = time.monotonic) -> None:
+        self._now = now
+        self._unit: str | None = None
+        self._baseline: tuple[float, int] | None = None
+        self._rate: float | None = None
+
+    def observe(self, progress: cli.Progress) -> float | None:
+        """The rate as of this observation, or `None` when there is not yet
+        one worth trusting -- either nothing has been observed for this unit
+        long enough to measure, or `progress` names a different fetch (or no
+        fetch at all) than the one this tracker was already timing.
+        """
+        if progress.bytes_downloaded is None:
+            self._reset()
+            return None
+        if progress.unit != self._unit:
+            self._unit = progress.unit
+            self._baseline = (self._now(), progress.bytes_downloaded)
+            self._rate = None
+            return None
+        moment = self._now()
+        baseline_time, baseline_bytes = self._baseline
+        elapsed = moment - baseline_time
+        if elapsed < self._MIN_INTERVAL_SECONDS:
+            return self._rate
+        self._rate = (progress.bytes_downloaded - baseline_bytes) / elapsed
+        self._baseline = (moment, progress.bytes_downloaded)
+        return self._rate
+
+    def _reset(self) -> None:
+        self._unit = None
+        self._baseline = None
+        self._rate = None
+
+
+def _run_install(window, navigator: Navigator, runtime: cli.Runtime, accent_attr: int) -> Navigator:
+    """Run the confirmed `InstallPlanScreen` for real, animating a frame
+    every `PROGRESS_TICK_MS` instead of blocking on `cli.install` the way a
+    synchronous `session.step` call would. The engine call itself runs on a
+    worker thread -- `session.install_task` knows nothing about that thread,
+    only how to build the call and the `Navigator` it produces; this
+    function owns starting it, timing the repaint, and reading progress back
+    off it through a lock.
+    """
+    message = busy_message_for(
+        navigator.current, navigator.cursor, Action.CHOOSE, display_name=runtime.identity.display_name
+    )
+    task = session.plan_task(navigator, runtime, navigator.current)
+    holder = _ProgressHolder()
+    outcome: list[Navigator] = []
+    failure: list[BaseException] = []
+
+    def worker() -> None:
+        # A thread's exception does not propagate to whoever joins it --
+        # Python only hands it to `threading.excepthook`, which here would
+        # print straight into a curses-controlled terminal and be lost, then
+        # leave `outcome` empty so the main thread raises a meaningless
+        # `IndexError` instead of whatever actually went wrong. Catching
+        # `BaseException`, not `Exception`, is deliberate: crossing a thread
+        # boundary is exactly the case where a blanket catch is correct,
+        # since the alternative is losing the exception entirely -- and that
+        # includes `KeyboardInterrupt`/`SystemExit`, which `cli.safe_report`
+        # never sees because they are not among `COMMAND_ERRORS`.
+        try:
+            outcome.append(task(holder.update))
+        except BaseException as exc:  # noqa: BLE001 - see comment above
+            failure.append(exc)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    window.timeout(PROGRESS_TICK_MS)
+    started = time.monotonic()
+    rate_tracker = _DownloadRateTracker()
+    try:
+        while thread.is_alive():
+            frame = int((time.monotonic() - started) * 1000 / PROGRESS_TICK_MS)
+            _, width = window.getmaxyx()
+            progress = holder.snapshot()
+            rate = rate_tracker.observe(progress)
+            draw(
+                window,
+                render_progress(message, progress, frame, width=width, rate_bytes_per_second=rate),
+                accent_attr=accent_attr,
+            )
+            window.getch()  # -1 on timeout; either way, just a tick of the clock.
+    except KeyboardInterrupt:
+        # An install has no cancellation token, so this cannot abandon the
+        # worker -- the `finally` below still joins it. All that changes
+        # here is the frame on screen: without this the person sees the last
+        # animation frame freeze for however long the install has left,
+        # which reads as a hang rather than "still working, please wait".
+        draw(window, render_busy("Finishing the install — it cannot be safely interrupted…"), accent_attr=accent_attr)
+        raise
+    finally:
+        # The thread is a daemon and `join()` only ran on the happy path
+        # before this fix, so a `Ctrl+C` unwound straight out of this
+        # function -- `curses.wrapper` then restores the terminal, making it
+        # look like the install stopped, while the worker keeps writing the
+        # journal, artifacts and snapshot completely unsupervised, and a
+        # daemon thread killed at process exit skips its `finally` blocks
+        # entirely, which can tear a write. There is no safe way to cancel
+        # an in-flight install, so waiting for it here -- even while a
+        # `KeyboardInterrupt` is unwinding -- is the correct behaviour, not
+        # a missed chance to cancel.
+        thread.join()
+        window.timeout(-1)
+        curses.flushinp()  # discard keys mashed during the install -- see `run`.
+
+    if failure:
+        raise failure[0]
+
+    frame = int((time.monotonic() - started) * 1000 / PROGRESS_TICK_MS)
+    _, width = window.getmaxyx()
+    draw(window, render_progress(message, _complete_progress(), frame, width=width), accent_attr=accent_attr)
+    return outcome[0]
+
+
+def _render_current(window, navigator: Navigator) -> tuple[Line, ...]:
+    """The current screen, rendered for the room this window actually has --
+    how big the terminal is happens to be the one fact only this layer can
+    know, per `draw`'s own docstring, so `render` never reads it any other
+    way."""
+    _, width = window.getmaxyx()
+    return render(navigator.current, navigator.cursor, width=width)
+
+
+#: How often the main loop polls while the background update check is still
+#: pending, in milliseconds. Unlike `PROGRESS_TICK_MS` this drives nothing
+#: visible -- nothing here animates -- so it only has to be short enough
+#: that a key press still feels instant; the check itself can otherwise take
+#: as long as the downloader's own timeout allows without the person ever
+#: noticing a difference from ordinary, unblocked navigation.
+UPDATE_CHECK_POLL_MS = 100
+
+
+class _UpdateCheckHolder:
+    """Where the background update-check thread leaves its answer for the
+    main loop to read back -- the same lock-guarded-value shape
+    `_ProgressHolder` uses, and for the same reason: one immutable value,
+    one lock around the reference to it. `None` is itself a legitimate
+    answer (disabled, or any of the failures `cli.check_for_update` collapses
+    into silence), so "has an answer arrived at all" is tracked separately
+    from what that answer was.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._done = False
+        self._latest: str | None = None
+
+    def set(self, latest: str | None) -> None:
+        with self._lock:
+            self._latest = latest
+            self._done = True
+
+    def snapshot(self) -> tuple[bool, str | None]:
+        with self._lock:
+            return self._done, self._latest
+
+
+def _merged_notice(
+    navigator: Navigator, notice: UpdateNotice, holder: _UpdateCheckHolder
+) -> tuple[Navigator, bool]:
+    """`navigator` with the remote half of `notice` folded in, once `holder`
+    has an answer -- `(navigator, False)`, unchanged, while there is still
+    nothing to fold in. `notice` already carries the local half decided
+    before the first frame; only `remote_latest` is new here.
+    """
+    done, latest = holder.snapshot()
+    if not done:
+        return navigator, False
+    return navigator.with_notice(replace(notice, remote_latest=latest)), True
+
+
+def _main_loop(
+    window,
+    navigator: Navigator,
+    runtime: cli.Runtime,
+    accent_attr: int,
+    notice: UpdateNotice,
+    holder: _UpdateCheckHolder,
+) -> Navigator:
+    """Ordinary navigation, plus folding in the update check's answer the
+    moment it lands.
+
+    `window.timeout(UPDATE_CHECK_POLL_MS)` is what makes this possible
+    without a second concurrency mechanism: the very same technique
+    `_run_install`'s animation loop already uses, except here a `-1` from a
+    timed-out `getch` is not the whole story the way it is there -- this
+    loop still has a real key to act on once one arrives, so `checking`
+    tracks whether blocking input has been restored yet, and the check
+    itself never delays a key from being handled.
+
+    The timeout is reasserted at the top of every iteration while `checking`
+    is still true, rather than trusted to still hold from whenever it was
+    last set. A nested call this loop makes -- `_run_install` today, and
+    curses gives no way to read a window's current timeout back to restore
+    it afterwards -- may leave the mode however it pleases before returning;
+    reasserting here, unconditionally, the moment control comes back is what
+    keeps that nested call's own choice of timeout from ever leaking past
+    its own return, no matter what a future one turns out to do.
+    """
+    checking = True
+    while not navigator.quit:
+        if checking:
+            window.timeout(UPDATE_CHECK_POLL_MS)
+        key = window.getch()
+        if checking:
+            navigator, done = _merged_notice(navigator, notice, holder)
+            if done:
+                draw(window, _render_current(window, navigator), accent_attr=accent_attr)
+                window.timeout(-1)
+                checking = False
+        if key == -1:
+            continue
+        action = action_for(key)
+        if action is None:
+            continue
+        if action is Action.CHOOSE and isinstance(navigator.current, InstallPlanScreen):
+            navigator = _run_install(window, navigator, runtime, accent_attr)
+            draw(window, _render_current(window, navigator), accent_attr=accent_attr)
+            continue
+        message = busy_message_for(
+            navigator.current, navigator.cursor, action, display_name=runtime.identity.display_name
+        )
+        if message is not None:
+            draw(window, render_busy(message), accent_attr=accent_attr)
+        navigator = session.step(navigator, runtime, action)
+        draw(window, _render_current(window, navigator), accent_attr=accent_attr)
+    return navigator
+
+
+def _start_update_check(runtime: cli.Runtime, holder: _UpdateCheckHolder) -> threading.Thread:
+    """Start the background version check on its own daemon thread, boxed
+    the same defensive way `_run_install`'s own worker is boxed just above
+    -- this file should not hold two different answers to the same
+    question. `check_for_update` already collapses every failure it knows
+    about to `None`, but a thread's exception does not propagate to
+    whoever joins it regardless: left uncaught, one this function does not
+    yet know about would go straight to `threading.excepthook`, which would
+    print into a curses-controlled terminal and be lost.
+
+    Returns the already-started thread so `run` can join it once the main
+    loop is done -- not at startup, where joining would delay the very
+    first frame this check must never hold up, but at shutdown, where
+    `check_for_update` may still be mid-write to its own on-disk cache
+    (`_save_cache`) and letting the process exit out from under a daemon
+    thread would risk tearing that write, the same hazard `_run_install`'s
+    own join already guards against for an install's artifacts.
+    """
+
+    def worker() -> None:
+        try:
+            holder.set(cli.check_for_update(runtime))
+        except BaseException:  # noqa: BLE001 - crossing a thread boundary, see docstring above
+            holder.set(None)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    return thread
+
+
+def run(window, runtime: cli.Runtime) -> None:
+    curses.curs_set(0)
+    window.keypad(True)
+    accent_attr = _init_colors()
+    draw(window, render_busy(STARTUP_MESSAGE), accent_attr=accent_attr)
+    installed = session.detect_installed(runtime)
+    # The local half needs no network and nothing asynchronous -- it is
+    # already known at this point, straight off the journal -- so it rides
+    # in the very first `Navigator` rather than waiting for anything.
+    notice = session.local_update_notice(runtime, installed)
+    navigator = Navigator.starting(
+        session.detect_clis(runtime),
+        installed,
+        notice=notice,
+        display_name=runtime.identity.display_name,
+        version=runtime.identity.version,
+        wordmark_words=runtime.identity.wordmark_words,
+    )
+    draw(window, _render_current(window, navigator), accent_attr=accent_attr)
+
+    # The remote half does need the network, so it runs on a worker thread
+    # and must never delay this first frame or any key press after it --
+    # see `_main_loop`'s own docstring for how `window.timeout(...)` makes
+    # that possible without a second concurrency mechanism.
+    holder = _UpdateCheckHolder()
+    update_check_thread = _start_update_check(runtime, holder)
+    window.timeout(UPDATE_CHECK_POLL_MS)
+    try:
+        _main_loop(window, navigator, runtime, accent_attr, notice, holder)
+    finally:
+        # Joined here, not at startup -- see `_start_update_check`'s own
+        # docstring for why waiting until shutdown is what keeps this from
+        # ever delaying the menu while still giving the thread's own
+        # on-disk write a chance to finish before the process does.
+        update_check_thread.join()
+
+
+def main() -> None:
+    runtime = cli.default_runtime(io.StringIO())
+    curses.wrapper(lambda window: run(window, runtime))

@@ -24,17 +24,17 @@ import unittest
 import zipfile
 from pathlib import Path
 
-import pegasus
+import darq
 from fakes import EXECUTABLE_MODE, FakeDownloader, FakeFileSystem
-from pegasus import cli
-from pegasus.core import identity as identity_module
-from pegasus.core import ownership
-from pegasus.core import upgrade as upgrade_module
+from darq import cli
+from darq.core import identity as identity_module
+from darq.core import ownership
+from darq.core import upgrade as upgrade_module
 from real_home import _scratch_root
 
 AT = "2026-08-14T00:00:00+00:00"
 HOME = Path("/home/person")
-CURRENT_VERSION = pegasus.__version__
+CURRENT_VERSION = darq.__version__
 NEWER_VERSION = "99.0.0"
 
 
@@ -77,7 +77,7 @@ class UpgradeTestCase(unittest.TestCase):
         """A `FakeFileSystem` whose destination already carries the
         executable mode, as the binary this process is actually running from
         always does. `replace_binary` now preserves whatever mode is already
-        there (see `pegasus.core.upgrade`), so a fixture that left it at the
+        there (see `darq.core.upgrade`), so a fixture that left it at the
         fake's plain-file default (`0o644`) would assert against a
         precondition no real running binary could ever have."""
         kwargs.setdefault("files", {self.destination: b"old bytes"})
@@ -105,7 +105,7 @@ class UpgradeTestCase(unittest.TestCase):
 
 #: An obviously fictional distribution -- never a real organization -- pinning this engine at
 #: one version while releasing its own product under a different one. This is the exact defect a
-#: real distribution hit: `pegasus.__version__` never moves with a distribution's own releases, so
+#: real distribution hit: `darq.__version__` never moves with a distribution's own releases, so
 #: comparing against it can never reach `already-current` for one.
 _DISTRIBUTION_IDENTITY = identity_module.parse(
     json.dumps(
@@ -129,14 +129,14 @@ _DISTRIBUTION_IDENTITY = identity_module.parse(
 
 class DistributionAlreadyCurrentTest(UpgradeTestCase):
     """Regression for the defect this whole change fixes: `current_version`
-    used to be `pegasus.__version__` unconditionally, so a distribution's own
+    used to be `darq.__version__` unconditionally, so a distribution's own
     releases -- tagged with its own version, never the pinned engine's --
     could never compare equal, and `upgrade` re-downloaded and replaced its
     own binary on every single run instead of ever reporting
     `already-current`."""
 
     def test_reports_already_current_against_the_distributions_own_release(self):
-        self.assertNotEqual(_DISTRIBUTION_IDENTITY.version, pegasus.__version__)
+        self.assertNotEqual(_DISTRIBUTION_IDENTITY.version, darq.__version__)
         downloader = FakeDownloader(
             {
                 _DISTRIBUTION_IDENTITY.release.latest_release_api_url: release_body(

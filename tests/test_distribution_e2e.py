@@ -25,15 +25,15 @@ import unittest
 import zipfile
 from pathlib import Path
 
-import pegasus
+import darq
 from fakes import EXECUTABLE_MODE, FakeDownloader, FakeFileSystem
-from pegasus import cli
-from pegasus.adapters.opencode import render as render_module
-from pegasus.core import identity as identity_module
+from darq import cli
+from darq.adapters.opencode import render as render_module
+from darq.core import identity as identity_module
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_ZIPAPP = ROOT / "tools" / "build_zipapp.py"
-REAL_SOURCE = ROOT / "src" / "pegasus"
+REAL_SOURCE = ROOT / "src" / "darq"
 REAL_IDENTITY = REAL_SOURCE / "identity.json"
 
 #: An obviously fictional distribution -- never a real organization -- so this test cannot be
@@ -98,7 +98,7 @@ class DistributionBuildRecipeTest(unittest.TestCase):
         self.assertTrue(zipfile.is_zipfile(control))
         with zipfile.ZipFile(control) as archive:
             archive.extractall(extracted)
-        extracted_package = extracted / "pegasus"
+        extracted_package = extracted / "darq"
         self.assertTrue((extracted_package / "__main__.py").is_file())
         self.assertTrue((extracted_package / "identity.json").is_file())
 
@@ -194,7 +194,7 @@ class DistributionVersionIdentityTest(unittest.TestCase):
 
     Mirrors that scenario with ACME (the same fictional distribution
     `DistributionBuildRecipeTest` already builds): the engine here is
-    whatever `pegasus.__version__` currently is, ACME's own identity
+    whatever `darq.__version__` currently is, ACME's own identity
     declares a deliberately different version, and both halves of the bug
     are proven fixed -- `--version` on the actual built binary, and
     `upgrade` reaching `already-current` through the actual `cli.upgrade`
@@ -206,7 +206,7 @@ class DistributionVersionIdentityTest(unittest.TestCase):
         self.addCleanup(self._directory.cleanup)
         self.root = Path(self._directory.name)
         self.assertNotEqual(
-            ACME_IDENTITY_PAYLOAD["version"], pegasus.__version__,
+            ACME_IDENTITY_PAYLOAD["version"], darq.__version__,
             "fixture drifted: ACME's own version must differ from the pinned engine's to mean anything",
         )
 
@@ -226,7 +226,7 @@ class DistributionVersionIdentityTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn(ACME_IDENTITY_PAYLOAD["version"], result.stdout)
-        self.assertNotIn(pegasus.__version__, result.stdout)
+        self.assertNotIn(darq.__version__, result.stdout)
 
     def test_upgrade_reports_already_current_against_the_products_own_release(self):
         """Drives the real `cli.upgrade` -- the exact function the real bug

@@ -30,15 +30,15 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus import cli
-from pegasus.adapters.opencode import Adapter
-from pegasus.adapters.opencode import render as render_module
-from pegasus.core import content as content_module
-from pegasus.core.content import AgentMode
-from pegasus.core.types import ConfigKeyArtifact, Environment
+from darq import cli
+from darq.adapters.opencode import Adapter
+from darq.adapters.opencode import render as render_module
+from darq.core import content as content_module
+from darq.core.content import AgentMode
+from darq.core.types import ConfigKeyArtifact, Environment
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT / "src" / "pegasus" / "content"
+CONTENT = ROOT / "src" / "darq" / "content"
 AGENTS = CONTENT / "agents"
 SKILLS = CONTENT / "skills"
 
@@ -377,7 +377,7 @@ class ProseDoesNotOverclaimEnforcementTest(unittest.TestCase):
       would need to notice the missing tool name.
 
     Disclosed honestly, in the register `_wildcard_match` in
-    `src/pegasus/adapters/opencode/render.py` uses for its own two
+    `src/darq/adapters/opencode/render.py` uses for its own two
     unreproduced behaviours, rather than hidden: this does NOT prove a body
     is honest about what is and is not enforced. A body could name "bash" in
     a sentence about something unrelated to writing and still pass the

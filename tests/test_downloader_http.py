@@ -19,8 +19,8 @@ from unittest.mock import patch
 
 from fakes import FakeDownloader  # noqa: F401 -- imports `no_network` for the whole process
 
-from pegasus.infra.downloader_http import HttpDownloader
-from pegasus.ports.downloader import DownloaderError
+from darq.infra.downloader_http import HttpDownloader
+from darq.ports.downloader import DownloaderError
 
 URL = "https://example.test/releases/probe-linux-x64"
 
@@ -49,7 +49,7 @@ class _FakeHttpResponse:
 
 
 def _urlopen(response: _FakeHttpResponse):
-    return patch("pegasus.infra.downloader_http.urllib.request.urlopen", return_value=response)
+    return patch("darq.infra.downloader_http.urllib.request.urlopen", return_value=response)
 
 
 class FetchWithoutACallbackTest(unittest.TestCase):
@@ -63,14 +63,14 @@ class FetchWithoutACallbackTest(unittest.TestCase):
             self.assertEqual(downloader.fetch(URL), b"first-chunk-second-chunk")
 
     def test_a_fetch_failure_still_raises_downloader_error(self):
-        with patch("pegasus.infra.downloader_http.urllib.request.urlopen", side_effect=OSError("boom")):
+        with patch("darq.infra.downloader_http.urllib.request.urlopen", side_effect=OSError("boom")):
             downloader = HttpDownloader()
             with self.assertRaises(DownloaderError):
                 downloader.fetch(URL)
 
     def test_a_malformed_url_raises_downloader_error_not_invalid_url(self):
         side_effect = http.client.InvalidURL("nonnumeric port")
-        with patch("pegasus.infra.downloader_http.urllib.request.urlopen", side_effect=side_effect):
+        with patch("darq.infra.downloader_http.urllib.request.urlopen", side_effect=side_effect):
             downloader = HttpDownloader()
             with self.assertRaises(DownloaderError):
                 downloader.fetch(URL)
@@ -96,7 +96,7 @@ class FetchWithACallbackTest(unittest.TestCase):
 
     def test_a_failed_fetch_never_calls_the_callback(self):
         observed: list[tuple[int, int | None]] = []
-        with patch("pegasus.infra.downloader_http.urllib.request.urlopen", side_effect=OSError("boom")):
+        with patch("darq.infra.downloader_http.urllib.request.urlopen", side_effect=OSError("boom")):
             downloader = HttpDownloader()
             with self.assertRaises(DownloaderError):
                 downloader.fetch(URL, on_progress=lambda done, total: observed.append((done, total)))

@@ -18,8 +18,8 @@ import time
 import unittest
 from pathlib import Path
 
-from pegasus.core import mcp_handshake
-from pegasus.infra.mcp_process_subprocess import SubprocessMCPProcess
+from darq.core import mcp_handshake
+from darq.infra.mcp_process_subprocess import SubprocessMCPProcess
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "mcp_servers" / "fixture_server.py"
 

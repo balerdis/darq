@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.core import pointer
+from darq.core import pointer
 
 
 class ParseTest(unittest.TestCase):

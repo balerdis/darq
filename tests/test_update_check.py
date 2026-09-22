@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 from fakes import FakeDownloader, FakeFileSystem
-from pegasus import cli
+from darq import cli
 
 AT = "2026-08-14T00:00:00+00:00"
 LATER = "2026-08-14T12:00:00+00:00"  # 12h after AT: inside the cache's TTL.
@@ -51,7 +51,7 @@ class TimeoutTest(CheckForUpdateTestCase):
         self.assertEqual(downloader.timeouts, [cli.UPDATE_CHECK_TIMEOUT_SECONDS])
 
     def test_an_archive_download_still_gets_the_default_long_timeout(self):
-        from pegasus.infra.downloader_http import TIMEOUT_SECONDS
+        from darq.infra.downloader_http import TIMEOUT_SECONDS
 
         downloader = FakeDownloader({"https://example.test/archive": b"bytes"})
         downloader.fetch("https://example.test/archive")
@@ -85,7 +85,7 @@ class SilentFailureTest(CheckForUpdateTestCase):
     """Every one of these must answer `None` -- never raise, never print."""
 
     def test_no_network_reachable_answers_none(self):
-        from pegasus.ports.downloader import DownloaderError
+        from darq.ports.downloader import DownloaderError
 
         class _Unreachable:
             def fetch(self, url: str, *, timeout_seconds=None) -> bytes:
@@ -163,7 +163,7 @@ class CacheTest(CheckForUpdateTestCase):
         self.assertEqual(len(downloader.calls), 1)
 
     def test_a_stale_cache_still_answers_as_a_fallback_when_the_network_fails(self):
-        from pegasus.ports.downloader import DownloaderError
+        from darq.ports.downloader import DownloaderError
 
         filesystem = FakeFileSystem()
         cache_path = filesystem.data_dir(HOME) / "update-check.json"
@@ -191,7 +191,7 @@ class FailureCacheTest(CheckForUpdateTestCase):
     paying the network timeout on every single launch."""
 
     def test_a_failed_lookup_writes_a_negative_cache_entry(self):
-        from pegasus.ports.downloader import DownloaderError
+        from darq.ports.downloader import DownloaderError
 
         class _Unreachable:
             def fetch(self, url: str, *, timeout_seconds=None) -> bytes:
@@ -248,7 +248,7 @@ class FailureCacheTest(CheckForUpdateTestCase):
         self.assertEqual(len(downloader.calls), 1)
 
     def test_a_failure_after_a_stale_success_preserves_the_older_version(self):
-        from pegasus.ports.downloader import DownloaderError
+        from darq.ports.downloader import DownloaderError
 
         class _Unreachable:
             def fetch(self, url: str, *, timeout_seconds=None) -> bytes:
@@ -266,7 +266,7 @@ class FailureCacheTest(CheckForUpdateTestCase):
         self.assertEqual(cached["failure_checked_at"], MUCH_LATER)
 
     def test_a_corrupt_cache_behaves_as_no_cache_for_the_negative_path_too(self):
-        from pegasus.ports.downloader import DownloaderError
+        from darq.ports.downloader import DownloaderError
 
         class _Unreachable:
             def fetch(self, url: str, *, timeout_seconds=None) -> bytes:

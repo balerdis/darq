@@ -23,7 +23,7 @@ from pathlib import Path
 
 PLUGIN = (
     Path(__file__).resolve().parent.parent
-    / "src/pegasus/adapters/opencode/assets/plugins/skill-registry.ts"
+    / "src/darq/adapters/opencode/assets/plugins/skill-registry.ts"
 )
 
 #: The helper's own name, not restated logic. If it gets renamed, this test

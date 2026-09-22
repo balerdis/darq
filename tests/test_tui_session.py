@@ -18,14 +18,14 @@ import unittest.mock
 from dataclasses import replace
 from pathlib import Path
 
-import pegasus
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import codecs, content as content_module, pointer
-from pegasus.core import journal as journal_module
-from pegasus.core import model_assignments as model_assignments_module
-from pegasus.core.registry import Registry
-from pegasus.core.types import (
+import darq
+from darq import cli
+from darq.adapters import available
+from darq.core import codecs, content as content_module, pointer
+from darq.core import journal as journal_module
+from darq.core import model_assignments as model_assignments_module
+from darq.core.registry import Registry
+from darq.core.types import (
     Capability,
     CapabilityManifest,
     Codec,
@@ -34,12 +34,12 @@ from pegasus.core.types import (
     Layout,
     SupportTier,
 )
-from pegasus.infra.fs_posix import PosixFileSystem
-from pegasus.infra.journal_store_file import journal_path
-from pegasus.infra.snapshot_store_file import MANIFEST_FILENAME, snapshots_root
-from pegasus.tui import navigator as navigator_module
-from pegasus.tui import session
-from pegasus.tui.navigator import (
+from darq.infra.fs_posix import PosixFileSystem
+from darq.infra.journal_store_file import journal_path
+from darq.infra.snapshot_store_file import MANIFEST_FILENAME, snapshots_root
+from darq.tui import navigator as navigator_module
+from darq.tui import session
+from darq.tui.navigator import (
     Action,
     CliOption,
     GrantMcpResultScreen,
@@ -58,7 +58,7 @@ from pegasus.tui.navigator import (
     StatusScreen,
     UninstallResultScreen,
 )
-from pegasus.tui.view import render
+from darq.tui.view import render
 from platform_conditions import make_unwritable
 from real_home import RealHomeTestCase
 from test_cli_identity_sweep import ACME_IDENTITY, BrandAssertionMixin
@@ -850,15 +850,15 @@ class LocalUpdateNoticeTest(SessionTestCase):
     def test_nothing_installed_says_nothing(self):
         notice = session.local_update_notice(self.runtime(), installed=())
         self.assertEqual(notice.local_behind, ())
-        self.assertEqual(notice.running, pegasus.__version__)
+        self.assertEqual(notice.running, darq.__version__)
 
     def test_a_distributions_notice_reports_its_own_running_version(self):
-        """Regression: `UpdateNotice.running` used to be `pegasus.__version__`
+        """Regression: `UpdateNotice.running` used to be `darq.__version__`
         unconditionally, so a distribution's own notice compared its own
         recorded install version (now the product's own, per the fix this
         accompanies) against the pinned engine's version instead of its own
         -- the same class of always-mismatched comparison `cli.upgrade` had."""
-        self.assertNotEqual(ACME_IDENTITY.version, pegasus.__version__)
+        self.assertNotEqual(ACME_IDENTITY.version, darq.__version__)
         notice = session.local_update_notice(self.runtime(identity=ACME_IDENTITY), installed=())
         self.assertEqual(notice.running, ACME_IDENTITY.version)
 
@@ -885,7 +885,7 @@ class LocalUpdateNoticeTest(SessionTestCase):
         notice = session.local_update_notice(runtime, installed=session.detect_installed(runtime))
         self.assertEqual(len(notice.local_behind), 1)
         self.assertIsNone(notice.local_behind[0].remedy_command)
-        from pegasus.tui.navigator import update_notice_lines
+        from darq.tui.navigator import update_notice_lines
 
         self.assertEqual(update_notice_lines(notice), ())
 
@@ -915,7 +915,7 @@ class LocalUpdateNoticeTest(SessionTestCase):
             cli.install_command_for(CLI, ["cbm"], program_name=runtime.identity.program_name),
         )
 
-        from pegasus.tui.navigator import update_notice_lines
+        from darq.tui.navigator import update_notice_lines
 
         lines = update_notice_lines(notice)
         self.assertEqual(len(lines), 1)

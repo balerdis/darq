@@ -24,10 +24,10 @@ SCRIPT = ROOT / "tools" / "build_catalog.py"
 
 sys.path.insert(0, str(ROOT / "src"))
 
-from pegasus.adapters import available  # noqa: E402
-from pegasus.cli import default_identity  # noqa: E402
-from pegasus.core import catalog as catalog_module  # noqa: E402
-from pegasus.core import content as content_module  # noqa: E402
+from darq.adapters import available  # noqa: E402
+from darq.cli import default_identity  # noqa: E402
+from darq.core import catalog as catalog_module  # noqa: E402
+from darq.core import content as content_module  # noqa: E402
 
 
 def _expected_digest(cli: str) -> str:

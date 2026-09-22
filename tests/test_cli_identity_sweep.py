@@ -28,12 +28,12 @@ import io
 import json
 from dataclasses import replace
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.identity import Identity, ReleaseSource
-from pegasus.core.types import Environment
-from pegasus.infra.fs_posix import PosixFileSystem
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.identity import Identity, ReleaseSource
+from darq.core.types import Environment
+from darq.infra.fs_posix import PosixFileSystem
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -214,8 +214,8 @@ class InstallBrandLeakTest(AcmeRuntimeTestCase):
         self.assertNoEngineBrand(" ".join(report["grant_warnings"]))
 
     def declare_own_mcp_server(self, key: str) -> None:
-        from pegasus.core import codecs, pointer
-        from pegasus.core.types import Codec
+        from darq.core import codecs, pointer
+        from darq.core.types import Codec
 
         layout = self.layout()
         document = codecs.loads(Codec.JSON, layout.settings_file.read_text(encoding="utf-8"))

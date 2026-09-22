@@ -24,10 +24,10 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.core import content as content_module
+from darq.core import content as content_module
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT / "src" / "pegasus" / "content"
+CONTENT = ROOT / "src" / "darq" / "content"
 AGENTS = CONTENT / "agents"
 SKILLS = CONTENT / "skills"
 

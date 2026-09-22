@@ -1,7 +1,7 @@
 # Distribución de releases (v5)
 
 v5 publica un solo archivo: `pegasus`, un `zipapp` de la biblioteca estándar con shebang, construido
-por `tools/build_zipapp.py` a partir de `src/pegasus/`. Es el archivo entero que la persona instala —
+por `tools/build_zipapp.py` a partir de `src/darq/`. Es el archivo entero que la persona instala —
 el asset que [INSTALL.md](../INSTALL.md) e [INSTALL_BY_AGENT.md](../INSTALL_BY_AGENT.md) instruyen
 descargar y verificar. No hay wheel, no hay venv, no hay shim aparte: Pegasus no declara ninguna
 dependencia y lee su contenido desde adentro del propio zip, así que no queda nada más que empaquetar.
@@ -12,7 +12,7 @@ prepara el release.
 que el motor puede construir un binario con una identidad distinta (nombre, wordmark, directorio de
 datos y fuente de release propia — ver `docs/arquitectura/arquitectura.md`), `tools/build_zipapp.py`
 exige el flag siempre: es la única forma de que "una distribución no puede olvidarse de dar su propia
-identidad" sea literalmente cierto. El propio release de Pegasus pasa `src/pegasus/identity.json`
+identidad" sea literalmente cierto. El propio release de Pegasus pasa `src/darq/identity.json`
 explícitamente, igual que cualquier otra distribución pasaría el suyo.
 
 **`install.sh` también se genera por identidad, con `tools/build_installer.py`.** El instalador
@@ -24,16 +24,16 @@ líneas `# ====...====` cerca del principio del archivo, es el equivalente shell
 se le da, carácter por carácter idéntico en el resto del archivo, y valida el `identity.json` con
 las mismas reglas de `core/identity.py` que usa `build_zipapp.py`. `--identity` y `--out` son
 obligatorios igual que en `build_zipapp.py`, y `--out` se niega si ya existe. El release de Pegasus
-corre este mismo comando con `src/pegasus/identity.json`, igual que cualquier otra distribución.
+corre este mismo comando con `src/darq/identity.json`, igual que cualquier otra distribución.
 
 1. Sobre un commit con la suite verde (`PYTHONPATH=src:tests python3 -m unittest discover -s tests -q`), confirmá que `pyproject.toml` declara la versión que vas a publicar y creá el tag anotado `vX.Y.Z` sobre ese commit.
 2. Construí el artefacto:
 
    ```sh
-   python3 tools/build_zipapp.py --identity src/pegasus/identity.json --out dist/pegasus
+   python3 tools/build_zipapp.py --identity src/darq/identity.json --out dist/pegasus
    ```
 
-   `--identity` se valida contra las reglas de `src/pegasus/core/identity.py` antes de escribir nada
+   `--identity` se valida contra las reglas de `src/darq/core/identity.py` antes de escribir nada
    — nombre con sólo letras y números (sin acentos, sin guiones), no más ancho de lo que entra en la
    grilla del wordmark, URLs de release `https` con host real — y `--source` tiene que ser el propio
    directorio del paquete (`.../pegasus`, con `core/content.py` adentro), no el directorio que lo
@@ -71,7 +71,7 @@ corre este mismo comando con `src/pegasus/identity.json`, igual que cualquier ot
    `pegasus`, su `.sha256`, `release-manifest.json`, `install.sh` (el archivo en la raíz del
    repositorio, tal cual está en ese commit — no se genera en este paso, se sube directo, y es el
    mismo cuyo hash quedó certificado en el paso anterior; es, además, exactamente lo que
-   `tools/build_installer.py --identity src/pegasus/identity.json` reproduciría, así que el propio
+   `tools/build_installer.py --identity src/darq/identity.json` reproduciría, así que el propio
    release de Pegasus no necesita correr ese comando para publicar el suyo), `build_zipapp.py` con
    su propio `.sha256` (el archivo en `tools/build_zipapp.py`, subido con el nombre plano que el
    manifest certificó), y `build_installer.py` con su propio `.sha256` (el archivo en

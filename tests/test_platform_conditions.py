@@ -6,7 +6,7 @@ import stat
 import unittest
 
 import no_network
-from pegasus.ports.filesystem import FileSystemError
+from darq.ports.filesystem import FileSystemError
 from platform_conditions import (
     fail_next_removal_once,
     fail_next_write_once,

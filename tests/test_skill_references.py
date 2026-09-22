@@ -41,9 +41,9 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.core import content as content_module
+from darq.core import content as content_module
 
-SKILLS = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills"
+SKILLS = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "skills"
 
 #: Any path that names a markdown file, in whatever syntax. Gating only inline code
 #: and link targets certifies the forms that were scanned rather than the tree: an

@@ -13,12 +13,12 @@ import zipfile
 from dataclasses import replace
 from pathlib import Path, PurePath, PurePosixPath
 
-from pegasus import cli
-from pegasus.adapters.opencode import Adapter
-from pegasus.adapters.opencode import adapter as adapter_module
-from pegasus.adapters.opencode import render as render_module
-from pegasus.core import content as content_module
-from pegasus.core.content import (
+from darq import cli
+from darq.adapters.opencode import Adapter
+from darq.adapters.opencode import adapter as adapter_module
+from darq.adapters.opencode import render as render_module
+from darq.core import content as content_module
+from darq.core.content import (
     Agent,
     AgentMode,
     Asset,
@@ -30,9 +30,9 @@ from pegasus.core.content import (
     Skill,
     SystemPrompt,
 )
-from pegasus.core import registry as registry_module
-from pegasus.core.registry import Registry
-from pegasus.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, Layout, ModelAssignment
+from darq.core import registry as registry_module
+from darq.core.registry import Registry
+from darq.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, Layout, ModelAssignment
 
 HOME = Path("/home/probe")
 ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
@@ -1280,7 +1280,7 @@ class OwnArtifactsIdentityPlumbingTest(unittest.TestCase):
 
     def test_own_artifacts_never_imports_identity_or_identity_json(self):
         """The adapter module itself must never know how to find an
-        `identity.json` or read `pegasus.core.identity.parse`; it may only
+        `identity.json` or read `darq.core.identity.parse`; it may only
         receive an already-resolved `Identity` value through this parameter."""
         source = Path(adapter_module.__file__).read_text(encoding="utf-8")
         self.assertNotIn("identity.json", source)
@@ -1505,7 +1505,7 @@ class OwnArtifactsTest(unittest.TestCase):
         actually asks for must be inside the closed vocabulary `own_artifacts`
         answers -- proven against the real source assets, not the rendered
         (already-filled) output."""
-        from pegasus.core import placeholders as placeholders_module
+        from darq.core import placeholders as placeholders_module
 
         used: set[str] = set()
         for group in adapter_module.ASSET_TARGETS:
@@ -1810,7 +1810,7 @@ class ZipAssetFilesTest(unittest.TestCase):
     read straight out of a zip (built with `zipapp`, for instance) instead of a
     real `pathlib.Path`. The two share `iterdir`, `is_dir`, `is_file` and
     `read_bytes`, so `_asset_files` must walk the tree using only those, the
-    same constraint `pegasus.core.content` already had to satisfy.
+    same constraint `darq.core.content` already had to satisfy.
     """
 
     def setUp(self):
@@ -1844,7 +1844,7 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
     generically, but with a placeholder ("// plugin\\n") standing in for the
     real file -- it cannot tell a correctly shipped plugin from an accidentally
     empty one. This test builds the actual `pegasus` zipapp from this checkout's
-    own source, loads `pegasus.adapters.opencode.adapter` from inside that
+    own source, loads `darq.adapters.opencode.adapter` from inside that
     archive in a subprocess, and reads back the plugin content `own_artifacts`
     hands out. This project has already shipped assets that resolved fine from
     a checkout and silently degraded once packaged, so the check only counts if
@@ -1856,7 +1856,7 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
         cls.repo_root = Path(__file__).resolve().parents[1]
         cls.source = (
             cls.repo_root
-            / "src/pegasus/adapters/opencode/assets/plugins/engram.ts"
+            / "src/darq/adapters/opencode/assets/plugins/engram.ts"
         )
         tools_dir = cls.repo_root / "tools"
         if str(tools_dir) not in sys.path:
@@ -1865,8 +1865,8 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
 
         cls._tmp = tempfile.TemporaryDirectory()
         cls.archive = Path(cls._tmp.name) / "pegasus"
-        real_identity = cls.repo_root / "src" / "pegasus" / "identity.json"
-        build_zipapp(cls.repo_root / "src" / "pegasus", cls.archive, real_identity)
+        real_identity = cls.repo_root / "src" / "darq" / "identity.json"
+        build_zipapp(cls.repo_root / "src" / "darq", cls.archive, real_identity)
 
     @classmethod
     def tearDownClass(cls):
@@ -1878,9 +1878,9 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
             import sys
             sys.path.insert(0, {str(self.archive)!r})
             from pathlib import Path
-            from pegasus.adapters.opencode.adapter import Adapter
-            from pegasus.cli import default_identity
-            from pegasus.core.types import Environment
+            from darq.adapters.opencode.adapter import Adapter
+            from darq.cli import default_identity
+            from darq.core.types import Environment
 
             home = Path("/dev/shm/pegasus-zip-probe-home")
             env = Environment(home=home, data_dir=home / ".local" / "share" / "pegasus-harness")

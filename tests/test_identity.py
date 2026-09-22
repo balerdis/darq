@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import unittest
 
-from pegasus.core import identity as module
-from pegasus.core.identity import Identity, IdentityError, ReleaseSource
+from darq.core import identity as module
+from darq.core.identity import Identity, IdentityError, ReleaseSource
 
 
 def document(**overrides) -> bytes:
@@ -225,7 +225,7 @@ class ParseRejectsAMalformedDocumentTest(unittest.TestCase):
 
     def test_missing_version_is_rejected(self):
         """`version` is required, never defaulted to the engine's own
-        `pegasus.__version__` -- a distribution's version is a fact about
+        `darq.__version__` -- a distribution's version is a fact about
         that distribution, not the pinned engine it happens to be built
         from, and a silent fallback here is exactly the dead-default shape
         this codebase already refuses everywhere else identity is involved."""

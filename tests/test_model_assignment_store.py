@@ -12,12 +12,12 @@ import unittest
 from pathlib import Path
 
 from fakes import FakeFileSystem
-from pegasus.core import model_assignments as model_assignments_module
-from pegasus.core.types import ModelAssignment
-from pegasus.infra.model_assignment_store_file import FileModelAssignmentStore, model_assignment_path
+from darq.core import model_assignments as model_assignments_module
+from darq.core.types import ModelAssignment
+from darq.infra.model_assignment_store_file import FileModelAssignmentStore, model_assignment_path
 from real_home import RealHomeTestCase as _RealHomeTestCase
-from pegasus.ports.filesystem import FileSystemError
-from pegasus.ports.model_assignment_store import ModelAssignmentStore, ModelAssignmentStoreError
+from darq.ports.filesystem import FileSystemError
+from darq.ports.model_assignment_store import ModelAssignmentStore, ModelAssignmentStoreError
 
 HOME = Path("/home/probe")
 ASSIGNMENT = ModelAssignment(provider_id="anthropic", model_id="claude-sonnet-5", effort="high")
@@ -37,7 +37,7 @@ class ModelAssignmentPathTest(unittest.TestCase):
 
     def test_the_path_does_not_collide_with_the_journal(self):
         filesystem = FakeFileSystem()
-        from pegasus.infra.journal_store_file import journal_path
+        from darq.infra.journal_store_file import journal_path
 
         self.assertNotEqual(model_assignment_path(filesystem, HOME), journal_path(filesystem, HOME))
 

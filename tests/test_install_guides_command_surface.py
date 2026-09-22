@@ -33,10 +33,10 @@ import io
 import json
 from pathlib import Path
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -124,7 +124,7 @@ class InstallGuidesSayABareInstallIsRefusedTest(_RealHomeTestCase):
         return tuple(selection)
 
     def test_the_example_server_is_one_this_release_ships(self):
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         self.assertIn(REMOTE_SERVER, {item.name for item in content_module.load().mcp})
 

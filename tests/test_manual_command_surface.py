@@ -75,10 +75,10 @@ import re
 from pathlib import Path
 
 from fakes import FakeMCPProcess
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.types import Environment, ModelAssignment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.types import Environment, ModelAssignment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -157,7 +157,7 @@ def server_check_statuses() -> tuple[frozenset[str], tuple[str, ...]]:
     Derived from the package rather than listed here, which is the whole
     point: the hand-typed list in the manual named five of nine, and nothing
     anywhere could notice. Every `ServerCheck(...)` construction under
-    `src/pegasus/` is read out of the source, and its status argument
+    `src/darq/` is read out of the source, and its status argument
     resolved -- a literal as itself, a name against the module-level string
     constants of the file it was written in, which is how `mcp_handshake`
     spells its five.
@@ -176,7 +176,7 @@ def server_check_statuses() -> tuple[frozenset[str], tuple[str, ...]]:
     """
     found: set[str] = set()
     unresolved: list[str] = []
-    for path in sorted((REPOSITORY / "src" / "pegasus").rglob("*.py")):
+    for path in sorted((REPOSITORY / "src" / "darq").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         constants = {
             target.id: node.value.value
@@ -284,7 +284,7 @@ class ManualSaysWhichMcpSubcommandsRewriteTheConfigurationTest(RealHomeTestCase)
     def test_the_stand_in_key_is_not_a_shipped_server(self):
         """Or `grant` would refuse it and the measurement above would be of a
         failure, not of a write."""
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         self.assertNotIn(OWN_KEY, {item.name for item in content_module.load().mcp})
 
@@ -430,7 +430,7 @@ class ManualSaysHowAnMcpSelectionIsRevokedOnPurposeTest(RealHomeTestCase):
         self.run_cli("install", "--cli", CLI, "--mcp", REMOTE_SERVER)
 
     def test_the_example_server_is_one_this_release_ships(self):
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         self.assertIn(REMOTE_SERVER, {item.name for item in content_module.load().mcp})
 
@@ -600,7 +600,7 @@ def agents_reached_by(key: str) -> frozenset[str]:
     """Every agent a shipped server's own descriptor reaches, off `reaches`,
     which is where that fact lives: `optional_mcp` is derived from these
     lists, so this is the same set the render works from."""
-    from pegasus.core import content as content_module
+    from darq.core import content as content_module
 
     server = next((item for item in content_module.load().mcp if item.name == key), None)
     return frozenset(server.reaches) if server is not None else frozenset()
@@ -652,7 +652,7 @@ class ManualSaysWhatTheTwoMcpSpellingsAskForTest(RealHomeTestCase):
     def test_the_two_spellings_are_the_ones_the_flag_actually_reads(self):
         """Straight off the parser the flag's values go through, so a change
         to what `=` means reaches this file."""
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         self.assertEqual(content_module.parse_mcp_choice(REMOTE_SERVER), (REMOTE_SERVER, None))
         self.assertEqual(
@@ -766,7 +766,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
     def a_configurable_agent() -> str:
         """One agent that accepts an assignment, off the content tree rather
         than named here."""
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         found = sorted(agent.name for agent in content_module.load().agents if agent.model_configurable)
         return found[0] if found else ""
@@ -798,7 +798,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         the same way `tests/test_cli.py` builds a stale preference, so what
         each command is measured against is real rather than arranged.
         """
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         store = cli.model_assignment_store(self.runtime())
         store.save(model_assignments_module.with_assignment(
@@ -974,7 +974,7 @@ class ManualDocumentsEveryTopLevelCommandTest(RealHomeTestCase):
     def test_the_menu_entry_that_leads_to_the_upgrade_is_quoted_as_drawn(self):
         """The TUI half, derived from the menu itself the same way
         `tests/test_manual_mcp_screens.py` derives the two it documents."""
-        from pegasus.tui import navigator
+        from darq.tui import navigator
 
         labels = [entry.label for entry in navigator.main_menu().entries]
         upgrade = [label for label in labels if label.lower() == "upgrade"]

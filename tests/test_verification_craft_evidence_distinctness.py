@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CRAFT = ROOT / "src" / "pegasus" / "content" / "skills" / "_shared" / "verification-craft.md"
+CRAFT = ROOT / "src" / "darq" / "content" / "skills" / "_shared" / "verification-craft.md"
 
 #: The diagnosis: what makes a report's named groups unreliable on their own.
 #: Explains the failure but orders nothing.

@@ -1,10 +1,10 @@
-"""Tests for the Python-version floor guard at the top of src/pegasus/__main__.py.
+"""Tests for the Python-version floor guard at the top of src/darq/__main__.py.
 
 `_too_old_message` is exercised directly with fabricated version tuples, so the guard's logic is
 provable without a second interpreter binary. `GuardWiringTest` then confirms the wiring: the
 normal path still runs on the interpreter actually available here, and a fabricated old
-`sys.version_info`, injected in a subprocess before `pegasus.__main__` is ever imported, is
-rejected with one clear line on stderr and no traceback -- before `pegasus.cli` (or anything it
+`sys.version_info`, injected in a subprocess before `darq.__main__` is ever imported, is
+rejected with one clear line on stderr and no traceback -- before `darq.cli` (or anything it
 imports) gets a chance to run.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from pegasus.__main__ import MINIMUM_PYTHON, _too_old_message  # noqa: E402
+from darq.__main__ import MINIMUM_PYTHON, _too_old_message  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -56,7 +56,7 @@ class GuardWiringTest(unittest.TestCase):
             environment = dict(os.environ, PYTHONPATH=str(SRC), HOME=scratch_home,
                                 XDG_DATA_HOME=str(Path(scratch_home) / "data"))
             result = subprocess.run(
-                [sys.executable, "-m", "pegasus", "doctor", "--json"],
+                [sys.executable, "-m", "darq", "doctor", "--json"],
                 cwd=str(ROOT), env=environment, capture_output=True, text=True,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -66,7 +66,7 @@ class GuardWiringTest(unittest.TestCase):
             "import sys\n"
             "sys.version_info = (3, 9, 0, 'final', 0)\n"
             "sys.path.insert(0, %r)\n"
-            "import pegasus.__main__\n"
+            "import darq.__main__\n"
         ) % str(SRC)
         result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)

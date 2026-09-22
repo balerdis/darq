@@ -2,7 +2,7 @@
 """Build the single-file `pegasus` artifact: a `zipapp` with a shebang, made executable.
 
 Pegasus has zero runtime dependencies and reads its content and assets from inside a zip just as
-well as from a directory (see `pegasus.core.content`), so nothing stands between a checkout and a
+well as from a directory (see `darq.core.content`), so nothing stands between a checkout and a
 single file that *is* the command: no venv, no shim, no PATH-shaped install step at all. Download it,
 verify its checksum, `chmod +x` (or `install -m 755`), and run it.
 
@@ -14,7 +14,7 @@ downloaded" but "these are the bytes this source actually produces".
     python3 tools/build_zipapp.py --out dist/pegasus
 
 `zipapp` looks for `__main__.py` at the archive root, not inside the package it runs -- `stage()`
-writes one there, copied verbatim from the package's own `src/pegasus/__main__.py` so the two can
+writes one there, copied verbatim from the package's own `src/darq/__main__.py` so the two can
 never drift apart into two different entry points.
 
     python3 -m zipapp <staged dir> -o pegasus -p "/usr/bin/env python3"
@@ -34,13 +34,13 @@ import zipapp
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_SOURCE = ROOT / "src" / "pegasus"
+PACKAGE_SOURCE = ROOT / "src" / "darq"
 
 #: A marker file present only at the package root, never at the extraction root above it.
 #: `stage()` also copies `__main__.py` to the extraction root, so checking for that file alone
-#: cannot tell `--source <tree>` (the extraction root) apart from `--source <tree>/pegasus` (the
-#: package itself) -- the former builds a nested `pegasus/pegasus/` archive that fails at runtime
-#: with `ModuleNotFoundError: No module named 'pegasus.cli'`. `core/content.py` exists only inside
+#: cannot tell `--source <tree>` (the extraction root) apart from `--source <tree>/darq` (the
+#: package itself) -- the former builds a nested `darq/darq/` archive that fails at runtime
+#: with `ModuleNotFoundError: No module named 'darq.cli'`. `core/content.py` exists only inside
 #: the package, so requiring it too closes that gap.
 _PACKAGE_MARKER = Path("core") / "content.py"
 
@@ -87,13 +87,13 @@ def _normalize(destination: Path, epoch: int) -> None:
 
 
 def stage(source: Path, destination: Path, identity: Path) -> None:
-    """Copy the package into ``destination/pegasus``, plus a root `__main__.py` for `zipapp` to find.
+    """Copy the package into ``destination/darq``, plus a root `__main__.py` for `zipapp` to find.
 
     `identity`'s bytes are staged as the package's own `identity.json`, overriding whatever
     `source` already carried -- so a distribution's identity always wins over the pinned engine's,
     and forgetting to pass one is an `argparse` error in `main()`, never a silent inheritance.
     """
-    package_dir = destination / "pegasus"
+    package_dir = destination / "darq"
     shutil.copytree(source, package_dir, ignore=_ignore)
     shutil.copy2(package_dir / "__main__.py", destination / "__main__.py")
     shutil.copy2(identity, package_dir / "identity.json")
@@ -102,8 +102,8 @@ def stage(source: Path, destination: Path, identity: Path) -> None:
 def _load_identity_module(source: Path) -> types.ModuleType:
     """Load `<source>/core/identity.py` as a standalone module, by file path.
 
-    Not `sys.path.insert(0, source.parent); import pegasus.core.identity`: that only works when
-    `source` is itself named `pegasus`, and it would silently resolve to whatever `pegasus` package
+    Not `sys.path.insert(0, source.parent); import darq.core.identity`: that only works when
+    `source` is itself named `darq`, and it would silently resolve to whatever `darq` package
     is already imported (the real engine under test, when this runs from inside the test suite)
     rather than the one actually being built. Loading the file directly validates against the
     exact source tree `--source` names, regardless of its directory name.
@@ -159,13 +159,13 @@ def validate_identity(source: Path, identity: Path) -> None:
 def validate_source_layout(source: Path) -> None:
     """Refuse a `--source` that is the extraction root instead of the package itself."""
     if not (source / "__main__.py").is_file():
-        raise ValueError(f"{source} has no __main__.py; it is not the pegasus package")
+        raise ValueError(f"{source} has no __main__.py; it is not the darq package")
     if not (source / _PACKAGE_MARKER).is_file():
         raise ValueError(
             f"{source} has no {_PACKAGE_MARKER}; pass the package directory itself "
-            f"(e.g. .../pegasus), not the extraction root above it -- passing the wrong "
-            f"directory builds a nested pegasus/pegasus/ archive that fails at runtime with "
-            f"ModuleNotFoundError: No module named 'pegasus.cli'"
+            f"(e.g. .../darq), not the extraction root above it -- passing the wrong "
+            f"directory builds a nested darq/darq/ archive that fails at runtime with "
+            f"ModuleNotFoundError: No module named 'darq.cli'"
         )
 
 
@@ -195,7 +195,7 @@ def build(source: Path, output: Path, identity: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--source", type=Path, default=PACKAGE_SOURCE, help="the pegasus package to bundle")
+    parser.add_argument("--source", type=Path, default=PACKAGE_SOURCE, help="the darq package to bundle")
     parser.add_argument("--out", type=Path, required=True, help="where to write the artifact (e.g. dist/pegasus)")
     parser.add_argument(
         "--identity", type=Path, required=True,

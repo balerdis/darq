@@ -15,13 +15,13 @@ from dataclasses import replace
 from pathlib import Path
 
 from fakes import FakeMCPProcess
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core import mcp_handshake, ownership
-from pegasus.core.types import Environment
-from pegasus.infra.mcp_process_subprocess import SubprocessMCPProcess
-from pegasus.ports.mcp_process import MCPExchange
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core import mcp_handshake, ownership
+from darq.core.types import Environment
+from darq.infra.mcp_process_subprocess import SubprocessMCPProcess
+from darq.ports.mcp_process import MCPExchange
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -75,8 +75,8 @@ class DoctorStartMcpServersTest(RealHomeTestCase):
     def claim_mcp_entry(self, name: str, value: dict) -> None:
         """The same shape `install --mcp` itself would leave: a value at
         `/mcp/<name>` in the config, claimed in the journal."""
-        from pegasus.core import codecs, pointer
-        from pegasus.core.types import Codec
+        from darq.core import codecs, pointer
+        from darq.core.types import Codec
 
         layout = self.layout()
         document = codecs.loads(Codec.JSON, layout.settings_file.read_text(encoding="utf-8"))

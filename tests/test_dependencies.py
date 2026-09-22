@@ -11,10 +11,10 @@ from pathlib import Path, PurePosixPath
 
 from fakes import FakeDownloader, FakeFileSystem, FakeNpmInstaller
 
-from pegasus.core import dependencies
-from pegasus.core import ownership
-from pegasus.core.content import Distribution, Mcp
-from pegasus.infra.fs_posix import PosixFileSystem
+from darq.core import dependencies
+from darq.core import ownership
+from darq.core.content import Distribution, Mcp
+from darq.infra.fs_posix import PosixFileSystem
 from real_home import _scratch_root
 
 DEPENDENCIES_DIR = Path("/home/probe/.local/share/pegasus-harness/mcp")

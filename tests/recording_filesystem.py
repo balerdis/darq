@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pegasus.infra.fs_posix import PosixFileSystem
+from darq.infra.fs_posix import PosixFileSystem
 
 
 class RecordingFileSystem:

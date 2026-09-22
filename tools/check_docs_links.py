@@ -4,7 +4,7 @@
 Most documents resolve a relative link the ordinary way: against the
 directory the linking file lives in. Skills are the deliberate exception.
 `tests/test_skill_references.py` documents why: every reference inside
-`src/pegasus/content/skills/` is written relative to that skills root, so the
+`src/darq/content/skills/` is written relative to that skills root, so the
 same reference means the same thing regardless of which skill wrote it, and a
 lazily-loaded agent can resolve it with one shared rule instead of a bespoke
 one per skill. Resolving those links against the linking file's own
@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LINK = re.compile(r"\[[^]]+\]\(([^)]+)\)")
-SKILLS_ROOT = ROOT / "src" / "pegasus" / "content" / "skills"
+SKILLS_ROOT = ROOT / "src" / "darq" / "content" / "skills"
 
 # An ATX heading: up to three leading spaces, one to six hashes, a space, the
 # text. Setext headings (`Title` underlined with `===` or `---`) and explicit

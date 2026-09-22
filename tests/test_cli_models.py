@@ -12,13 +12,13 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 from unittest.mock import patch
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import content as content_module
-from pegasus.core import journal as journal_module
-from pegasus.core.content import AgentMode, Agent, Content
-from pegasus.core.types import Environment
-from pegasus.infra.model_assignment_store_file import model_assignment_path
+from darq import cli
+from darq.adapters import available
+from darq.core import content as content_module
+from darq.core import journal as journal_module
+from darq.core.content import AgentMode, Agent, Content
+from darq.core.types import Environment
+from darq.infra.model_assignment_store_file import model_assignment_path
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -78,7 +78,7 @@ class SetTest(RealHomeTestCase):
             "models", "set", "--cli", CLI, "--assign", f"{CONFIGURABLE_AGENT}=anthropic/claude-sonnet-5",
         )
         loaded = cli.model_assignment_store(self.runtime()).load()
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         assignment = model_assignments_module.get(loaded, CLI, CONFIGURABLE_AGENT)
         self.assertIsNotNone(assignment)
@@ -102,7 +102,7 @@ class SetTest(RealHomeTestCase):
             source=PurePosixPath("agents/static-agent.md"),
             model_configurable=False,
         )
-        with patch("pegasus.core.content.load", return_value=Content(agents=(not_configurable,))):
+        with patch("darq.core.content.load", return_value=Content(agents=(not_configurable,))):
             code, report = self.run_cli(
                 "models", "set", "--cli", CLI, "--assign", "static-agent=anthropic/claude-sonnet-5",
             )
@@ -135,7 +135,7 @@ class UnsetTest(RealHomeTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(report["status"], "unset")
 
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         loaded = cli.model_assignment_store(self.runtime()).load()
         self.assertIsNone(model_assignments_module.get(loaded, CLI, CONFIGURABLE_AGENT))
@@ -440,8 +440,8 @@ class UnfilteredListingReportsPhantomEntriesTest(RealHomeTestCase):
     PHANTOM_CLI = "claudecode"
 
     def write_phantom_entry(self) -> None:
-        from pegasus.core import model_assignments as model_assignments_module
-        from pegasus.core.types import ModelAssignment
+        from darq.core import model_assignments as model_assignments_module
+        from darq.core.types import ModelAssignment
 
         store = cli.model_assignment_store(self.runtime())
         assignments = model_assignments_module.with_assignment(
@@ -499,7 +499,7 @@ class ModelsApplyGuardTest(RealHomeTestCase):
         self.assertIn(cli_id, str(context.exception))
 
         loaded = cli.model_assignment_store(runtime).load()
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         self.assertIsNone(model_assignments_module.get(loaded, cli_id, CONFIGURABLE_AGENT))
 

@@ -8,8 +8,8 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from pegasus.tui import navigator as navigator_module
-from pegasus.tui.navigator import (
+from darq.tui import navigator as navigator_module
+from darq.tui.navigator import (
     CANCEL,
     Action,
     AgentRow,
@@ -102,7 +102,7 @@ class MainMenuTest(unittest.TestCase):
 
     def test_the_title_names_the_running_release(self):
         """`version` is threaded in explicitly, the same as `display_name` --
-        never read off `pegasus.__version__` here, since a distribution's own
+        never read off `darq.__version__` here, since a distribution's own
         version can differ from the pinned engine's (see
         `test_cli_identity_sweep.py`'s own coverage of that fact)."""
         navigator = Navigator.starting(display_name="Demo Product", version="1.2.3")

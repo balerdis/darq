@@ -21,7 +21,7 @@ extremes are both wrong: parsing the prose itself (matching on wording like
 "sin prefijo" as a full sentence) breaks on any harmless rewording, while
 scanning the whole document for any backtick-quoted token is too loose --
 it would also pick up prose fragments never meant to name an artifact
-("`download`", "`npm`", a path like "`src/pegasus/content/mcp/`").
+("`download`", "`npm`", a path like "`src/darq/content/mcp/`").
 
 The compromise struck here:
 
@@ -38,7 +38,7 @@ The compromise struck here:
   the other hand, always does, so the test cannot go blind to it.
 - A backtick-quoted token counts as naming an MCP *server id* only if it is
   exactly equal to an id derived from the tree (the stem of one of
-  `src/pegasus/content/mcp/*.md`) -- never hardcoded, so a sixth server
+  `src/darq/content/mcp/*.md`) -- never hardcoded, so a sixth server
   renames or removes an id without silently going unnoticed.
 - The plugin bullets are the one place the prose has a load-bearing shape
   worth reading structurally rather than by extension alone: each is a
@@ -60,12 +60,12 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus.adapters.opencode.adapter import _RENAMED_ASSETS
+from darq.adapters.opencode.adapter import _RENAMED_ASSETS
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DOC_PATH = _REPO_ROOT / "docs" / "contrato-inclusion-artifacts.md"
-_MCP_DIR = _REPO_ROOT / "src" / "pegasus" / "content" / "mcp"
-_PLUGINS_DIR = _REPO_ROOT / "src" / "pegasus" / "adapters" / "opencode" / "assets" / "plugins"
+_MCP_DIR = _REPO_ROOT / "src" / "darq" / "content" / "mcp"
+_PLUGINS_DIR = _REPO_ROOT / "src" / "darq" / "adapters" / "opencode" / "assets" / "plugins"
 
 _SECTION_HEADING = "## Inclusion aprobada"
 _FILE_EXTENSIONS = (".md", ".ts", ".js")
@@ -86,14 +86,14 @@ def _inclusion_section(doc_text: str) -> str:
 
 def _mcp_server_ids() -> frozenset[str]:
     """Server ids the tree defines: the stem of every `*.md` descriptor
-    under `src/pegasus/content/mcp/` (excluding non-descriptor files such as
+    under `src/darq/content/mcp/` (excluding non-descriptor files such as
     `playwright-package-lock.json`)."""
     return frozenset(path.stem for path in _MCP_DIR.glob("*.md"))
 
 
 def _plugin_files() -> frozenset[str]:
     """Plugin filenames the tree ships, under
-    `src/pegasus/adapters/opencode/assets/plugins/`."""
+    `src/darq/adapters/opencode/assets/plugins/`."""
     return frozenset(path.name for path in _PLUGINS_DIR.iterdir() if path.is_file())
 
 

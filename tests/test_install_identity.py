@@ -29,7 +29,7 @@ from brand_fragments import BANNED_FRAGMENTS, BUILD_MECHANISM_FRAGMENTS
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SH = ROOT / "install.sh"
 BUILD_INSTALLER = ROOT / "tools" / "build_installer.py"
-REAL_IDENTITY = ROOT / "src" / "pegasus" / "identity.json"
+REAL_IDENTITY = ROOT / "src" / "darq" / "identity.json"
 
 # `tools/build_installer.py` is a standalone script, not a package, so it is loaded
 # by file path rather than assumed to be on `sys.path` -- the same reasoning

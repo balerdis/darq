@@ -4,8 +4,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path, PurePosixPath
 
-from pegasus.core import journal as journal_module
-from pegasus.core.journal import Install, Journal, JournalError, Link, Record
+from darq.core import journal as journal_module
+from darq.core.journal import Install, Journal, JournalError, Link, Record
 
 HOME = Path("/home/probe")
 CONFIG = HOME / ".config" / "opencode"

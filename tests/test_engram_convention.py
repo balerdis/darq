@@ -26,7 +26,7 @@ import re
 import unittest
 from pathlib import Path
 
-CONTENT = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content"
+CONTENT = Path(__file__).resolve().parents[1] / "src" / "darq" / "content"
 
 #: `project: "{anything}"` or `project="{anything}"`, the shapes an agent copies
 #: out of a template verbatim. A literal name in quotes is deliberate and fine;

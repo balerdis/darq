@@ -23,7 +23,7 @@ from build_zipapp import (  # noqa: E402
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "zipapp_source"
 FIXTURE_IDENTITY = Path(__file__).resolve().parent / "fixtures" / "zipapp_source_identity.json"
-REAL_SOURCE = Path(__file__).resolve().parents[1] / "src" / "pegasus"
+REAL_SOURCE = Path(__file__).resolve().parents[1] / "src" / "darq"
 REAL_IDENTITY = REAL_SOURCE / "identity.json"
 
 
@@ -38,13 +38,13 @@ class StageTest(unittest.TestCase):
     def test_copies_the_package_under_its_own_name(self):
         stage(FIXTURE_ROOT, self.destination, FIXTURE_IDENTITY)
         self.assertEqual(
-            (self.destination / "pegasus" / "cli.py").read_text(encoding="utf-8"),
+            (self.destination / "darq" / "cli.py").read_text(encoding="utf-8"),
             (FIXTURE_ROOT / "cli.py").read_text(encoding="utf-8"),
         )
 
     def test_writes_a_root_level_entry_point_identical_to_the_packages_own(self):
         """`zipapp` looks for `__main__.py` at the archive root, not inside the package it runs --
-        this is the file that makes that lookup land on the same code `python -m pegasus` runs."""
+        this is the file that makes that lookup land on the same code `python -m darq` runs."""
         stage(FIXTURE_ROOT, self.destination, FIXTURE_IDENTITY)
         self.assertEqual(
             (self.destination / "__main__.py").read_text(encoding="utf-8"),
@@ -57,13 +57,13 @@ class StageTest(unittest.TestCase):
         (cache / "cli.cpython-312.pyc").write_bytes(b"stale bytecode")
         self.addCleanup(lambda: __import__("shutil").rmtree(cache))
         stage(FIXTURE_ROOT, self.destination, FIXTURE_IDENTITY)
-        self.assertFalse((self.destination / "pegasus" / "__pycache__").exists())
+        self.assertFalse((self.destination / "darq" / "__pycache__").exists())
 
     def test_stages_the_given_identity_overriding_whatever_source_already_carried(self):
         """A distribution's `--identity` always wins over the pinned engine's own file."""
         stage(FIXTURE_ROOT, self.destination, FIXTURE_IDENTITY)
         self.assertEqual(
-            (self.destination / "pegasus" / "identity.json").read_bytes(),
+            (self.destination / "darq" / "identity.json").read_bytes(),
             FIXTURE_IDENTITY.read_bytes(),
         )
 
@@ -72,10 +72,10 @@ class ValidateSourceLayoutTest(unittest.TestCase):
     """The tightened staging guard: catch the nested-build footgun at build time, not at runtime.
 
     Locks in the empirically observed failure this guard exists to pre-empt: `--source
-    <extraction-root>` instead of `--source <extraction-root>/pegasus` used to pass the old guard
+    <extraction-root>` instead of `--source <extraction-root>/darq` used to pass the old guard
     (it only checked for `__main__.py`, which `stage()` also copies to the extraction root) and
-    build a nested `pegasus/pegasus/` archive that crashed at runtime with
-    `ModuleNotFoundError: No module named 'pegasus.cli'` -- loud, but only after the artifact was
+    build a nested `darq/darq/` archive that crashed at runtime with
+    `ModuleNotFoundError: No module named 'darq.cli'` -- loud, but only after the artifact was
     already built and handed to someone.
     """
 

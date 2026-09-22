@@ -36,19 +36,19 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
-import pegasus
+import darq
 from fakes import FakeFileSystem
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import content as content_module
-from pegasus.core import journal as journal_module
-from pegasus.core import model_assignments as model_assignments_module
-from pegasus.core import identity as identity_module
-from pegasus.core import ownership
-from pegasus.core import planner
-from pegasus.core.types import Environment, ModelAssignment
-from pegasus.infra.journal_store_file import journal_path
-from pegasus.infra.snapshot_store_file import snapshots_root
+from darq import cli
+from darq.adapters import available
+from darq.core import content as content_module
+from darq.core import journal as journal_module
+from darq.core import model_assignments as model_assignments_module
+from darq.core import identity as identity_module
+from darq.core import ownership
+from darq.core import planner
+from darq.core.types import Environment, ModelAssignment
+from darq.infra.journal_store_file import journal_path
+from darq.infra.snapshot_store_file import snapshots_root
 from platform_conditions import (
     fail_probe_once_it_exists,
     make_undeletable,
@@ -208,7 +208,7 @@ class FakeHomeTestCase(unittest.TestCase):
 
 class VersionTest(unittest.TestCase):
     """Three places now hold Pegasus's own version -- `pyproject.toml`,
-    `pegasus.__version__`, and Pegasus's own shipped `identity.json` -- and
+    `darq.__version__`, and Pegasus's own shipped `identity.json` -- and
     all three must agree, never just the first two. This does NOT generalise
     to an arbitrary distribution's `identity.json`: a distribution legitimately
     pins the engine at one version and releases its own product under a
@@ -220,12 +220,12 @@ class VersionTest(unittest.TestCase):
     def test_the_package_version_matches_the_project_metadata(self):
         """Two places holding one number is how a release starts lying about itself."""
         metadata = tomllib.loads(Path(__file__).resolve().parents[1].joinpath("pyproject.toml").read_text())
-        self.assertEqual(pegasus.__version__, metadata["project"]["version"])
+        self.assertEqual(darq.__version__, metadata["project"]["version"])
 
     def test_pegasus_own_identity_json_agrees_with_the_package_version(self):
-        real_identity_path = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "identity.json"
+        real_identity_path = Path(__file__).resolve().parents[1] / "src" / "darq" / "identity.json"
         own_identity = identity_module.parse(real_identity_path.read_bytes())
-        self.assertEqual(own_identity.version, pegasus.__version__)
+        self.assertEqual(own_identity.version, darq.__version__)
 
 
 class VersionFlagTest(unittest.TestCase):
@@ -250,7 +250,7 @@ class VersionFlagTest(unittest.TestCase):
     def test_version_is_reported_and_exits_cleanly(self):
         code, printed = self.run_flag("--version")
         self.assertEqual(code, 0)
-        self.assertIn(pegasus.__version__, printed)
+        self.assertIn(darq.__version__, printed)
 
     def test_the_short_spelling_answers_the_same(self):
         self.assertEqual(self.run_flag("-V")[1], self.run_flag("--version")[1])
@@ -276,7 +276,7 @@ class VersionFlagTest(unittest.TestCase):
         """
         code, printed = self.run_flag("--version")
         self.assertEqual(code, 0)
-        self.assertEqual(printed.strip().split()[-1], pegasus.__version__)
+        self.assertEqual(printed.strip().split()[-1], darq.__version__)
 
 
 #: An obviously fictional distribution -- never a real organization -- pinning this engine at
@@ -300,14 +300,14 @@ _DISTRIBUTION_IDENTITY_PAYLOAD = {
 
 class DistributionVersionFlagTest(unittest.TestCase):
     """`--version` must report a distribution's own version -- from its own
-    `identity.json` -- never the pinned engine's `pegasus.__version__`. This
+    `identity.json` -- never the pinned engine's `darq.__version__`. This
     is the exact defect a real distribution hit: `darq --version` printed
     `darq 5.19.0`, the engine's own baked-in constant, instead of `darq
     1.0.0`, the product's own release."""
 
     def test_a_distributions_version_flag_reports_its_own_version_not_the_engines(self):
         distribution_identity = identity_module.parse(json.dumps(_DISTRIBUTION_IDENTITY_PAYLOAD).encode("utf-8"))
-        self.assertNotEqual(distribution_identity.version, pegasus.__version__)
+        self.assertNotEqual(distribution_identity.version, darq.__version__)
         runtime = cli.Runtime(
             filesystem=FakeFileSystem(), home=Path("/home/person"), now=AT, out=io.StringIO(), variables={},
             identity=distribution_identity,
@@ -319,7 +319,7 @@ class DistributionVersionFlagTest(unittest.TestCase):
         self.assertEqual(exit_code.exception.code, 0)
         printed = out.getvalue()
         self.assertIn("darq 1.0.0", printed)
-        self.assertNotIn(pegasus.__version__, printed)
+        self.assertNotIn(darq.__version__, printed)
 
 
 class ArgumentTest(RealHomeTestCase):
@@ -425,20 +425,20 @@ class InstallTest(RealHomeTestCase):
         self.present()
         self.run_cli("install", "--cli", CLI)
         install = journal_module.install_for(self.store().load(), CLI)
-        self.assertEqual(install.release["version"], pegasus.__version__)
+        self.assertEqual(install.release["version"], darq.__version__)
         self.assertTrue(install.release["catalog_digest"].startswith("sha256:"))
         self.assertEqual(install.installed_at, AT)
 
     def test_a_distributions_journal_records_its_own_version_not_the_engines(self):
         """Regression: `Install.release["version"]` used to be
-        `pegasus.__version__` unconditionally -- so an installation made by a
+        `darq.__version__` unconditionally -- so an installation made by a
         distribution recorded the pinned engine's own version, never the
         product's own release, in the very record the TUI's own update
         notice later compares the running version against."""
         distribution_identity = identity_module.parse(
             json.dumps(_DISTRIBUTION_IDENTITY_PAYLOAD).encode("utf-8")
         )
-        self.assertNotEqual(distribution_identity.version, pegasus.__version__)
+        self.assertNotEqual(distribution_identity.version, darq.__version__)
         self.present()
         self.run_cli("install", "--cli", CLI, identity=distribution_identity)
         install = journal_module.install_for(self.store().load(), CLI)
@@ -1592,13 +1592,13 @@ class DoctorTest(RealHomeTestCase):
     def test_a_distributions_doctor_reports_its_own_version_not_the_engines(self):
         """The `pegasus_version` KEY is a stable wire identifier, unchanged
         across every distribution -- but its VALUE used to be
-        `pegasus.__version__` unconditionally, so a distribution's own
+        `darq.__version__` unconditionally, so a distribution's own
         `doctor --json` reported the pinned engine's own version rather than
         its own release."""
         distribution_identity = identity_module.parse(
             json.dumps(_DISTRIBUTION_IDENTITY_PAYLOAD).encode("utf-8")
         )
-        self.assertNotEqual(distribution_identity.version, pegasus.__version__)
+        self.assertNotEqual(distribution_identity.version, darq.__version__)
         _, report = self.run_cli("doctor", identity=distribution_identity)
         self.assertEqual(report["pegasus_version"], distribution_identity.version)
 
@@ -1830,7 +1830,7 @@ class DoctorTest(RealHomeTestCase):
         self.install()
         self.store().path.write_bytes(b"{ not json")
         _, report = self.run_cli("doctor")
-        self.assertEqual(report["pegasus_version"], pegasus.__version__)
+        self.assertEqual(report["pegasus_version"], darq.__version__)
         entry = next(item for item in report["clis"] if item["cli"] == CLI)
         self.assertTrue(entry["detected"])
         self.assertIsNotNone(entry["config_dir"])

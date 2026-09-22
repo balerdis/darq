@@ -9,13 +9,13 @@ import unittest
 from unittest import mock
 from pathlib import Path, PurePosixPath
 
-from pegasus import cli
-from pegasus.adapters.opencode import Adapter
-from pegasus.core import catalog as catalog_module
-from pegasus.core import content as content_module
-from pegasus.core.catalog import Catalog, CatalogError, Entry
-from pegasus.core.content import Content
-from pegasus.core.types import (
+from darq import cli
+from darq.adapters.opencode import Adapter
+from darq.core import catalog as catalog_module
+from darq.core import content as content_module
+from darq.core.catalog import Catalog, CatalogError, Entry
+from darq.core.content import Content
+from darq.core.types import (
     Capability,
     CapabilityManifest,
     ConfigKeyArtifact,
@@ -94,7 +94,7 @@ class StubAdapter:
 
 
 def one_skill():
-    from pegasus.core.content import Asset, Skill
+    from darq.core.content import Asset, Skill
 
     return _content(
         skills=(
@@ -175,7 +175,7 @@ class BuildTest(unittest.TestCase):
 
 
 def one_agent(name="probe-agent"):
-    from pegasus.core.content import Agent, AgentMode
+    from darq.core.content import Agent, AgentMode
 
     return _content(
         agents=(

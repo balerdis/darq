@@ -5,16 +5,16 @@ fifth does not, on purpose.
 
 1. MANUAL.md's "## Qué hacen los cinco MCPs opcionales" heading and its
    table, checked against `content.load().mcp` -- the real parser for
-   `src/pegasus/content/mcp/`, which already knows to ignore
+   `src/darq/content/mcp/`, which already knows to ignore
    `playwright-package-lock.json` because that file has no `.md` descriptor
    shape to load.
 
 2. MANUAL.md's "con cinco generaciones de historial y no más", checked
-   against `pegasus.cli.RETAIN_GENERATIONS`.
+   against `darq.cli.RETAIN_GENERATIONS`.
 
 3. MANUAL.md's "El menú principal agrupa sus ocho entradas por intención"
    and the enumeration that follows it, checked against
-   `pegasus.tui.navigator.main_menu()` -- both the count and, in the exact
+   `darq.tui.navigator.main_menu()` -- both the count and, in the exact
    order the prose claims is deliberate, the entries themselves. This is the
    figure that was once right while the list beneath it silently dropped
    `Grant MCP servers`; the list is what this guards, not just the number.
@@ -22,7 +22,7 @@ fifth does not, on purpose.
 4. MANUAL.md's "de una instalación anterior a 5.28.0 que la poda automática
    nunca puede alcanzar" gets NO guard here. `5.28.0` is a historical fact
    about when `Install.created_dirs`/`created` started being recorded
-   (`src/pegasus/core/journal.py`, `src/pegasus/core/planner.py`) -- it
+   (`src/darq/core/journal.py`, `src/darq/core/planner.py`) -- it
    exists only as prose in docstrings and as a git tag (`v5.28.0`), never as
    a runtime constant, schema-version field, or migration marker. A git tag
    is not read by the installed product and reading one here would mean
@@ -36,7 +36,7 @@ fifth does not, on purpose.
 
 5. MANUAL.md's "Los comandos distribuidos son ..." enumeration of the
    OpenCode slash commands Pegasus ships, checked against
-   `content.load().commands` -- the real `src/pegasus/content/commands/`
+   `content.load().commands` -- the real `src/darq/content/commands/`
    tree. This is a different command surface than
    `ManualDocumentsEveryTopLevelCommandTest`
    (`tests/test_manual_command_surface.py`), which checks the `pegasus`
@@ -54,9 +54,9 @@ import re
 import unittest
 from pathlib import Path
 
-from pegasus import cli as cli_module
-from pegasus.core import content as content_module
-from pegasus.tui import navigator
+from darq import cli as cli_module
+from darq.core import content as content_module
+from darq.tui import navigator
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANUAL = REPOSITORY / "MANUAL.md"
@@ -183,7 +183,7 @@ class MainMenuEntriesTest(unittest.TestCase):
 
 class DistributedCommandsEnumerationTest(unittest.TestCase):
     """MANUAL.md's "Los comandos distribuidos son ..." enumeration of the
-    OpenCode slash commands under `src/pegasus/content/commands/`.
+    OpenCode slash commands under `src/darq/content/commands/`.
 
     A different surface than `ManualDocumentsEveryTopLevelCommandTest`
     (`tests/test_manual_command_surface.py`), which checks the `pegasus`

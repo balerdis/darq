@@ -25,10 +25,10 @@ import io
 import json
 from dataclasses import replace
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import codecs, content as content_module, journal as journal_module, pointer
-from pegasus.core.types import Codec, Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import codecs, content as content_module, journal as journal_module, pointer
+from darq.core.types import Codec, Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"

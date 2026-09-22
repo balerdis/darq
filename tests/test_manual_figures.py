@@ -40,12 +40,12 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import pegasus
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import content as content_module
-from pegasus.core.types import Environment
-from pegasus.infra.fs_posix import PosixFileSystem
+import darq
+from darq import cli
+from darq.adapters import available
+from darq.core import content as content_module
+from darq.core.types import Environment
+from darq.infra.fs_posix import PosixFileSystem
 from real_home import RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -247,7 +247,7 @@ class ManualNamesTheEntryPointThisReleaseShipsTest(unittest.TestCase):
     the tree.
 
     So the paragraph's CLAIM is now what the tree actually builds, and its
-    figure -- the product major -- is derived here from `pegasus.__version__`
+    figure -- the product major -- is derived here from `darq.__version__`
     rather than typed into the prose, the same treatment
     `GrantMcpReachesEveryAgentTest` gives its agent counts.
 
@@ -279,13 +279,13 @@ class ManualNamesTheEntryPointThisReleaseShipsTest(unittest.TestCase):
     def test_the_major_the_manual_documents_is_the_major_the_tree_is(self):
         """The figure. It said four where the tree said five, in the sentence
         that told a reader which product this manual is even about."""
-        major = pegasus.__version__.split(".")[0]
+        major = darq.__version__.split(".")[0]
         stated = PRODUCT_MAJOR.findall(self.manual)
         self.assertTrue(stated, f"{MANUAL.name} never says which major of the product it documents")
         self.assertEqual(
             sorted(set(stated)),
             [major],
-            f"{MANUAL.name} documents a major the tree is not: tree is {pegasus.__version__}",
+            f"{MANUAL.name} documents a major the tree is not: tree is {darq.__version__}",
         )
 
     def test_the_paragraph_names_where_the_binary_actually_lands(self):

@@ -12,7 +12,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-SHARED = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills" / "_shared"
+SHARED = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "skills" / "_shared"
 CRITERION = SHARED / "sub-delegation-criterion.md"
 
 

@@ -26,12 +26,12 @@ import tempfile
 import unittest
 from pathlib import Path, PurePath
 
-from pegasus import cli
-from pegasus.adapters.opencode import adapter as adapter_module
-from pegasus.adapters.opencode import render as render_module
-from pegasus.core import content as content_module
-from pegasus.core import placeholders
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters.opencode import adapter as adapter_module
+from darq.adapters.opencode import render as render_module
+from darq.core import content as content_module
+from darq.core import placeholders
+from darq.core.types import Environment
 
 IDENTITY = cli.default_identity()
 

@@ -7,10 +7,10 @@ from __future__ import annotations
 import unittest
 from pathlib import Path, PurePosixPath
 
-from pegasus import cli
-from pegasus.adapters.claudecode import Adapter
-from pegasus.adapters.claudecode import render as render_module
-from pegasus.core.content import (
+from darq import cli
+from darq.adapters.claudecode import Adapter
+from darq.adapters.claudecode import render as render_module
+from darq.core.content import (
     Agent,
     AgentMode,
     Asset,
@@ -22,11 +22,11 @@ from pegasus.core.content import (
     Skill,
     SystemPrompt,
 )
-from pegasus.core import registry as registry_module
-from pegasus.core.catalog import DelegationTarget
-from pegasus.core.content import delegation_capabilities_path
-from pegasus.core.registry import Registry
-from pegasus.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, ModelAssignment
+from darq.core import registry as registry_module
+from darq.core.catalog import DelegationTarget
+from darq.core.content import delegation_capabilities_path
+from darq.core.registry import Registry
+from darq.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, ModelAssignment
 
 HOME = Path("/home/probe")
 ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
@@ -53,7 +53,7 @@ class RegistrationTest(unittest.TestCase):
         )
 
     def test_the_tier_is_partial(self):
-        from pegasus.core.types import SupportTier
+        from darq.core.types import SupportTier
 
         self.assertEqual(Adapter().tier(), SupportTier.PARTIAL)
 
@@ -396,7 +396,7 @@ class McpRenderTest(unittest.TestCase):
         self.assertEqual(artifacts[0].content, b"# Context7 Convention\n")
 
     def test_a_layout_without_skills_refuses(self):
-        from pegasus.core.types import Layout
+        from darq.core.types import Layout
 
         layout = Layout(config_dir=CONFIG, settings_file=CONFIG / "settings.json")
         with self.assertRaises(render_module.RenderError) as raised:
@@ -404,7 +404,7 @@ class McpRenderTest(unittest.TestCase):
         self.assertIn("context7", str(raised.exception))
 
     def test_the_dispatch_table_covers_every_distribution_member(self):
-        from pegasus.core.content import Distribution as DistributionEnum
+        from darq.core.content import Distribution as DistributionEnum
 
         self.assertEqual(set(render_module.MCP_VALUE), set(DistributionEnum))
 

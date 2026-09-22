@@ -14,8 +14,8 @@ from collections.abc import Callable
 from importlib.resources import files as _package_files
 from pathlib import Path, PurePosixPath
 
-from pegasus.core import content
-from pegasus.core.content import AgentMode, ContentError, Distribution, Execution, RunsAs
+from darq.core import content
+from darq.core.content import AgentMode, ContentError, Distribution, Execution, RunsAs
 
 SKILL = """---
 name: alpha
@@ -924,25 +924,25 @@ class SessionStartTest(TemporaryContent):
         `core/content.py` hardcoded a literal instead -- both sides would just
         diverge from the packaged file in the same way, proving nothing about
         which one the module attribute actually tracks. So this substitutes a
-        *different* packaged value in an isolated copy of the `pegasus`
+        *different* packaged value in an isolated copy of the `darq`
         package and asserts the constant follows the substitution, in a fresh
         subprocess -- the only way to observe the module-level constant
         re-evaluate its import-time read against a distinct value without
-        reloading (and thereby corrupting) the real `pegasus.core.content`
+        reloading (and thereby corrupting) the real `darq.core.content`
         module every other test in this process shares."""
-        real_pegasus_root = Path(content.__file__).resolve().parent.parent
+        real_darq_root = Path(content.__file__).resolve().parent.parent
         fake_src = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, fake_src, ignore_errors=True)
         shutil.copytree(
-            real_pegasus_root,
-            fake_src / "pegasus",
+            real_darq_root,
+            fake_src / "darq",
             ignore=shutil.ignore_patterns("__pycache__"),
         )
-        (fake_src / "pegasus" / "content" / "session-start.txt").write_text(
+        (fake_src / "darq" / "content" / "session-start.txt").write_text(
             "substituted-orchestrator\n", encoding="utf-8"
         )
         result = subprocess.run(
-            [sys.executable, "-c", "from pegasus.core import content; print(content.SESSION_STARTS_IN)"],
+            [sys.executable, "-c", "from darq.core import content; print(content.SESSION_STARTS_IN)"],
             env={**os.environ, "PYTHONPATH": str(fake_src)},
             capture_output=True,
             text=True,
@@ -1995,7 +1995,7 @@ class ShippedContentTest(unittest.TestCase):
     # -- Delegation criterion: sub-agents may now decide to fan out, so a set of
     # invariants replaces the outright prohibition that used to make these moot.
 
-    _SHARED_DIR = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills" / "_shared"
+    _SHARED_DIR = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "skills" / "_shared"
 
     def test_no_shipped_agent_still_carries_the_old_prohibition(self):
         """The literal that used to forbid delegation outright must be gone from

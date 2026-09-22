@@ -15,7 +15,7 @@ from pathlib import Path
 
 from brand_fragments import BANNED_FRAGMENTS
 
-SOURCE = Path(__file__).resolve().parents[1] / "src" / "pegasus"
+SOURCE = Path(__file__).resolve().parents[1] / "src" / "darq"
 ADAPTERS = SOURCE / "adapters"
 CLI_AGNOSTIC_PACKAGES = ("core", "ports", "infra", "tui")
 #: `NoProductIdentityOutsideCompositionRootTest`'s own scan list -- deliberately
@@ -60,7 +60,7 @@ def product_identity_modules() -> list[Path]:
 class NoCliNamesOutsideAdaptersTest(unittest.TestCase):
     def test_at_least_one_adapter_exists(self):
         """Without this, the test below would pass by finding nothing to look for."""
-        self.assertTrue(cli_ids(), "no adapter directories found under src/pegasus/adapters")
+        self.assertTrue(cli_ids(), "no adapter directories found under src/darq/adapters")
 
     def test_agnostic_packages_are_scanned(self):
         self.assertTrue(agnostic_modules(), "no modules found in the CLI-agnostic packages")
@@ -418,7 +418,7 @@ def _product_identity_offenders(path: Path) -> list[tuple[int, str]]:
     which is the one thing every real offender has in common: assigned,
     passed as an argument, or interpolated into an f-string that is raised or
     returned. An import statement, a dotted module name, and an attribute
-    read (`pegasus.__version__`) are not scanned at all -- structurally, they
+    read (`darq.__version__`) are not scanned at all -- structurally, they
     are never `ast.Constant` string nodes in the first place.
     """
     source = path.read_text(encoding="utf-8")
@@ -513,11 +513,11 @@ class NoProductIdentityOutsideCompositionRootTest(unittest.TestCase):
         self.assertEqual([text for _, text in offenders], ["Pegasus Harness"])
 
     def test_importing_the_package_is_not_flagged(self):
-        probe = _write_probe(self, "import pegasus\nfrom pegasus.core import identity\n")
+        probe = _write_probe(self, "import darq\nfrom darq.core import identity\n")
         self.assertEqual(_product_identity_offenders(probe), [])
 
     def test_reading_the_version_attribute_is_not_flagged(self):
-        probe = _write_probe(self, "import pegasus\nversion = pegasus.__version__\n")
+        probe = _write_probe(self, "import darq\nversion = darq.__version__\n")
         self.assertEqual(_product_identity_offenders(probe), [])
 
     def test_a_docstring_mentioning_the_product_is_not_flagged(self):
@@ -609,7 +609,7 @@ class NoAgentNameLiteralInBundledTsAssetsTest(unittest.TestCase):
         self.assertTrue(bundled_ts_assets(), "no .ts assets found under adapters/ -- scan target drifted")
 
     def test_no_bundled_ts_asset_hardcodes_the_rendered_orchestrator_name(self):
-        from pegasus.core import content as content_module
+        from darq.core import content as content_module
 
         literal = f'"{content_module.SESSION_STARTS_IN}"'
         offenders = [
@@ -778,7 +778,7 @@ def _engine_brand_fragments() -> tuple[str, ...]:
     into a bundled asset as placeholders -- because those two are exactly
     what "names the engine brand in a verbatim asset body" means here.
     """
-    from pegasus.core import identity as identity_module
+    from darq.core import identity as identity_module
 
     identity = identity_module.parse((SOURCE / "identity.json").read_bytes())
     return tuple(sorted({identity.program_name.lower(), identity.display_name.lower()}))
@@ -958,14 +958,14 @@ def _owning_adapter(path: Path) -> str:
 #:   only. It satisfies the `CliAdapter` protocol structurally -- Python's `Protocol` needs
 #:   no import from the implementer -- so it has never needed `ports/`, and this rule does
 #:   not grant an allowance nothing exercises.
-#: - `tui/` imports `core`, `adapters` (`tui/session.py` calls `pegasus.adapters.available()`
+#: - `tui/` imports `core`, `adapters` (`tui/session.py` calls `darq.adapters.available()`
 #:   directly to build the registry a session runs against) and, as the one named exemption
 #:   below, `cli`.
 #: - `cli.py` imports `core`, `ports`, `infra`, `adapters` and, as the same named exemption,
 #:   `tui`.
 #:
 #: The exemption: this is not a strict DAG between `cli` and `tui`. `cli.py` imports
-#: `pegasus.tui.app` and calls `tui_app.main()` as the interactive entry point -- the
+#: `darq.tui.app` and calls `tui_app.main()` as the interactive entry point -- the
 #: installer always finishes in the TUI, never in a bare CLI prompt, which is the whole
 #: point of the "instalador abre siempre la TUI" change this rule arrived after. `tui/app.py`
 #: and `tui/session.py` import back into `cli` to reuse its argument parsing and execution
@@ -996,7 +996,7 @@ def _layer_of_path(path: Path, source: Path) -> str | None:
 
 def _module_dotted_name(path: Path, source: Path) -> str:
     """The dotted module name Python itself would give `path`, e.g.
-    `pegasus/core/catalog.py` -> `pegasus.core.catalog`, and a package's own `__init__.py`
+    `pegasus/core/catalog.py` -> `darq.core.catalog`, and a package's own `__init__.py`
     -> the package name with no trailing `.__init__`. Relative-import resolution below needs
     this to find the package a level climbs from."""
     relative = path.relative_to(source.parent).with_suffix("")
@@ -1008,7 +1008,7 @@ def _module_dotted_name(path: Path, source: Path) -> str:
 
 def _resolve_import_from(path: Path, node: ast.ImportFrom, source: Path) -> str:
     """The absolute dotted module `node` names, resolving `node.level` the way Python's own
-    import machinery does. `level == 0` (`from pegasus.infra import x`) is already absolute.
+    import machinery does. `level == 0` (`from darq.infra import x`) is already absolute.
     A relative import climbs from the package *containing* `path` -- itself, if `path` is a
     package's own `__init__.py`, otherwise its parent -- one extra level per point beyond the
     first, exactly as `from . import x` inside a module means "this package" while
@@ -1031,8 +1031,8 @@ def _resolve_import_from(path: Path, node: ast.ImportFrom, source: Path) -> str:
 
 
 def _layer_of_module(dotted: str, root_package: str) -> str | None:
-    """Which policed layer an absolute dotted module name (e.g. `pegasus.infra.fs_posix`)
-    lives in, or `None` for a bare `import pegasus` (carries no layer -- `pegasus/__init__.py`
+    """Which policed layer an absolute dotted module name (e.g. `darq.infra.fs_posix`)
+    lives in, or `None` for a bare `import darq` (carries no layer -- `pegasus/__init__.py`
     is a version constant, not a dependency) or a name outside `root_package` entirely (a
     third-party or stdlib import, which this rule has no opinion about)."""
     if dotted == root_package:
@@ -1094,7 +1094,7 @@ def _write_scratch_pegasus(test: unittest.TestCase, files: dict[str, str]) -> Pa
     """A throwaway `pegasus/` tree under a temp directory, holding only the files a
     self-test needs. Named `pegasus` (not the real package's name by coincidence, but
     because `_layer_of_module` keys off `source.name`) so the same resolution code this
-    rule runs against `src/pegasus` also runs, unmodified, against a tree small enough to
+    rule runs against `src/darq` also runs, unmodified, against a tree small enough to
     hold one deliberate violation."""
     directory = tempfile.TemporaryDirectory()
     test.addCleanup(directory.cleanup)
@@ -1121,7 +1121,7 @@ class ImportDirectionTest(unittest.TestCase):
 
     The allowed table is `LAYER_ALLOWED_IMPORTS` above, together with the one named
     exemption in its own comment. It was read off the tree, not designed in the abstract:
-    at the time this test was written, the real `src/pegasus` tree already obeyed it in
+    at the time this test was written, the real `src/darq` tree already obeyed it in
     full.
     """
 

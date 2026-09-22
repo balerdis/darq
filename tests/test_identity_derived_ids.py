@@ -33,10 +33,10 @@ what "derive the set by execution" can close, not an oversight in this test.
 """
 from __future__ import annotations
 
-from pegasus.adapters import available
-from pegasus.core import catalog
-from pegasus.core.content import load as load_content
-from pegasus.core.types import Environment
+from darq.adapters import available
+from darq.core import catalog
+from darq.core.content import load as load_content
+from darq.core.types import Environment
 from test_identity_rename_migration import CLI, FIRST_IDENTITY, SECOND_IDENTITY
 from real_home import RealHomeTestCase as _RealHomeTestCase
 

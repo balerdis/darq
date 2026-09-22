@@ -5,7 +5,7 @@ import dataclasses
 import unittest
 from pathlib import Path
 
-from pegasus.core.types import (
+from darq.core.types import (
     Capability,
     CapabilityManifest,
     Codec,

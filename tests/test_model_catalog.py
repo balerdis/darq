@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.core.model_catalog import (
+from darq.core.model_catalog import (
     Model,
     ModelCatalog,
     Provider,

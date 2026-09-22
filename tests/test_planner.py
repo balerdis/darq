@@ -26,10 +26,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import fakes
-from pegasus.core import ownership, planner
-from pegasus.core.journal import Install, Link, Record
-from pegasus.core.types import Codec, ConfigKeyArtifact, FileArtifact
-from pegasus.ports.filesystem import FileSystemError
+from darq.core import ownership, planner
+from darq.core.journal import Install, Link, Record
+from darq.core.types import Codec, ConfigKeyArtifact, FileArtifact
+from darq.ports.filesystem import FileSystemError
 from platform_conditions import (
     fail_next_removal_once,
     fail_next_write_once,

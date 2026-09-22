@@ -26,11 +26,11 @@ from __future__ import annotations
 import io
 import json
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core import model_assignments as model_assignments_module
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core import model_assignments as model_assignments_module
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -109,7 +109,7 @@ class ModelsSetBatchTest(RealHomeTestCase):
             "--assign", f"{AGENT_ONE}=anthropic/claude-sonnet-5",
             "--assign", f"{AGENT_TWO}=anthropic/claude-sonnet-5",
         )
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         assignments = cli.model_assignment_store(self.runtime()).load()
         self.assertIsNotNone(model_assignments_module.get(assignments, CLI, AGENT_ONE))
@@ -126,7 +126,7 @@ class ModelsSetBatchTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("nonexistent-agent", report["error"])
         self.assertEqual(self.generations(), before)
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         assignments = cli.model_assignment_store(self.runtime()).load()
         self.assertIsNone(model_assignments_module.get(assignments, CLI, AGENT_ONE))
@@ -223,7 +223,7 @@ class ModelsApplyMixedBatchTest(RealHomeTestCase):
         self.assertEqual(report["status"], "applied")
         after = self.generations()
         self.assertEqual(len(after), len(before) + 1)
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         assignments = cli.model_assignment_store(self.runtime()).load()
         self.assertIsNotNone(model_assignments_module.get(assignments, CLI, AGENT_ONE))
@@ -242,7 +242,7 @@ class ModelsApplyMixedBatchTest(RealHomeTestCase):
             )
         self.assertIn("nonexistent-agent", str(caught.exception))
         self.assertEqual(self.generations(), before)
-        from pegasus.core import model_assignments as model_assignments_module
+        from darq.core import model_assignments as model_assignments_module
 
         assignments = cli.model_assignment_store(self.runtime()).load()
         # The staged removal must not have landed either -- all-or-nothing

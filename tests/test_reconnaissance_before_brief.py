@@ -52,7 +52,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT / "src" / "pegasus" / "content"
+CONTENT = ROOT / "src" / "darq" / "content"
 CRITERION = CONTENT / "skills" / "_shared" / "sub-delegation-criterion.md"
 ORCHESTRATOR = CONTENT / "agents" / "pegasus-orchestrator.md"
 

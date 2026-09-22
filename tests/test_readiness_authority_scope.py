@@ -33,7 +33,7 @@ import re
 import unittest
 from pathlib import Path
 
-AGENTS = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "agents"
+AGENTS = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "agents"
 
 #: A self-declared "I am THE authority" claim, worded loosely enough to catch a
 #: future agent phrasing it differently while still claiming the same thing:

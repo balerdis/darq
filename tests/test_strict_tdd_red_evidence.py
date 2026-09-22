@@ -24,7 +24,7 @@ import re
 import unittest
 from pathlib import Path
 
-SKILLS = Path(__file__).resolve().parents[1] / "src" / "pegasus" / "content" / "skills"
+SKILLS = Path(__file__).resolve().parents[1] / "src" / "darq" / "content" / "skills"
 APPLY_PATH = SKILLS / "sdd-apply" / "strict-tdd.md"
 VERIFY_PATH = SKILLS / "sdd-verify" / "strict-tdd-verify.md"
 

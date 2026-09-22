@@ -18,12 +18,12 @@ import unittest
 import zipfile
 from pathlib import Path
 
-import pegasus
+import darq
 from fakes import FakeDownloader, FakeFileSystem
-from pegasus import cli
-from pegasus.core import ownership
-from pegasus.tui import session
-from pegasus.tui.navigator import (
+from darq import cli
+from darq.core import ownership
+from darq.tui import session
+from darq.tui.navigator import (
     Action,
     InstallPlanScreen,
     InstallResultScreen,
@@ -35,7 +35,7 @@ from pegasus.tui.navigator import (
 
 AT = "2026-08-14T00:00:00+00:00"
 HOME = Path("/home/person")
-CURRENT_VERSION = pegasus.__version__
+CURRENT_VERSION = darq.__version__
 NEWER_VERSION = "99.0.0"
 #: What `session._upgrade_preview` builds from the running identity -- every
 #: test here uses the real `default_identity()` (no override), so this
@@ -55,7 +55,7 @@ def sha256sum_line(content: bytes) -> bytes:
 
 
 def upgrade_downloader(*, version: str = NEWER_VERSION, content: bytes = b"new pegasus bytes") -> FakeDownloader:
-    from pegasus.core import upgrade as upgrade_module
+    from darq.core import upgrade as upgrade_module
 
     release = cli.default_identity().release
     return FakeDownloader(

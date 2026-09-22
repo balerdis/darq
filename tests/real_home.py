@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 
 import no_network  # noqa: F401  -- importing it is what installs the refusal
-from pegasus.infra.fs_posix import PosixFileSystem
+from darq.infra.fs_posix import PosixFileSystem
 
 
 class RealHomeTestCase(unittest.TestCase):

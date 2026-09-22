@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pegasus.ports.filesystem import FileSystem
+from darq.ports.filesystem import FileSystem
 from recording_filesystem import RecordingFileSystem
 
 

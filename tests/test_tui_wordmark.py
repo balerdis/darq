@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.core import identity
-from pegasus.tui import wordmark
+from darq.core import identity
+from darq.tui import wordmark
 
 
 class WordRowsTest(unittest.TestCase):

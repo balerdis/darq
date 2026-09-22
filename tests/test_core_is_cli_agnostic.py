@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent / "src" / "pegasus"
+ROOT = Path(__file__).resolve().parent.parent / "src" / "darq"
 CHECKED_DIRECTORIES = ("core", "ports")
 FORBIDDEN_SUBSTRING = "opencode"
 

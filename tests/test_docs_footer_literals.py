@@ -1,6 +1,6 @@
 """`docs/arquitectura/arquitectura.md` quotes two TUI screen footers verbatim,
 inside fenced code blocks meant to show what a person actually sees. Nothing
-checked that those quotes still match `src/pegasus/tui/view.py` once the real
+checked that those quotes still match `src/darq/tui/view.py` once the real
 footer changed -- a stale description of the models screen's own footer was
 found by hand, not by a failing test (see the models screen's own history).
 
@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-VIEW = REPOSITORY / "src" / "pegasus" / "tui" / "view.py"
+VIEW = REPOSITORY / "src" / "darq" / "tui" / "view.py"
 ARQUITECTURA = REPOSITORY / "docs" / "arquitectura" / "arquitectura.md"
 
 

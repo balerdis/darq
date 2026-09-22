@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus import cli
-from pegasus.core import content as content_module
-from pegasus.tui.navigator import (
+from darq import cli
+from darq.core import content as content_module
+from darq.tui.navigator import (
     Action,
     CliOption,
     GenerationSummary,

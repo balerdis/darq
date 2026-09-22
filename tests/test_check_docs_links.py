@@ -100,7 +100,7 @@ class ResolveTest(unittest.TestCase):
         )
 
     def test_a_link_inside_the_skills_tree_resolves_against_the_skills_root(self):
-        skills_root = ROOT / "src" / "pegasus" / "content" / "skills"
+        skills_root = ROOT / "src" / "darq" / "content" / "skills"
         checker.SKILLS_ROOT = skills_root
         linking_file = skills_root / "some-skill" / "SKILL.md"
         self.assertEqual(
@@ -230,7 +230,7 @@ class SyntheticRepositoryFailureTest(unittest.TestCase):
         self.addCleanup(setattr, checker, "ROOT", self._original_root)
         self.addCleanup(setattr, checker, "SKILLS_ROOT", self._original_skills_root)
         checker.ROOT = self.repo
-        checker.SKILLS_ROOT = self.repo / "src" / "pegasus" / "content" / "skills"
+        checker.SKILLS_ROOT = self.repo / "src" / "darq" / "content" / "skills"
 
     def _commit(self, message: str) -> None:
         _git(self.repo, "add", "-A")

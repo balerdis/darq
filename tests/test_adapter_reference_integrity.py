@@ -16,7 +16,7 @@ is deliberately per-adapter, so nothing forced parity between adapters.
 This module makes that class of gap structurally impossible to ship again: for
 every adapter this release registers, every skills-root path a rendered agent
 body names must resolve to an artifact that very adapter emits. A third
-adapter is covered the day it registers in `pegasus.adapters.available()`,
+adapter is covered the day it registers in `darq.adapters.available()`,
 with nothing here to edit.
 
 Home: not `test_skill_references.py` (that file is a static-source guard over
@@ -35,11 +35,11 @@ import unittest
 from collections import defaultdict
 from pathlib import Path
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import catalog as catalog_module
-from pegasus.core import content as content_module
-from pegasus.core.types import Environment, FileArtifact
+from darq import cli
+from darq.adapters import available
+from darq.core import catalog as catalog_module
+from darq.core import content as content_module
+from darq.core.types import Environment, FileArtifact
 
 HOME = Path("/home/probe")
 ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")

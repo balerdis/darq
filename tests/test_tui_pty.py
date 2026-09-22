@@ -26,13 +26,13 @@ from pathlib import Path
 from dataclasses import replace
 
 import no_network  # noqa: F401  -- importing it is what installs the refusal
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.types import Environment
-from pegasus.infra.fs_posix import PosixFileSystem
-from pegasus.infra.journal_store_file import FileJournalStore
-from pegasus.tui import wordmark
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.types import Environment
+from darq.infra.fs_posix import PosixFileSystem
+from darq.infra.journal_store_file import FileJournalStore
+from darq.tui import wordmark
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "src"
@@ -75,7 +75,7 @@ class _RealTerminalSession:
             sys.path.insert(0, str(SRC))
             os.execv(
                 sys.executable,
-                [sys.executable, "-c", "from pegasus.cli import main; raise SystemExit(main([]))"],
+                [sys.executable, "-c", "from darq.cli import main; raise SystemExit(main([]))"],
             )
         self._buffer = b""
 
@@ -124,7 +124,7 @@ class _RealTerminalSession:
 
 
 class LiveFeedbackTest(unittest.TestCase):
-    """Drives the actual `pegasus.tui.app.run` loop end to end. Any of these
+    """Drives the actual `darq.tui.app.run` loop end to end. Any of these
     would fail against the frozen-screen version: nothing ties the busy
     frame to a particular moment, so with the old loop the first thing this
     ever sees for either wait is the finished result, straight after the
@@ -252,7 +252,7 @@ class LocalUpdateNoticeTest(unittest.TestCase):
         # Backdate the journal's own recorded version, the same fact
         # `session.local_update_notice` reads, so the running binary looks
         # newer than what this installation was made with.
-        store = FileJournalStore(filesystem, home=self.home, pegasus_version=cli.pegasus.__version__)
+        store = FileJournalStore(filesystem, home=self.home, pegasus_version=cli.darq.__version__)
         journal = store.load()
         install = journal_module.install_for(journal, cli_id)
         store.save(journal_module.with_install(journal, replace(install, release={**install.release, "version": "0.0.1"})))

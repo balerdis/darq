@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import unittest
 
-from pegasus.core import model_assignments as module
-from pegasus.core.model_assignments import Entry, ModelAssignmentError, ModelAssignments
-from pegasus.core.model_catalog import Model, ModelCatalog, Provider
-from pegasus.core.types import ModelAssignment
+from darq.core import model_assignments as module
+from darq.core.model_assignments import Entry, ModelAssignmentError, ModelAssignments
+from darq.core.model_catalog import Model, ModelCatalog, Provider
+from darq.core.types import ModelAssignment
 
 
 def assignment(model="claude-sonnet-5", effort=None) -> ModelAssignment:

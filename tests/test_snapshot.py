@@ -4,8 +4,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from pegasus.core import snapshot as snapshot_module
-from pegasus.core.snapshot import Entry, Manifest, SnapshotError
+from darq.core import snapshot as snapshot_module
+from darq.core.snapshot import Entry, Manifest, SnapshotError
 
 AT = "2026-08-14T00:00:00+00:00"
 

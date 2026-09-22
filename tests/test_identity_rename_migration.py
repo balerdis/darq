@@ -20,11 +20,11 @@ import io
 import json
 from dataclasses import replace
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import journal as journal_module
-from pegasus.core.identity import Identity, ReleaseSource
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import journal as journal_module
+from darq.core.identity import Identity, ReleaseSource
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"

@@ -11,7 +11,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from pegasus.ports.filesystem import FileSystemError
+from darq.ports.filesystem import FileSystemError
 from fakes import DEFAULT_DIR_MODE, DEFAULT_MODE, FakeFileSystem
 
 ROOT = Path("/home/probe")

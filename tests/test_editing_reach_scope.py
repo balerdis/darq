@@ -46,7 +46,7 @@ from pathlib import Path
 BASELINE = (
     Path(__file__).resolve().parents[1]
     / "src"
-    / "pegasus"
+    / "darq"
     / "content"
     / "system-prompt"
     / "AGENTS.md"

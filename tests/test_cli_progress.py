@@ -22,11 +22,11 @@ from unittest.mock import patch
 
 from fakes import FakeDownloader
 
-from pegasus import cli
-from pegasus.adapters import available
-from pegasus.core import ownership
-from pegasus.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
-from pegasus.core.types import Environment
+from darq import cli
+from darq.adapters import available
+from darq.core import ownership
+from darq.core.content import Agent, AgentMode, Content, Distribution, Mcp, SESSION_STARTS_IN
+from darq.core.types import Environment
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 AT = "2026-08-14T00:00:00+00:00"
@@ -143,7 +143,7 @@ class PlainInstallProgressTest(RealHomeTestCase):
         self.assertAlmostEqual(halfway.percent, 100 * halfway.done / halfway.total)
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class DependencyProgressTest(RealHomeTestCase):
     """A `download` server is one or two units of work regardless of how long
     the fetch actually takes on the wire -- the whole reason the total has to
@@ -172,7 +172,7 @@ class DependencyProgressTest(RealHomeTestCase):
         self.assertEqual([event.done for event in events], list(range(total + 1)))
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class DownloadByteProgressTest(RealHomeTestCase):
     """The bytes/total fields on `Progress` -- populated only while a
     `download` server's fetch is actually in flight, absent everywhere else.
@@ -217,7 +217,7 @@ class DownloadByteProgressTest(RealHomeTestCase):
         self.assertTrue(all(event.bytes_downloaded is None and event.bytes_total is None for event in events))
 
 
-@patch("pegasus.core.content.load", return_value=PROBE_CONTENT)
+@patch("darq.core.content.load", return_value=PROBE_CONTENT)
 class RetirementProgressTest(RealHomeTestCase):
     """Reinstalling with `mcp=[]` -- the explicit empty selection, `--mcp
     none` at the argv level -- over an installation that recorded `probe` is

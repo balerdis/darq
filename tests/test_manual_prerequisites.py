@@ -41,8 +41,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pegasus import cli
-from pegasus.adapters import available
+from darq import cli
+from darq.adapters import available
 from real_home import RealHomeTestCase as _RealHomeTestCase
 
 REPOSITORY = Path(__file__).resolve().parents[1]

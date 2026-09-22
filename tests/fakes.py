@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Callable
 
 import no_network  # noqa: F401  -- importing it is what installs the refusal
-from pegasus.infra.downloader_http import TIMEOUT_SECONDS as _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS
-from pegasus.ports.downloader import DownloaderError
-from pegasus.ports.filesystem import FileSystemError
-from pegasus.ports.mcp_process import MCPExchange
-from pegasus.ports.npm_installer import NpmInstallerError
+from darq.infra.downloader_http import TIMEOUT_SECONDS as _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS
+from darq.ports.downloader import DownloaderError
+from darq.ports.filesystem import FileSystemError
+from darq.ports.mcp_process import MCPExchange
+from darq.ports.npm_installer import NpmInstallerError
 
 DEFAULT_MODE = 0o644
 DEFAULT_DIR_MODE = 0o755

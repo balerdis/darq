@@ -12,8 +12,8 @@ import unittest
 
 from fakes import FakeMCPProcess
 
-from pegasus.core import mcp_handshake
-from pegasus.ports.mcp_process import MCPExchange
+from darq.core import mcp_handshake
+from darq.ports.mcp_process import MCPExchange
 
 COMMAND = ("fixture", "--stdio")
 
