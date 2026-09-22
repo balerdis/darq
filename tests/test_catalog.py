@@ -570,7 +570,12 @@ class ShippedCatalogTest(unittest.TestCase):
         # `implementation-craft.md` and `sdd-applicability.md` in that same
         # lazy-loaded home. No settings key of its own, for the same reason
         # every other reference in that list has none.
-        self.assertEqual((len(files), len(keys)), (98, 27))
+        # 103, not 98: `estandar-versiones-asi` and `laravel-security` are the
+        # two institutional domain skills DARQ adds on top of the shared
+        # engine content -- three files for the first (`SKILL.md` plus its two
+        # references) and two for the second (`SKILL.md` plus its one
+        # reference). Skills, not agents, so they add no config-key entry.
+        self.assertEqual((len(files), len(keys)), (103, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:

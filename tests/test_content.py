@@ -1376,7 +1376,10 @@ class ShippedContentTest(unittest.TestCase):
                 )
 
     def test_skills_load(self):
-        self.assertEqual(len(self.content.skills), 25)
+        # 27, not 25: `estandar-versiones-asi` and `laravel-security` are the
+        # two institutional DGISIS skills DARQ adds on top of the shared
+        # engine content -- see docs/contrato-inclusion.md.
+        self.assertEqual(len(self.content.skills), 27)
 
     def test_commands_load(self):
         self.assertEqual(len(self.content.commands), 16)
