@@ -1,5 +1,7 @@
 # DARQ: núcleo agnóstico y adapters por CLI
 
+> **Nota de procedencia.** DARQ es un fork de [Pegasus Harness](https://github.com/balerdis/pegasus-harness): hasta el 2026-09-22 fue una distribución que consumía un release fijado del motor Pegasus, y desde esa fecha tiene su propia copia completa bajo `src/darq/`. Este documento se escribió, y creció durante años, describiendo ese motor — el rediseño hexagonal v4, las unidades numeradas, la serie de releases hasta 5.8.0 y lo que sigue en "Lo que se agregó después del corte" narran decisiones tomadas en el desarrollo de **Pegasus**, no de DARQ, aunque el texto heredado del rebrand anterior las nombre como si lo fueran. Se dejan así a propósito — reescribir 1560 líneas de historia técnica no agrega valor — pero conviene tenerlo presente al leer cualquier frase que diga "DARQ decidió" sobre una decisión de diseño del núcleo: esa decisión es de Pegasus, y DARQ la heredó junto con el resto del motor. Lo que sí es propio de DARQ desde el fork es su copia del código, su `identity.json`, su numeración de versión y cualquier cambio institucional que se agregue de acá en más. Ver `docs/adr/0005-fork-no-distribucion.md`.
+
 DARQ separa **qué distribuye** (contenido común a cualquier CLI de agentes) de **cómo lo materializa** (un adapter por CLI). El motor deja de conocer nombres de CLIs: recibe contenido del núcleo, se lo da al adapter, y el adapter decide dónde va y con qué forma. Fue un rediseño con ruptura de compatibilidad respecto de v3.1.x, entregado como v4 y continuado desde entonces.
 
 Este documento se escribió para ese rediseño y siguió creciendo con el producto. El corte numerado de unidades es el plan de v4 y su ejecución, y está cerrado; lo que se agregó después vive en su propia sección, y no lleva número porque no salió de un plan sino de instalaciones reales. Al 5.8.0 lo que sigue acá es la arquitectura vigente, no un registro histórico — cuando una parte deja de serlo, se corrige o se anota como deuda, nunca se deja parada.
@@ -1349,11 +1351,14 @@ Una trampa propia de este formato: el rebrandeo de una distribución sustituye s
 
 ## Identidad de producto y raíz de composición
 
-Hasta acá el motor era, literalmente, DARQ: el nombre, el wordmark, el directorio de datos y la
+Hasta acá el motor era, literalmente, Pegasus: el nombre, el wordmark, el directorio de datos y la
 fuente de auto-actualización estaban escritos como literales en `cli.py`, `core/upgrade.py` y
 `tui/wordmark.py`. Eso hacía imposible construir un binario con otro nombre sin tocar el motor, y
 tocar el motor para eso es exactamente lo que este cambio existe para evitar — cualquier
-organización tiene que poder producir su propia distribución sin bifurcar la fuente.
+organización tiene que poder producir su propia distribución sin bifurcar la fuente. (Esa capacidad
+genérica es la que, más tarde, DARQ dejó de usar como distribución: desde el fork del 2026-09-22
+mantiene su propia copia del motor en vez de construirse contra un release fijado — ver la nota de
+procedencia al inicio de este documento.)
 
 **La identidad es un dato, nunca una rama de código.** `src/darq/identity.json` declara
 `product_id`, `display_name`, `program_name`, `wordmark_words` y un bloque `release` (plantilla de
@@ -1541,6 +1546,8 @@ Tests que fallan si el diseño se degrada:
 
 ## Próximo paso
 
+> Esta sección narra historia de versión del motor Pegasus (4.0.0 a 5.8.0 y lo que siguió), de antes de que DARQ existiera como fork — ver la nota de procedencia al inicio del documento. Se deja con los nombres de versión tal como se escribió entonces.
+
 El corte numerado quedó completo y **4.0.0 se publicó**: tag, wheel, evidencia y una instalación hecha de punta a punta en una cuenta Linux limpia, bajando el release desde donde lo baja cualquiera.
 
 **4.1.0 cerró lo que 4.0.0 dejó anotado.** Los cuatro servidores MCP se instalan: a `context7` y `engram` se suman `cbm` y `playwright`.
@@ -1551,7 +1558,7 @@ También se cerraron el esfuerzo de razonamiento, que se guardaba sin llegar nun
 
 Y salió del árbol lo que quedaba de la distribución de v3: el binario vendorizado de 37 MB que el propio diseño prohíbe, y los manifiestos que lo describían.
 
-**Después de 4.1.0, DARQ se quedó sin dependencias de terceros.** Con eso resuelto, el venv privado dejó de aislar nada, así que el punto de entrada cambió de shim más venv a un único `zipapp` con shebang y bit ejecutable (`tools/build_zipapp.py`), acompañado de su `.sha256`. Instalar pasa a ser bajar dos archivos, verificar el checksum y dejar el ejecutable en el PATH — sin wheel, sin `pip install`, sin `darq setup`. Esto sólo era viable porque, en paralelo, el contenido y los assets de los adapters aprendieron a leerse también desde adentro de un zip.
+**Después de 4.1.0, el motor se quedó sin dependencias de terceros.** Con eso resuelto, el venv privado dejó de aislar nada, así que el punto de entrada cambió de shim más venv a un único `zipapp` con shebang y bit ejecutable (`tools/build_zipapp.py`), acompañado de su `.sha256`. Instalar pasa a ser bajar dos archivos, verificar el checksum y dejar el ejecutable en el PATH — sin wheel, sin `pip install`, sin `darq setup`. Esto sólo era viable porque, en paralelo, el contenido y los assets de los adapters aprendieron a leerse también desde adentro de un zip.
 
 **De 5.1.0 a 5.8.0 el producto dejó de crecer por plan y empezó a crecer por evidencia.** Nueve releases, y casi ninguna nació de una unidad: nacieron de mirar una instalación viva y encontrar que el producto prometía algo que no cumplía. La línea de base `{"*": "deny"}` negaba el `skill` que pone el inventario delante de un agente, y también el `external_directory` sin el cual ningún agente podía leer las skills que DARQ le instala; el contrato común de engram no llegaba a nadie porque ningún agente declaraba el servidor; los párrafos de un MCP quedaban en el prompt aunque el servidor no se hubiera elegido; el comodín de un grant alcanzaba lo que destruye estado; `doctor` afirmaba que no había servidores configurados en una máquina que tenía seis. Todo eso está en "Lo que se agregó después del corte" y en las deudas resueltas.
 

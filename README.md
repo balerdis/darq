@@ -4,6 +4,12 @@ DARQ es un conjunto open source con licencia MIT de prompts, agentes, skills, co
 
 DARQ es aditivo. Revisa lo que ya existe, muestra un plan y crea solamente los artifacts seleccionados que faltan. No toma propiedad de una instalación existente del CLI elegido, su configuración ni sus archivos.
 
+## De dónde viene
+
+DARQ nace como un **fork de [Pegasus Harness](https://github.com/balerdis/pegasus-harness)**, orientado a incorporar y evolucionar las necesidades institucionales de la DGISIS (Dirección General de Infraestructura y Sistemas). Pegasus sigue existiendo como producto independiente y genérico, sin ninguna atadura a esta distribución.
+
+Al día de hoy DARQ sigue de cerca la evolución genérica de Pegasus y puede incorporar sus mejoras — el traslado es manual, caso por caso, mediante merge, cherry-pick o port, sin ninguna automatización. Con el tiempo ambas bases pueden divergir progresivamente a medida que cada una evolucione según sus propias necesidades.
+
 ## Instalación
 
 DARQ soporta hoy Linux, con OpenCode y Claude Code como clientes. El mismo comando de siempre
