@@ -1,7 +1,7 @@
 """The content core renders into every CLI adapter identically -- so it must
 name none of them.
 
-`src/darq/content/` is the half of Pegasus every adapter renders; a file in
+`src/darq/content/` is the half of DARQ every adapter renders; a file in
 there that says "OpenCode" is prose leaking a fact the architecture already
 promises not to depend on. The forbidden names are derived from the adapter
 registry itself (`darq.adapters.available()`), not hardcoded, so this guard

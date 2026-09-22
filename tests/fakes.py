@@ -244,7 +244,7 @@ class FakeFileSystem:
     # --- Locating ---
 
     def data_dir(self, home: Path) -> Path:
-        return home / ".local" / "share" / "pegasus-harness"
+        return home / ".local" / "share" / "darq"
 
     def bin_dir(self, home: Path) -> Path:
         return home / ".local" / "bin"

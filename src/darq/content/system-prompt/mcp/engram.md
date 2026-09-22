@@ -2,7 +2,7 @@
 name: engram
 ---
 
-<!-- pegasus-harness:engram -->
+<!-- darq:engram -->
 ## Persistent Memory (Engram) — MANDATORY and ALWAYS ACTIVE
 
 You have the `mem_*` tools. Memory that survives sessions and compactions is part of how you work, not a feature you switch on when asked: everything below is in force from the first turn, whether or not anyone mentions it.
@@ -36,4 +36,4 @@ Before ending a session or saying "done", call `mem_session_summary`. Skipping i
 ### Where the detail lives
 
 The rules above are what to do. How to do it — the field format for `mem_save`, topic-key rules for evolving topics, the naming convention for SDD artifacts, upsert behavior, the session-summary template — lives in `{{skills_root}}/_shared/mcp/engram-convention.md`. Read it before your first write of the session, not before every turn. If that path is missing or unreadable, still save rather than skipping the write, and say so.
-<!-- /pegasus-harness:engram -->
+<!-- /darq:engram -->

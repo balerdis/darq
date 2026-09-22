@@ -1,18 +1,18 @@
-"""`pegasus directory grant` on a path the deny floor shadows reports success
+"""`darq directory grant` on a path the deny floor shadows reports success
 and is a permanent no-op.
 
 `EXTERNAL_DIRECTORY_DENY_FLOOR` (`render.py`) is written last into every
 agent's rendered `external_directory` map, so the runtime's last-match
 resolution always lands on it for the five directory names it names. A
-person can still run `pegasus directory grant --cli opencode /home/me/.ssh`:
+person can still run `darq directory grant --cli opencode /home/me/.ssh`:
 `content.validate_granted_directory` accepts it (it names no glob
 metacharacter, is absolute, is not the filesystem root, the CLI's own
-configuration directory, or Pegasus's own data directory), and it is written
+configuration directory, or DARQ's own data directory), and it is written
 and reported as granted -- but it can never take effect, because the floor
 always wins the match regardless of where a grant was written.
 
 `render.deny_floor_shadows` is the predicate that answers this ahead of time,
-so `pegasus directory grant` can warn instead of silently doing nothing. It
+so `darq directory grant` can warn instead of silently doing nothing. It
 must match the runtime's own semantics -- `packages/core/src/util/wildcard.ts`
 -- not a path-component proxy (`".ssh" in Path(p).parts`), which would flag a
 directory merely named `sshfoo` or miss the pattern's real shape.

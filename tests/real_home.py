@@ -27,11 +27,11 @@ class RealHomeTestCase(unittest.TestCase):
 
     def setUp(self):
         if os.geteuid() == 0:
-            self.skipTest("root is not refused by permission bits, and Pegasus refuses to install as root")
+            self.skipTest("root is not refused by permission bits, and DARQ refuses to install as root")
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
-        self.filesystem = PosixFileSystem(product_id="pegasus-harness")
+        self.filesystem = PosixFileSystem(product_id="darq")
 
 
 def _scratch_root() -> str | None:

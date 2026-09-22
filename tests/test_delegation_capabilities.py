@@ -1,7 +1,7 @@
 """A delegating agent needs to know what its target can actually do.
 
-An incident showed the gap: `pegasus-orchestrator` sent git shell commands to
-`pegasus-explorer` when it had no `bash` tool, then a browser-measurement brief
+An incident showed the gap: `darq-orchestrator` sent git shell commands to
+`darq-explorer` when it had no `bash` tool, then a browser-measurement brief
 to an agent with no Playwright MCP. Nothing told the delegator what the target
 could actually reach, so it wrote a brief demanding capabilities the target
 never had.
@@ -39,17 +39,17 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS_DIR = ROOT / "src" / "darq" / "content" / "agents"
 
 HOME = Path("/home/probe")
-ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
 IDENTITY = cli.default_identity()
 
 #: Today's shipped set, pinned as a drift guard: a seventh delegating agent
 #: added tomorrow must fail this pin until its body carries the pointer too.
 EXPECTED_QUALIFYING_AGENTS = frozenset(
     {
-        "king-pegasus",
-        "pegasus-general",
-        "pegasus-implementer",
-        "pegasus-orchestrator",
+        "arquitecto-darq",
+        "darq-general",
+        "darq-implementer",
+        "darq-orchestrator",
         "sdd-explore",
         "sdd-verify",
     }
@@ -164,7 +164,7 @@ class RespectsMcpPruningTest(unittest.TestCase):
 
     def test_a_deselected_server_does_not_appear_anywhere_in_the_generated_file(self):
         full_content = content_module.load()
-        # `jira` reaches `pegasus-explorer`, a real delegation target, in the
+        # `jira` reaches `darq-explorer`, a real delegation target, in the
         # shipped content -- see `src/darq/content/mcp/jira.md`. Selecting
         # only `context7` must prune it away before this file is ever built.
         selected = content_module.select_mcp(full_content, ["context7"])
@@ -215,7 +215,7 @@ class PointerAndArtifactPathsAgreeTest(unittest.TestCase):
         artifact = _find_delegation_artifact((artifacts, layout, None))
         expected_pointer = f"{{{{skills_root}}}}/{content_module.delegation_capabilities_path().as_posix()}"
 
-        orchestrator_body = (AGENTS_DIR / "pegasus-orchestrator.md").read_text(encoding="utf-8")
+        orchestrator_body = (AGENTS_DIR / "darq-orchestrator.md").read_text(encoding="utf-8")
         self.assertIn(expected_pointer, orchestrator_body)
         # The artifact really exists at the exact path the pointer names, relative to
         # the layout's own skills root -- not two hand-typed strings that merely agree.
@@ -282,7 +282,7 @@ class WithheldToolsAreDerivedNotSnapshottedTest(unittest.TestCase):
 
     Mutation run: start from the real shipped content, select only `cbm`
     (whose descriptor declares `withheld_tools: [delete_project,
-    ingest_traces]` and reaches `pegasus-explorer`, a real delegation
+    ingest_traces]` and reaches `darq-explorer`, a real delegation
     target), render, and observe both withheld tools present. Then mutate
     the in-memory `cbm` descriptor's `withheld_tools` to a different pair of
     made-up names and re-render: the old names must disappear and the new

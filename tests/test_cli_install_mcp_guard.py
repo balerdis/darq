@@ -6,7 +6,7 @@ because every `install` names its whole selection explicitly on the command
 line" -- true and useful for a *first* install, but deadly for a *repeat*
 one: an operator reinstalling for an unrelated reason (a new agent, a config
 drift fix) who forgets to repeat `--mcp` was, before this guard, silently
-telling Pegasus to tear down every MCP server, convention file and binding
+telling DARQ to tear down every MCP server, convention file and binding
 it had recorded, with nothing on screen suggesting anything happened -- the
 run still reports success, because from `install`'s point of view retiring
 an unnamed server is not a failure, it is the documented contract working

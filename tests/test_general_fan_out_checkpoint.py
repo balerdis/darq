@@ -1,4 +1,4 @@
-"""`pegasus-general`'s fan-out permission becomes a checkpoint with a moment.
+"""`darq-general`'s fan-out permission becomes a checkpoint with a moment.
 
 The permission used to be one long sentence at the end of a section, phrased as
 a passive escape ("When your own brief divides into genuinely independent parts,
@@ -31,7 +31,7 @@ CONTENT = ROOT / "src" / "darq" / "content"
 AGENTS = CONTENT / "agents"
 SKILLS = CONTENT / "skills"
 
-GENERAL = AGENTS / "pegasus-general.md"
+GENERAL = AGENTS / "darq-general.md"
 CRITERION = SKILLS / "_shared" / "sub-delegation-criterion.md"
 CRITERION_REFERENCE = "_shared/sub-delegation-criterion.md"
 
@@ -41,7 +41,7 @@ OFFLOADING_SECTION = "Fan-out is help, never offloading"
 
 #: Word count, not line count. A line ceiling is defeated by reflow alone --
 #: `tests/test_orchestrator_routing.py` proves this in this same repository on
-#: `pegasus-orchestrator.md`, where hand-wrapping (or collapsing) a bullet
+#: `darq-orchestrator.md`, where hand-wrapping (or collapsing) a bullet
 #: moves the line count without moving a single word. Word count cannot be
 #: bought that way: joining or splitting physical lines never changes how many
 #: whitespace-separated tokens the file holds.
@@ -137,25 +137,25 @@ class WidenedTargetsTest(unittest.TestCase):
 
     def test_the_targets_are_the_two_readers_plus_itself(self):
         self.assertEqual(
-            self.by_name["pegasus-general"].may_delegate_to,
-            ("pegasus-general", "pegasus-explorer", "pegasus-verifier"),
+            self.by_name["darq-general"].may_delegate_to,
+            ("darq-general", "darq-explorer", "darq-verifier"),
         )
 
     def test_every_target_is_a_shipped_agent(self):
-        for name in self.by_name["pegasus-general"].may_delegate_to:
+        for name in self.by_name["darq-general"].may_delegate_to:
             with self.subTest(target=name):
                 self.assertIn(name, self.by_name)
 
     def test_it_does_not_hand_its_writing_to_another_writer(self):
         """Gate 2's hand-off: the general already writes, so reaching a second
         writer transfers the work rather than distributing it."""
-        self.assertNotIn("pegasus-implementer", self.by_name["pegasus-general"].may_delegate_to)
+        self.assertNotIn("darq-implementer", self.by_name["darq-general"].may_delegate_to)
 
 
 class BodyStaysShortTest(unittest.TestCase):
     def test_the_body_did_not_become_a_second_document(self):
         words = len(GENERAL.read_text(encoding="utf-8").split())
-        self.assertLessEqual(words, GENERAL_WORD_CEILING, "pegasus-general.md grew past its budget")
+        self.assertLessEqual(words, GENERAL_WORD_CEILING, "darq-general.md grew past its budget")
 
 
 if __name__ == "__main__":

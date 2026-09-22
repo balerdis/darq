@@ -34,7 +34,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-REPO = "balerdis/pegasus-harness"
+REPO = "balerdis/darq"
 DOWNLOAD_TAGGED = "https://github.com/{repo}/releases/download/{tag}/{name}"
 DOWNLOAD_LATEST = "https://github.com/{repo}/releases/latest/download/{name}"
 LATEST_RELEASE_API = "https://api.github.com/repos/{repo}/releases/latest"
@@ -45,7 +45,7 @@ Fetch = Callable[[str], bytes]
 
 def default_fetch(url: str) -> bytes:
     """The real network call. Tests never use this -- they inject a fake instead."""
-    request = urllib.request.Request(url, headers={"User-Agent": "pegasus-harness-release-check"})
+    request = urllib.request.Request(url, headers={"User-Agent": "darq-release-check"})
     with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_SECONDS) as response:  # noqa: S310
         return response.read()
 

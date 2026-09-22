@@ -73,17 +73,17 @@ class NestedMappingTest(unittest.TestCase):
         )
 
     def test_nested_mapping_may_contain_a_boolean(self):
-        text = "metadata:\n  author: pegasus-balerdis\n  version: \"3.0\"\n  delegate_only: true\n"
+        text = "metadata:\n  author: darq-balerdis\n  version: \"3.0\"\n  delegate_only: true\n"
         self.assertEqual(
             frontmatter.parse(text, "<test>"),
-            {"metadata": {"author": "pegasus-balerdis", "version": "3.0", "delegate_only": True}},
+            {"metadata": {"author": "darq-balerdis", "version": "3.0", "delegate_only": True}},
         )
 
 
 class MultiFieldTest(unittest.TestCase):
     def test_parses_a_full_descriptor(self):
         text = (
-            "name: king-pegasus\n"
+            "name: arquitecto-darq\n"
             "description: The teaching-architect voice\n"
             "mode: primary\n"
             "requires_tools: [read]\n"
@@ -92,7 +92,7 @@ class MultiFieldTest(unittest.TestCase):
         self.assertEqual(
             frontmatter.parse(text, "<test>"),
             {
-                "name": "king-pegasus",
+                "name": "arquitecto-darq",
                 "description": "The teaching-architect voice",
                 "mode": "primary",
                 "requires_tools": ["read"],

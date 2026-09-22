@@ -1,10 +1,10 @@
 """End-to-end regression: the build recipe a distribution actually follows, locked in as a test.
 
-This locks in what `sdd/pegasus-distributions/build-recipe-verification` already proved by hand:
+This locks in what `sdd/darq-distributions/build-recipe-verification` already proved by hand:
 extraction tolerates the prepended shebang (`zipfile.is_zipfile()` is true, all entries extract
 cleanly), extract-then-rebuild-unmodified reproduces the byte-identical published SHA-256, the
-rebuilt binary runs and reports its own identity (never Pegasus's), and overlaid content genuinely
-resolves -- a broken `agents/king-pegasus.md` fails a real install on that exact file, while the
+rebuilt binary runs and reports its own identity (never DARQ's), and overlaid content genuinely
+resolves -- a broken `agents/arquitecto-darq.md` fails a real install on that exact file, while the
 unmodified control build succeeds.
 
 Uses `ACME` throughout: an obviously fictional name, never a real organization's, so nothing here
@@ -85,9 +85,9 @@ class DistributionBuildRecipeTest(unittest.TestCase):
         )
 
     def test_extract_rebuild_and_overlay_recipe(self):
-        # 1. Control build: Pegasus's own identity, from the real pinned source -- stands in for
+        # 1. Control build: DARQ's own identity, from the real pinned source -- stands in for
         # a published release artifact.
-        control = self.root / "control" / "pegasus"
+        control = self.root / "control" / "darq"
         result = _build(REAL_SOURCE, control, REAL_IDENTITY)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         control_sha256 = hashlib.sha256(control.read_bytes()).hexdigest()
@@ -105,7 +105,7 @@ class DistributionBuildRecipeTest(unittest.TestCase):
         # 3. Extract-then-rebuild-unmodified reproduces the exact published SHA-256: `_normalize`
         # pins mtime/mode after staging, so the noise extraction introduces is erased by
         # construction.
-        rebuilt = self.root / "rebuilt" / "pegasus"
+        rebuilt = self.root / "rebuilt" / "darq"
         result = _build(extracted_package, rebuilt, extracted_package / "identity.json")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         rebuilt_sha256 = hashlib.sha256(rebuilt.read_bytes()).hexdigest()
@@ -145,27 +145,27 @@ class DistributionBuildRecipeTest(unittest.TestCase):
         result = self._run_binary(acme, "--version", home=acme_home)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("acme", result.stdout.lower())
-        self.assertNotIn("pegasus", result.stdout.lower())
+        self.assertNotIn("darq", result.stdout.lower())
 
         # 7. A real (non-dry-run) install creates its own data directory, keyed by its own
-        # `product_id` -- never Pegasus's.
+        # `product_id` -- never DARQ's.
         result = self._run_binary(acme, "install", "--cli", "opencode", home=acme_home)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertTrue((acme_home / ".local" / "share" / "acme-widget").exists())
-        self.assertFalse((acme_home / ".local" / "share" / "pegasus-harness").exists())
+        self.assertFalse((acme_home / ".local" / "share" / "darq").exists())
 
         # 8. Overlay a genuine content difference that breaks an existing file's frontmatter --
         # exactly the overlay the verified recipe used -- and rebuild ACME from it.
-        king_pegasus = extracted_package / "content" / "agents" / "king-pegasus.md"
-        original_king_pegasus = king_pegasus.read_text(encoding="utf-8")
-        king_pegasus.write_text(
-            "overlay marker breaking frontmatter\n" + original_king_pegasus, encoding="utf-8"
+        king_darq = extracted_package / "content" / "agents" / "arquitecto-darq.md"
+        original_king_darq = king_darq.read_text(encoding="utf-8")
+        king_darq.write_text(
+            "overlay marker breaking frontmatter\n" + original_king_darq, encoding="utf-8"
         )
         acme_overlaid = self.root / "acme-overlaid" / "ACME"
         result = _build(extracted_package, acme_overlaid, acme_identity)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-        # 9. The overlaid content genuinely resolves: the broken `king-pegasus.md` fails this
+        # 9. The overlaid content genuinely resolves: the broken `arquitecto-darq.md` fails this
         # exact install, naming that exact file -- while the unmodified control build succeeds
         # on the same command.
         overlaid_home = self.root / "acme-overlaid-home"
@@ -174,7 +174,7 @@ class DistributionBuildRecipeTest(unittest.TestCase):
             acme_overlaid, "install", "--cli", "opencode", "--dry-run", home=overlaid_home
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("king-pegasus.md", result.stdout + result.stderr)
+        self.assertIn("arquitecto-darq.md", result.stdout + result.stderr)
 
         control_home = self.root / "control-home"
         (control_home / ".config" / "opencode").mkdir(parents=True)
@@ -267,7 +267,7 @@ _AGENT_FRONTMATTER_FIELD = re.compile(r'^agent:\s*"([^"]+)"\s*$', re.MULTILINE)
 
 class DistributionOrchestratorRenameTest(unittest.TestCase):
     """Regression test for the bug this locks in: `AGENT_FOR_ROLE` used to
-    hardcode `"pegasus-orchestrator"` as the `agent:` field for every command
+    hardcode `"darq-orchestrator"` as the `agent:` field for every command
     with `runs_as: orchestrator`, independently of `SESSION_STARTS_IN` --
     content's own declared name for the agent a session starts in. A
     distribution that renamed its orchestrator in content still got that
@@ -294,26 +294,26 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
     def test_no_installed_command_names_an_agent_absent_from_the_installed_set(self):
         # 1. A private copy of the real source, renaming its orchestrator in
         # content only -- never a change to any engine module.
-        renamed_source = self.root / "renamed-source" / "pegasus"
+        renamed_source = self.root / "renamed-source" / "darq"
         shutil.copytree(REAL_SOURCE, renamed_source)
         session_start = renamed_source / "content" / "session-start.txt"
-        self.assertEqual(session_start.read_text(encoding="utf-8").strip(), "pegasus-orchestrator")
+        self.assertEqual(session_start.read_text(encoding="utf-8").strip(), "darq-orchestrator")
         session_start.write_text("acme-orchestrator\n", encoding="utf-8")
 
-        orchestrator_agent = renamed_source / "content" / "agents" / "pegasus-orchestrator.md"
+        orchestrator_agent = renamed_source / "content" / "agents" / "darq-orchestrator.md"
         original = orchestrator_agent.read_text(encoding="utf-8")
-        self.assertIn("name: pegasus-orchestrator\n", original)
+        self.assertIn("name: darq-orchestrator\n", original)
         renamed_agent = renamed_source / "content" / "agents" / "acme-orchestrator.md"
         orchestrator_agent.unlink()
         renamed_agent.write_text(
-            original.replace("name: pegasus-orchestrator\n", "name: acme-orchestrator\n", 1), encoding="utf-8"
+            original.replace("name: darq-orchestrator\n", "name: acme-orchestrator\n", 1), encoding="utf-8"
         )
 
         # An agent-specific MCP override section is keyed by agent name in its
         # own filename (`<id>@<agent>.md`) -- it has to move with the rename
         # too, or the loader rejects it as an override for an agent that no
         # longer ships.
-        override = renamed_source / "content" / "agents" / "mcp" / "cbm@pegasus-orchestrator.md"
+        override = renamed_source / "content" / "agents" / "mcp" / "cbm@darq-orchestrator.md"
         override.rename(renamed_source / "content" / "agents" / "mcp" / "cbm@acme-orchestrator.md")
 
         # An MCP grant is declared by the server, not the agent: each
@@ -324,9 +324,9 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
         # the distribution performs, never the engine's original names.
         for descriptor in (renamed_source / "content" / "mcp").glob("*.md"):
             text = descriptor.read_text(encoding="utf-8")
-            if "pegasus-orchestrator" in text:
+            if "darq-orchestrator" in text:
                 descriptor.write_text(
-                    text.replace("pegasus-orchestrator", "acme-orchestrator"), encoding="utf-8"
+                    text.replace("darq-orchestrator", "acme-orchestrator"), encoding="utf-8"
                 )
 
         # 2. Build ACME from that renamed source.
@@ -345,7 +345,7 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
         settings = json.loads((home / ".config" / "opencode" / "opencode.json").read_text(encoding="utf-8"))
         installed_agents = set(settings.get("agent", {}))
         self.assertIn("acme-orchestrator", installed_agents)
-        self.assertNotIn("pegasus-orchestrator", installed_agents)
+        self.assertNotIn("darq-orchestrator", installed_agents)
 
         # 4. The assertion that would have caught the original bug: no
         # rendered command's `agent:` field may name an agent absent from the
@@ -375,8 +375,8 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
         self.assertTrue(checked_any, "fixture drifted: no installed command declares an agent field")
 
         # 5. A command that runs as the orchestrator names ACME's own agent in
-        # its rendered `agent:` field -- never Pegasus's. (The command body's
-        # own prose still says "pegasus-orchestrator" here: that is
+        # its rendered `agent:` field -- never DARQ's. (The command body's
+        # own prose still says "darq-orchestrator" here: that is
         # content-authoring debt in the shipped command bodies, orthogonal to
         # this bug, which is only about the rendered frontmatter field.)
         sdd_apply = (commands_dir / "sdd-apply.md").read_text(encoding="utf-8")
@@ -386,7 +386,7 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
 
         # 6. The sibling defect this same rename exposes: the notifier plugin
         # (`own_artifacts`, not `render_command`) used to hardcode
-        # `"pegasus-orchestrator"` as a TypeScript literal, independently of
+        # `"darq-orchestrator"` as a TypeScript literal, independently of
         # both `SESSION_STARTS_IN` and this fix's own `_orchestrator_name`.
         # Installed end to end, it must carry ACME's own orchestrator name and
         # never the old literal.
@@ -394,7 +394,7 @@ class DistributionOrchestratorRenameTest(unittest.TestCase):
             home / ".config" / "opencode" / "plugins" / "acme-orchestrator-notifier.ts"
         ).read_text(encoding="utf-8")
         self.assertIn('"acme-orchestrator"', notifier)
-        self.assertNotIn("pegasus-orchestrator", notifier)
+        self.assertNotIn("darq-orchestrator", notifier)
 
 
 if __name__ == "__main__":

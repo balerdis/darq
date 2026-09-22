@@ -40,7 +40,7 @@ from real_home import RealHomeTestCase as _RealHomeTestCase
 AT = "2026-08-14T00:00:00+00:00"
 CLI = "claudecode"
 NO_BINARY = {"PATH": ""}
-ORCHESTRATOR_AGENT = "pegasus-orchestrator"
+ORCHESTRATOR_AGENT = "darq-orchestrator"
 
 
 def cli_entry(report, cli_id: str = CLI):
@@ -113,7 +113,7 @@ class InstallTest(RealHomeTestCase):
         command_files = sorted(p.name for p in layout.commands_dir.glob("*.md"))
         self.assertTrue(command_files, "expected at least one rendered slash command")
 
-        system_prompt = layout.config_dir / "rules" / "pegasus.md"
+        system_prompt = layout.config_dir / "rules" / "darq.md"
         self.assertTrue(system_prompt.is_file())
         self.assertGreater(len(system_prompt.read_bytes()), 0)
 
@@ -170,11 +170,11 @@ class DoctorMcpTest(RealHomeTestCase):
     recorded `mcp_bindings` entry either.
 
     Before `CliAdapter.writes_mcp_config_key` existed, `_bound_checks` read
-    that shape as "granted but not installed by Pegasus" regardless of
-    adapter, which made a real install of five servers Pegasus itself
+    that shape as "granted but not installed by DARQ" regardless of
+    adapter, which made a real install of five servers DARQ itself
     obtained and administers (`cbm`, `context7`, `engram`, `jira`,
     `playwright`) get reported as five servers the user administers, with a
-    remedy command telling them to re-bind servers Pegasus already owns.
+    remedy command telling them to re-bind servers DARQ already owns.
 
     `context7` and `jira` stand in for the five here: both ship
     `distribution: remote` (see `content/mcp/context7.md`,
@@ -200,7 +200,7 @@ class DoctorMcpTest(RealHomeTestCase):
 
     def test_a_genuine_binding_is_still_reported_as_administered(self):
         """The false positive above must not take the true positive with it:
-        `--mcp id=key` still asks Pegasus to grant tools for a server the
+        `--mcp id=key` still asks DARQ to grant tools for a server the
         user runs and administers themselves, and that fact is still worth
         reporting."""
         self.install("--mcp", "cbm=codebase-memory-mcp")
@@ -255,5 +255,5 @@ class DriftTest(RealHomeTestCase):
         _, report = self.run_cli("doctor")
 
         entry = cli_entry(report)
-        self.assertIn("agent:pegasus-orchestrator", entry["drifted"])
+        self.assertIn("agent:darq-orchestrator", entry["drifted"])
         self.assertFalse(entry["missing"])

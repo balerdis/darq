@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Instala Pegasus en una cuenta Linux limpia: nvm + Node LTS, el CLI que elijas
-# y el binario de pegasus, en ese orden, y deja el resultado listo para trabajar.
+# Instala DARQ en una cuenta Linux limpia: nvm + Node LTS, el CLI que elijas
+# y el binario de darq, en ese orden, y deja el resultado listo para trabajar.
 #
 # Pensado para correrse así, como asset de un release (bash lee la tubería de
 # a poco, por eso todo el script vive adentro de funciones — ver el comentario
@@ -17,7 +17,7 @@
 #   ./install.sh --verify            informa el estado, no cambia nada
 #   ./install.sh --yes               salta la confirmación
 #   ./install.sh --no-run            instala lo que falte, pero no lanza nada al final; dice qué habría lanzado
-#   ./install.sh --bin-dir DIR       instala el binario de pegasus en DIR en vez de ~/.local/bin
+#   ./install.sh --bin-dir DIR       instala el binario de darq en DIR en vez de ~/.local/bin
 #   ./install.sh --opencode-version X   si el CLI elegido es OpenCode, fija la versión a instalar
 #   ./install.sh --opencode-ultima      si el CLI elegido es OpenCode, instala la última versión publicada
 #
@@ -60,10 +60,10 @@ trap 'echo "ERROR interno del instalador: falló \"$BASH_COMMAND\" en la línea 
 #   PRODUCT_RELEASE_BASE_URL_DEFAULT    la ruta "latest" de identity.release,
 #                                        usada cuando nadie fija la variable
 #                                        de entorno derivada (ver BASE_URL)
-PRODUCT_ID='pegasus-harness'
-PRODUCT_DISPLAY_NAME='Pegasus'
-PRODUCT_PROGRAM_NAME='pegasus'
-PRODUCT_RELEASE_BASE_URL_DEFAULT='https://github.com/balerdis/pegasus-harness/releases/latest/download'
+PRODUCT_ID='darq'
+PRODUCT_DISPLAY_NAME='DARQ'
+PRODUCT_PROGRAM_NAME='darq'
+PRODUCT_RELEASE_BASE_URL_DEFAULT='https://github.com/balerdis/darq/releases/latest/download'
 # ============================================================================
 
 # Catálogo de CLIs que este motor sabe instalar, generado por

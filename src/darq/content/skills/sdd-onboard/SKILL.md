@@ -5,7 +5,7 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
   version: "1.0"
   delegate_only: false
 ---

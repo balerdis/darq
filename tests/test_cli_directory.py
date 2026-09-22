@@ -1,13 +1,13 @@
-"""`pegasus directory grant|revoke`: working directories the person administers.
+"""`darq directory grant|revoke`: working directories the person administers.
 
 `sdd-verify`, a sub-agent, was pointed at a working directory outside its own
 worktree and refused outright by the runtime's `external_directory`
-permission -- reported from real use, not from the suite. Pegasus had no
+permission -- reported from real use, not from the suite. DARQ had no
 supported way for a person to hand an agent its own working directory: it
 claims the agent's whole rendered entry, so a hand-edited exception would be
 overwritten by the next `install`/`update`. `directory grant` is the lever
-this change adds, mirroring `pegasus mcp grant`'s own shape (see
-`test_cli_mcp.py`) for a different fact Pegasus cannot know on its own.
+this change adds, mirroring `darq mcp grant`'s own shape (see
+`test_cli_mcp.py`) for a different fact DARQ cannot know on its own.
 
 Follows the same discipline as `test_cli_mcp.py`: real disk, a throwaway
 home, and the double only where a real filesystem condition cannot be
@@ -228,8 +228,8 @@ class GrantTest(RealHomeTestCase):
         code, report = self.run_cli("directory", "grant", "--cli", CLI, "/srv/[work]")
         self.assertNotEqual(code, 0)
 
-    def test_pegasus_own_data_directory_is_refused(self):
-        """Granting write access to Pegasus's own data directory would let an
+    def test_darq_own_data_directory_is_refused(self):
+        """Granting write access to DARQ's own data directory would let an
         agent's own write turn into arbitrary deletion at the next
         `uninstall`, which reads the journal that lives there uncritically."""
         self.install()
@@ -238,7 +238,7 @@ class GrantTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("data directory", report["error"])
 
-    def test_an_ancestor_of_pegasus_own_data_directory_is_refused(self):
+    def test_an_ancestor_of_darq_own_data_directory_is_refused(self):
         self.install()
         data_dir = self.filesystem.data_dir(self.home)
         code, report = self.run_cli("directory", "grant", "--cli", CLI, str(data_dir.parent))

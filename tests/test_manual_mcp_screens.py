@@ -45,7 +45,7 @@ def rendered_selection_screen() -> tuple[str, ...]:
         cli=CLI_OPTION,
         options=(
             McpOption(id="probe-bound", description="A server you already run", bound_to=BOUND_KEY),
-            McpOption(id="probe-own", description="A server Pegasus obtains"),
+            McpOption(id="probe-own", description="A server DARQ obtains"),
         ),
         chosen=("probe-bound", "probe-own"),
     )
@@ -155,7 +155,7 @@ class ManualDocumentsTheInstallMcpScreenTest(unittest.TestCase):
             self.assertIn(f"`{label}`", self.manual, f"MANUAL.md never names the `{label}` entry")
 
     def test_the_two_screens_are_documented_apart(self):
-        """Converting a server between bound and Pegasus-administered is the
+        """Converting a server between bound and DARQ-administered is the
         grant screen's job, not this one's. Both headings must be present, so
         the manual cannot be read as describing a single MCP screen."""
         self.assertIn(screen_heading_tail(), self.manual)

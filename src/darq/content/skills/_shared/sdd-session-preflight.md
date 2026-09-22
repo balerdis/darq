@@ -20,7 +20,7 @@ points at it rather than restating it:
 - `_shared/persistence-contract.md` owns what each artifact store mode does.
 - `_shared/sdd-phase-common.md` owns the review workload guard the budget feeds.
 
-Not to be confused with the Pegasus installer's preflight, which is an unrelated check
+Not to be confused with the DARQ installer's preflight, which is an unrelated check
 about journal writability while installing.
 
 ## When preflight runs

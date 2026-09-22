@@ -36,11 +36,11 @@ SAMPLE = CliOption(id="demo", display_name="Demo CLI", config_dir="/home/x/.demo
 #: Stands in for `session._upgrade_preview`'s own `CliOption`, built at
 #: runtime from identity data -- this module tests rendering only, so a
 #: fixture with the same shape is enough; it is never read from `navigator`.
-SAMPLE_PROGRAM = CliOption(id="pegasus", display_name="Pegasus", config_dir="", tier="full")
+SAMPLE_PROGRAM = CliOption(id="darq", display_name="DARQ", config_dir="", tier="full")
 #: Stands in for a real identity's `wordmark_words` -- this module tests
 #: rendering only, so a fixture value plays the same role `session` would
 #: thread in from `runtime.identity.wordmark_words`.
-SAMPLE_WORDMARK = ("PEGASUS", "HARNESS")
+SAMPLE_WORDMARK = ("DARQ", "HARNESS")
 DOCTOR_REPORT = {
     "schema": cli.SCHEMA,
     "command": "doctor",
@@ -89,7 +89,7 @@ MULTI_LINE_ERROR = (
     "demo has bound mcp server(s) x whose server key was never recorded (an install made before this was "
     "tracked); update cannot reapply them without guessing, and guessing would retire the very binding it "
     "exists to preserve. Run this once instead:\n"
-    "  pegasus install --cli demo --mcp x=<key>\n"
+    "  darq install --cli demo --mcp x=<key>\n"
     "After that one run, update needs no flags ever again. doctor lists the bound ids; the keys themselves "
     "live in the CLI's own configuration."
 )
@@ -98,27 +98,27 @@ UPDATE_UNRESOLVED_BINDINGS_REPORT = {
 }
 UPGRADE_PLANNED_REPORT = {
     "schema": cli.SCHEMA, "command": "upgrade", "status": "planned",
-    "old_version": "5.10.0", "new_version": "5.11.0", "destination": "/opt/pegasus/pegasus",
+    "old_version": "5.10.0", "new_version": "5.11.0", "destination": "/opt/darq/darq",
     "restart_required": True,
 }
 UPGRADED_REPORT = {
     "schema": cli.SCHEMA, "command": "upgrade", "status": "upgraded",
-    "old_version": "5.10.0", "new_version": "5.11.0", "destination": "/opt/pegasus/pegasus",
-    "restart_required": True, "program_name": "pegasus",
+    "old_version": "5.10.0", "new_version": "5.11.0", "destination": "/opt/darq/darq",
+    "restart_required": True, "program_name": "darq",
 }
 UPGRADE_FAILED_REPORT = {
     "schema": cli.SCHEMA, "command": "upgrade", "status": "failed", "error": "5.10.0 is not writable",
 }
 UPGRADE_ALREADY_CURRENT_REPORT = {
     "schema": cli.SCHEMA, "command": "upgrade", "status": "already-current",
-    "version": "5.11.0", "destination": "/opt/pegasus/pegasus",
+    "version": "5.11.0", "destination": "/opt/darq/darq",
 }
 
 
 class MenuRenderingTest(unittest.TestCase):
     def menu(self) -> Menu:
         return Menu(
-            title="Pegasus Harness",
+            title="DARQ",
             entries=(
                 Entry("Install", Placeholder("Install", "not built")),
                 Entry("Exit", QUIT),
@@ -127,7 +127,7 @@ class MenuRenderingTest(unittest.TestCase):
 
     def test_the_first_line_is_the_title(self):
         lines = render(self.menu(), cursor=0)
-        self.assertEqual(lines[0].text, "Pegasus Harness")
+        self.assertEqual(lines[0].text, "DARQ")
 
     def test_the_selected_entry_carries_the_documented_pointer(self):
         lines = render(self.menu(), cursor=0)
@@ -304,7 +304,7 @@ class GrantMcpEmptyRenderingTest(unittest.TestCase):
         screen = Placeholder(
             f"Grant MCP servers · {SAMPLE.display_name}",
             "No MCP server of your own was found here. This screen grants access to a server "
-            "you install and administer yourself, outside Pegasus -- it does not install one. "
+            "you install and administer yourself, outside DARQ -- it does not install one. "
             f"Add a server under {SAMPLE.display_name}'s own mcp configuration the way you always "
             "would, then come back to this screen to grant it to every agent.",
         )
@@ -408,11 +408,11 @@ class UpdateResultRenderingTest(unittest.TestCase):
             self.assertIn(expected, lines, f"line {expected!r} was flattened into a longer one")
         # And no rendered line is the whole multi-line message glued together.
         self.assertFalse(any("\n" in text for text in lines))
-        self.assertIn("pegasus install --cli demo --mcp x=<key>", "\n".join(lines))
+        self.assertIn("darq install --cli demo --mcp x=<key>", "\n".join(lines))
 
 
 class UpgradePlanRenderingTest(unittest.TestCase):
-    """`InstallPlanScreen` with `command="upgrade"`: the preview `pegasus
+    """`InstallPlanScreen` with `command="upgrade"`: the preview `darq
     upgrade --dry-run` would report, worded for its own flow rather than
     borrowing Install's or Update's."""
 
@@ -693,8 +693,8 @@ class LineSpanTest(unittest.TestCase):
         self.assertEqual(line.spans, (Span("text", Style.NORMAL),))
 
     def test_the_text_property_concatenates_every_span(self):
-        line = Line((Span("PEGASUS", Style.DIM), Span("HARNESS", Style.NORMAL)))
-        self.assertEqual(line.text, "PEGASUSHARNESS")
+        line = Line((Span("DARQ", Style.DIM), Span("HARNESS", Style.NORMAL)))
+        self.assertEqual(line.text, "DARQHARNESS")
 
     def test_a_span_defaults_to_normal_style(self):
         self.assertEqual(Span("text").style, Style.NORMAL)
@@ -734,7 +734,7 @@ class MenuWordmarkTest(unittest.TestCase):
 
     def menu(self, *, installed: bool) -> Menu:
         return Menu(
-            title="Pegasus Harness 9.9.9",
+            title="DARQ 9.9.9",
             entries=(Entry("Exit", QUIT),),
             installed=installed,
             version="9.9.9",
@@ -743,7 +743,7 @@ class MenuWordmarkTest(unittest.TestCase):
 
     def test_nothing_installed_keeps_the_plain_title(self):
         lines = [line.text for line in render(self.menu(installed=False), cursor=0, width=200)]
-        self.assertEqual(lines[0], "Pegasus Harness 9.9.9")
+        self.assertEqual(lines[0], "DARQ 9.9.9")
         self.assertNotIn(_full_wordmark_row(0), lines)
 
     def test_no_wordmark_words_keeps_the_plain_title_even_when_installed(self):
@@ -758,7 +758,7 @@ class MenuWordmarkTest(unittest.TestCase):
         lines = [line.text for line in render(self.menu(installed=True), cursor=0, width=200)]
         for index in range(_FULL_WORDMARK_ROW_COUNT):
             self.assertIn(_full_wordmark_row(index), lines)
-        self.assertNotIn("Pegasus Harness 9.9.9", lines)
+        self.assertNotIn("DARQ 9.9.9", lines)
 
     def test_the_version_sits_on_its_own_line_right_aligned_to_the_art(self):
         lines = [line.text for line in render(self.menu(installed=True), cursor=0, width=200)]
@@ -772,8 +772,8 @@ class MenuWordmarkTest(unittest.TestCase):
             self.assertNotIn(_full_wordmark_row(index), lines)
 
     def test_installed_but_too_narrow_for_any_mark_keeps_the_plain_title(self):
-        lines = [line.text for line in render(self.menu(installed=True), cursor=0, width=20)]
-        self.assertEqual(lines[0], "Pegasus Harness 9.9.9")
+        lines = [line.text for line in render(self.menu(installed=True), cursor=0, width=10)]
+        self.assertEqual(lines[0], "DARQ 9.9.9")
 
     def test_the_full_marks_first_half_is_dim_and_second_half_is_normal(self):
         """The reference banner dims only the first word, leaving the second
@@ -818,7 +818,7 @@ class InstallResultWordmarkTest(unittest.TestCase):
         self.assertNotIn(_solo_wordmark_row(0), lines)
 
     def test_no_room_for_any_mark_still_shows_the_banner_plainly(self):
-        lines = [line.text for line in render(self._screen(INSTALLED_REPORT), cursor=0, width=20)]
+        lines = [line.text for line in render(self._screen(INSTALLED_REPORT), cursor=0, width=10)]
         self.assertIn("INSTALLED.", lines)
         self.assertNotIn(_full_wordmark_row(0), lines)
         self.assertNotIn(_solo_wordmark_row(0), lines)

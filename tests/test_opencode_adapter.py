@@ -35,9 +35,9 @@ from darq.core.registry import Registry
 from darq.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, Layout, ModelAssignment
 
 HOME = Path("/home/probe")
-ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
 CONFIG = HOME / ".config" / "opencode"
-ORCHESTRATOR = "pegasus-orchestrator"
+ORCHESTRATOR = "darq-orchestrator"
 #: A real `Identity`, standing in for `Runtime.identity`: `own_artifacts`
 #: requires one now, and every direct call in this file passes the same real
 #: value `cli.py`'s composition root would.
@@ -395,7 +395,7 @@ class AgentRenderTest(unittest.TestCase):
         name. `denied_mcp_tools` narrows a shipped server's wildcard grant by
         being written after it -- so a user grant must be written *before*
         `denied_mcp_tools`, never after, or a wildcard the user administers
-        would re-open exactly the tool Pegasus deliberately denied.
+        would re-open exactly the tool DARQ deliberately denied.
 
         Chosen so the trap actually fires: `denied_mcp_tools` here names
         `jira_delete_issue`, fully qualified under the same key the user is
@@ -547,12 +547,12 @@ class AgentRenderTest(unittest.TestCase):
         named permission, and that asks under the separate name
         `external_directory`. Permission names are matched by wildcard and
         resolved to the last match, so the baseline this map opens with
-        matches that name too. Every path Pegasus itself hands an agent (a
+        matches that name too. Every path DARQ itself hands an agent (a
         phase agent's own SKILL.md, the `_shared` conventions) lives under the
         config directory and outside every worktree, so without this grant the
         whole lazy-loading contract is unreadable by construction. The grant is
         a pattern rather than a bare `allow` so that it opens exactly the
-        directory Pegasus writes into, and nothing else on the machine.
+        directory DARQ writes into, and nothing else on the machine.
         """
         agent = self.agent(requires_tools=("read",))
         rule = self.value(agent)["permission"]["external_directory"]
@@ -749,7 +749,7 @@ class AgentRenderTest(unittest.TestCase):
         presence alone says nothing about which one `findLast` would pick.
 
         `/home/probe/.ssh` is a directory a person could plausibly grant
-        (`pegasus directory grant`) that a real ask target inside it,
+        (`darq directory grant`) that a real ask target inside it,
         `/home/probe/.ssh/*`, would match under *both* the grant's own key
         (`/home/probe/.ssh/*`, exact) and the floor's key (`*/.ssh/*`,
         wildcard) -- two different pattern strings, same target.
@@ -850,8 +850,8 @@ class ApplyPatchPermissionFoldTest(unittest.TestCase):
     (`packages/opencode/src/permission/index.ts`), and its config loader
     keys a declared permission off the literal `"patch"`, not
     `"apply_patch"` (`packages/core/src/v1/config/agent.ts`, `normalize`).
-    So naming `apply_patch` in either table -- as a source key Pegasus
-    declares, or as a target any Pegasus tool name maps to -- would render a
+    So naming `apply_patch` in either table -- as a source key DARQ
+    declares, or as a target any DARQ tool name maps to -- would render a
     key the runtime never reads: a silent no-op that looks like a
     restriction and is not one. See `render._tools` and `render._permission`
     for the full account.
@@ -877,11 +877,11 @@ class ApplyPatchPermissionFoldTest(unittest.TestCase):
             "apply_patch", render_module.PERMISSION_NAME, self.MESSAGE.format(table="PERMISSION_NAME")
         )
 
-    def test_no_pegasus_tool_name_maps_to_apply_patch_in_tool_name(self):
+    def test_no_darq_tool_name_maps_to_apply_patch_in_tool_name(self):
         offending = [key for key, value in render_module.TOOL_NAME.items() if value == "apply_patch"]
         self.assertEqual(offending, [], self.MESSAGE.format(table="TOOL_NAME"))
 
-    def test_no_pegasus_tool_name_maps_to_apply_patch_in_permission_name(self):
+    def test_no_darq_tool_name_maps_to_apply_patch_in_permission_name(self):
         offending = [
             key for key, value in render_module.PERMISSION_NAME.items() if value == "apply_patch"
         ]
@@ -903,7 +903,7 @@ class CommandRenderTest(unittest.TestCase):
             source=PurePosixPath("commands/sdd-apply.md"),
         )
         fields.update(overrides)
-        return self.adapter.render_command(self.layout, Command(**fields), "pegasus-orchestrator")[0].content.decode()
+        return self.adapter.render_command(self.layout, Command(**fields), "darq-orchestrator")[0].content.decode()
 
     def test_lands_in_the_commands_directory(self):
         artifact = self.adapter.render_command(
@@ -916,12 +916,12 @@ class CommandRenderTest(unittest.TestCase):
                 execution=Execution.INLINE,
                 source=PurePosixPath("commands/sdd-apply.md"),
             ),
-            "pegasus-orchestrator",
+            "darq-orchestrator",
         )[0]
         self.assertEqual(artifact.path, CONFIG / "commands/sdd-apply.md")
 
-    def test_the_orchestrator_role_becomes_the_pegasus_agent(self):
-        self.assertIn("agent: \"pegasus-orchestrator\"", self.rendered())
+    def test_the_orchestrator_role_becomes_the_darq_agent(self):
+        self.assertIn("agent: \"darq-orchestrator\"", self.rendered())
 
     def test_the_orchestrator_role_names_the_content_declared_orchestrator(self):
         """The `agent:` field for `RunsAs.ORCHESTRATOR` must come from whatever
@@ -939,9 +939,9 @@ class CommandRenderTest(unittest.TestCase):
             execution=Execution.ISOLATED,
             source=PurePosixPath("commands/sdd-apply.md"),
         )
-        content = render_module.command(self.layout, item, "king-pegasus-two")[0].content.decode()
-        self.assertIn('agent: "king-pegasus-two"', content)
-        self.assertNotIn("pegasus-orchestrator", content)
+        content = render_module.command(self.layout, item, "arquitecto-darq-two")[0].content.decode()
+        self.assertIn('agent: "arquitecto-darq-two"', content)
+        self.assertNotIn("darq-orchestrator", content)
 
     def test_planner_and_builder_become_opencode_native_agents(self):
         self.assertIn('agent: "plan"', self.rendered(runs_as=RunsAs.PLANNER))
@@ -977,7 +977,7 @@ class SystemPromptRenderTest(unittest.TestCase):
 
     def test_ships_its_own_file(self):
         file_artifact = only(self.artifacts, FileArtifact)[0]
-        self.assertEqual(file_artifact.path, CONFIG / "pegasus-AGENTS.md")
+        self.assertEqual(file_artifact.path, CONFIG / "darq-AGENTS.md")
 
     def test_wires_itself_in_by_appending_to_the_instructions_list(self):
         key = only(self.artifacts, ConfigKeyArtifact)[0]
@@ -986,13 +986,13 @@ class SystemPromptRenderTest(unittest.TestCase):
     def test_names_the_file_by_its_absolute_path(self):
         """A relative entry in this list is resolved against the project being
         worked in, not against the directory the config lives in -- so a
-        `./pegasus-AGENTS.md` written into the global configuration names a
+        `./darq-AGENTS.md` written into the global configuration names a
         file that exists nowhere the runtime will look, and the whole system
         prompt is silently never loaded. The absolute path is the only spelling
-        that means the file Pegasus actually placed.
+        that means the file DARQ actually placed.
         """
         key = only(self.artifacts, ConfigKeyArtifact)[0]
-        self.assertEqual(key.value, str(CONFIG / "pegasus-AGENTS.md"))
+        self.assertEqual(key.value, str(CONFIG / "darq-AGENTS.md"))
 
     def _body_of(self, prompt: SystemPrompt) -> str:
         return only(self.render(prompt), FileArtifact)[0].content.decode("utf-8")
@@ -1091,7 +1091,7 @@ class McpRenderTest(unittest.TestCase):
 class DownloadMcpRenderTest(unittest.TestCase):
     def setUp(self):
         self.adapter = Adapter()
-        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
         self.layout = self.adapter.layout(self.environment)
         self.mcp = Mcp(
             name="probe",
@@ -1158,7 +1158,7 @@ class ArchiveDownloadMcpRenderTest(unittest.TestCase):
 
     def setUp(self):
         self.adapter = Adapter()
-        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
         self.layout = self.adapter.layout(self.environment)
         self.mcp = Mcp(
             name="probe",
@@ -1185,7 +1185,7 @@ class ArchiveDownloadMcpRenderTest(unittest.TestCase):
 class NpmMcpRenderTest(unittest.TestCase):
     def setUp(self):
         self.adapter = Adapter()
-        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
         self.layout = self.adapter.layout(self.environment)
         self.mcp = Mcp(
             name="probe",
@@ -1257,7 +1257,7 @@ class ShippedEngramCommandTest(unittest.TestCase):
 
     def setUp(self):
         self.adapter = Adapter()
-        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+        self.environment = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
         self.layout = self.adapter.layout(self.environment)
         self.engram = next(item for item in content_module.load().mcp if item.name == "engram")
         self.artifacts = self.adapter.render_mcp(self.layout, self.engram)
@@ -1316,9 +1316,9 @@ class OwnArtifactsTest(unittest.TestCase):
     def test_build_leftovers_are_excluded(self):
         self.assertEqual([item for item in self.artifacts if "__pycache__" in str(item.path)], [])
 
-    def test_the_skill_registry_helper_lives_under_a_pegasus_subtree(self):
+    def test_the_skill_registry_helper_lives_under_a_darq_subtree(self):
         paths = {item.path for item in only(self.artifacts, FileArtifact)}
-        self.assertIn(CONFIG / "pegasus/skill-registry/pegasus_skill_registry.py", paths)
+        self.assertIn(CONFIG / "darq/skill-registry/darq_skill_registry.py", paths)
 
     def test_plugins_land_in_the_plugin_directory(self):
         paths = {item.path for item in only(self.artifacts, FileArtifact)}
@@ -1384,7 +1384,7 @@ class OwnArtifactsTest(unittest.TestCase):
         executable = {
             item.path.name for item in only(self.artifacts, FileArtifact) if item.executable
         }
-        self.assertEqual(executable, {"pegasus-skill-registry"})
+        self.assertEqual(executable, {"darq-skill-registry"})
 
     def test_the_result_is_deterministic(self):
         self.assertEqual(
@@ -1396,18 +1396,18 @@ class OwnArtifactsTest(unittest.TestCase):
         """The positive half of the mirror: the notifier plugin must actually
         carry whatever name content declares as its orchestrator, not just
         fail to carry the old literal (that half is `test_no_asset_ships_...
-        pegasus_orchestrator_literal` below)."""
-        notifier = next(item for item in only(self.artifacts, FileArtifact) if item.path.name == "pegasus-orchestrator-notifier.ts")
+        darq_orchestrator_literal` below)."""
+        notifier = next(item for item in only(self.artifacts, FileArtifact) if item.path.name == "darq-orchestrator-notifier.ts")
         self.assertIn(f'"{ORCHESTRATOR}"', notifier.content.decode("utf-8"))
 
-    def test_a_non_pegasus_orchestrator_name_reaches_the_notifier(self):
+    def test_a_non_darq_orchestrator_name_reaches_the_notifier(self):
         """The negative half: a distribution's own orchestrator name must
         substitute cleanly, and the old literal must not survive alongside it."""
-        artifacts = Adapter().own_artifacts(self.layout, "king-pegasus-two", IDENTITY, ())
-        notifier = next(item for item in only(artifacts, FileArtifact) if item.path.name == "pegasus-orchestrator-notifier.ts")
+        artifacts = Adapter().own_artifacts(self.layout, "arquitecto-darq-two", IDENTITY, ())
+        notifier = next(item for item in only(artifacts, FileArtifact) if item.path.name == "darq-orchestrator-notifier.ts")
         content = notifier.content.decode("utf-8")
-        self.assertIn('"king-pegasus-two"', content)
-        self.assertNotIn("pegasus-orchestrator", content)
+        self.assertIn('"arquitecto-darq-two"', content)
+        self.assertNotIn("darq-orchestrator", content)
 
     def test_the_apply_patch_scope_plugin_ships_under_the_derived_name(self):
         """Like every other plugin this adapter bundles, its installed filename
@@ -1843,7 +1843,7 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
     `ZipAssetFilesTest` above proves `_asset_files` can walk a `zipfile.Path`
     generically, but with a placeholder ("// plugin\\n") standing in for the
     real file -- it cannot tell a correctly shipped plugin from an accidentally
-    empty one. This test builds the actual `pegasus` zipapp from this checkout's
+    empty one. This test builds the actual `darq` zipapp from this checkout's
     own source, loads `darq.adapters.opencode.adapter` from inside that
     archive in a subprocess, and reads back the plugin content `own_artifacts`
     hands out. This project has already shipped assets that resolved fine from
@@ -1864,7 +1864,7 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
         from build_zipapp import build as build_zipapp
 
         cls._tmp = tempfile.TemporaryDirectory()
-        cls.archive = Path(cls._tmp.name) / "pegasus"
+        cls.archive = Path(cls._tmp.name) / "darq"
         real_identity = cls.repo_root / "src" / "darq" / "identity.json"
         build_zipapp(cls.repo_root / "src" / "darq", cls.archive, real_identity)
 
@@ -1882,11 +1882,11 @@ class RealZipappShipsTheEngramPluginTest(unittest.TestCase):
             from darq.cli import default_identity
             from darq.core.types import Environment
 
-            home = Path("/dev/shm/pegasus-zip-probe-home")
-            env = Environment(home=home, data_dir=home / ".local" / "share" / "pegasus-harness")
+            home = Path("/dev/shm/darq-zip-probe-home")
+            env = Environment(home=home, data_dir=home / ".local" / "share" / "darq")
             adapter = Adapter()
             layout = adapter.layout(env)
-            artifacts = adapter.own_artifacts(layout, "pegasus-orchestrator", default_identity(), ())
+            artifacts = adapter.own_artifacts(layout, "darq-orchestrator", default_identity(), ())
             plugin = next(
                 item for item in artifacts
                 if str(item.path).endswith("plugins/engram.ts")
@@ -1951,14 +1951,14 @@ class SkillRegistryContractTest(unittest.TestCase):
             declared,
             {
                 "PEGASUS_SKILL_REGISTRY_BIN": str(
-                    self.layout.config_dir / "pegasus/skill-registry/pegasus-skill-registry"
+                    self.layout.config_dir / "darq/skill-registry/darq-skill-registry"
                 ),
                 "PEGASUS_SKILL_ROOTS": str(self.layout.skills_dir),
             },
         )
 
     def test_every_declared_path_is_an_artifact_this_install_creates(self):
-        binary = self.layout.config_dir / "pegasus/skill-registry/pegasus-skill-registry"
+        binary = self.layout.config_dir / "darq/skill-registry/darq-skill-registry"
         self.assertIn(binary, self.files)
         self.assertEqual(self.layout.skills_dir, self.layout.config_dir / "skills")
 
@@ -1969,7 +1969,7 @@ class SkillRegistryContractTest(unittest.TestCase):
         permission travels with the artifact, not with the asset it was read from.
         """
         binary = self.files[
-            self.layout.config_dir / "pegasus/skill-registry/pegasus-skill-registry"
+            self.layout.config_dir / "darq/skill-registry/darq-skill-registry"
         ]
         self.assertTrue(binary.executable, f"executable is {binary.executable}")
 
@@ -2026,7 +2026,7 @@ class ShippedContentRenderTest(unittest.TestCase):
             self.assertEqual(value["permission"]["*"], "deny", agent.name)
             self.assertEqual(value["permission"]["task"]["*"], "deny", agent.name)
 
-    def test_every_shipped_agent_can_reach_the_skills_pegasus_installs_for_it(self):
+    def test_every_shipped_agent_can_reach_the_skills_darq_installs_for_it(self):
         """Each shipped prompt defers its detail to an absolute path under the
         config directory, and every one of those sits outside the project
         worktree the agent runs in. An agent that can read but is not allowed
@@ -2108,7 +2108,7 @@ class ShippedContentRenderTest(unittest.TestCase):
         a capability but the option of working in silence -- which a permission
         map cannot express and the prompt has to carry.
         """
-        persona = next(a for a in self.loaded.agents if a.name == "king-pegasus")
+        persona = next(a for a in self.loaded.agents if a.name == "arquitecto-darq")
         value = only(render_module.agent(self.layout, persona), ConfigKeyArtifact)[0].value
         self.assertEqual(
             value["tools"],
@@ -2141,7 +2141,7 @@ class ShippedContentRenderTest(unittest.TestCase):
         is the assertion that keeps the vocabulary from silently falling behind
         the runtime again.
         """
-        for name in ("pegasus-orchestrator", "king-pegasus"):
+        for name in ("darq-orchestrator", "arquitecto-darq"):
             with self.subTest(agent=name):
                 agent = next(a for a in self.loaded.agents if a.name == name)
                 value = only(render_module.agent(self.layout, agent), ConfigKeyArtifact)[0].value
@@ -2185,7 +2185,7 @@ class ShippedContentRenderTest(unittest.TestCase):
         self.assertTrue(checked_any, "fixture drifted: no shipped server withholds any tool")
 
     def test_the_orchestrator_renders_its_declared_allows_on_top_of_the_deny_baseline(self):
-        orchestrator = next(a for a in self.loaded.agents if a.name == "pegasus-orchestrator")
+        orchestrator = next(a for a in self.loaded.agents if a.name == "darq-orchestrator")
         value = only(render_module.agent(self.layout, orchestrator), ConfigKeyArtifact)[0].value
         self.assertEqual(value["permission"]["task"]["*"], "deny")
         for name in orchestrator.may_delegate_to:
@@ -2194,7 +2194,7 @@ class ShippedContentRenderTest(unittest.TestCase):
     def test_every_declared_delegator_renders_exactly_its_declared_allows(self):
         """The mirror of the orchestrator-only check above, generalized to every
         agent that declares `may_delegate_to` -- `sdd-explore`, `sdd-verify`,
-        `king-pegasus` and `pegasus-general` each fan out to `pegasus-general` now
+        `arquitecto-darq` and `darq-general` each fan out to `darq-general` now
         that the delegation criterion replaces the outright prohibition. Both
         directions matter: a declared target must render `allow`, and a name
         nobody declared must stay on the `deny` baseline rather than leaking in
@@ -2248,7 +2248,7 @@ class BoundMcpRenderTest(unittest.TestCase):
     Writing `/mcp/<id>` for a server the user administers would put a second
     definition beside the one they maintain -- two servers, or one silently
     replaced. The convention still travels, because the behaviour half is
-    Pegasus's regardless of who owns the binary.
+    DARQ's regardless of who owns the binary.
     """
 
     def setUp(self):
@@ -2350,7 +2350,7 @@ class PlaceholderRenderTest(unittest.TestCase):
             execution=Execution.ISOLATED,
             source=PurePosixPath("commands/sdd-apply.md"),
         )
-        content = self.adapter.render_command(self.layout, item, "pegasus-orchestrator")[0].content.decode("utf-8")
+        content = self.adapter.render_command(self.layout, item, "darq-orchestrator")[0].content.decode("utf-8")
         self.assertIn(self.skills, content)
 
     def test_a_system_prompt_body_gets_it(self):

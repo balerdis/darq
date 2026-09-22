@@ -33,7 +33,7 @@ AGENTS = CONTENT / "agents"
 SKILLS = CONTENT / "skills"
 SHARED = SKILLS / "_shared"
 
-ORCHESTRATOR = AGENTS / "pegasus-orchestrator.md"
+ORCHESTRATOR = AGENTS / "darq-orchestrator.md"
 APPLICABILITY = SHARED / "sdd-applicability.md"
 CRITERION = SHARED / "sub-delegation-criterion.md"
 
@@ -198,7 +198,7 @@ class SddApplicabilityTest(unittest.TestCase):
         names all three, so a whole-file search would pass without the prose
         ever telling the agent where non-SDD work goes."""
         prose = ORCHESTRATOR.read_text(encoding="utf-8").split("---\n", 2)[2]
-        for name in ("pegasus-explorer", "pegasus-verifier", "pegasus-implementer"):
+        for name in ("darq-explorer", "darq-verifier", "darq-implementer"):
             with self.subTest(agent=name):
                 self.assertIn(name, prose)
 

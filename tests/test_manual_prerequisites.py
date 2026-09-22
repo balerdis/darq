@@ -1,9 +1,9 @@
 """`MANUAL.md` told the reader to go get OpenCode. This project had already
 got it for them.
 
-The paragraph said you need OpenCode installed outside Pegasus and that
-"Pegasus no lo instala, actualiza ni desinstala". That is true of the
-`pegasus` binary and false of the project: the repository root ships
+The paragraph said you need OpenCode installed outside DARQ and that
+"DARQ no lo instala, actualiza ni desinstala". That is true of the
+`darq` binary and false of the project: the repository root ships
 `install.sh`, the very asset the documented one-line `curl ... | bash`
 downloads, and that script installs nvm, Node and OpenCode before it ever
 gets to the binary. A person following the documented path had OpenCode

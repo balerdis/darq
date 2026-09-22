@@ -11,10 +11,10 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-import pegasus_skill_registry as registry  # noqa: E402
+import darq_skill_registry as registry  # noqa: E402
 
 
-class PegasusSkillRegistryTests(unittest.TestCase):
+class DARQSkillRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.workspace = Path(self.temporary.name)
@@ -31,7 +31,7 @@ class PegasusSkillRegistryTests(unittest.TestCase):
 
     def run_generator(self, *roots: Path) -> subprocess.CompletedProcess[str]:
         roots = roots or (self.root_one, self.root_two)
-        arguments = [str(ROOT / "tools" / "pegasus-skill-registry"), "--project-root", str(self.project)]
+        arguments = [str(ROOT / "tools" / "darq-skill-registry"), "--project-root", str(self.project)]
         for root in roots:
             arguments.extend(["--skill-root", str(root)])
         return subprocess.run(
@@ -143,8 +143,8 @@ class PegasusSkillRegistryTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         forbidden = "gent" + "le-ai"
         production = [
-            ROOT / "tools" / "pegasus_skill_registry.py",
-            ROOT / "tools" / "pegasus-skill-registry",
+            ROOT / "tools" / "darq_skill_registry.py",
+            ROOT / "tools" / "darq-skill-registry",
             self.project / ".atl" / "skill-registry.md",
         ]
         for path in production:

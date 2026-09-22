@@ -98,6 +98,15 @@ class RealHomeTestCase(_RealHomeTestCase):
     def layout(self):
         return available().get(CLI).layout(Environment(home=self.home))
 
+    def system_prompt_path(self):
+        """The real, identity-branded system prompt path a real install
+        writes -- `layout().system_prompt_file` is deliberately identity-
+        unaware (see `tests/test_architecture.py`'s `PRODUCT_IDENTITY_ALLOWLIST`),
+        so a test proving something about the actual file on disk has to
+        derive the name the same way `render.system_prompt` does, from the
+        identity the install actually ran with."""
+        return self.layout().config_dir / f"{cli.default_identity().program_name}-AGENTS.md"
+
     def present(self) -> None:
         """Make the adapter find the CLI's configuration directory."""
         self.layout().config_dir.mkdir(parents=True, exist_ok=True)
@@ -207,13 +216,13 @@ class FakeHomeTestCase(unittest.TestCase):
 
 
 class VersionTest(unittest.TestCase):
-    """Three places now hold Pegasus's own version -- `pyproject.toml`,
-    `darq.__version__`, and Pegasus's own shipped `identity.json` -- and
+    """Three places now hold DARQ's own version -- `pyproject.toml`,
+    `darq.__version__`, and DARQ's own shipped `identity.json` -- and
     all three must agree, never just the first two. This does NOT generalise
     to an arbitrary distribution's `identity.json`: a distribution legitimately
     pins the engine at one version and releases its own product under a
     completely different one (the whole point of the fix this test
-    accompanies) -- this three-way rule is only about the identity Pegasus
+    accompanies) -- this three-way rule is only about the identity DARQ
     ships for itself.
     """
 
@@ -222,7 +231,7 @@ class VersionTest(unittest.TestCase):
         metadata = tomllib.loads(Path(__file__).resolve().parents[1].joinpath("pyproject.toml").read_text())
         self.assertEqual(darq.__version__, metadata["project"]["version"])
 
-    def test_pegasus_own_identity_json_agrees_with_the_package_version(self):
+    def test_darq_own_identity_json_agrees_with_the_package_version(self):
         real_identity_path = Path(__file__).resolve().parents[1] / "src" / "darq" / "identity.json"
         own_identity = identity_module.parse(real_identity_path.read_bytes())
         self.assertEqual(own_identity.version, darq.__version__)
@@ -231,7 +240,7 @@ class VersionTest(unittest.TestCase):
 class VersionFlagTest(unittest.TestCase):
     """Asking a program what version it is should not require diagnosing it.
 
-    The number was reachable only through `pegasus doctor --json`, which opens
+    The number was reachable only through `darq doctor --json`, which opens
     a home, reads a journal and reports on an installation — a great deal of
     work, and a different question, to answer one that is about the binary and
     nothing else. It is also the number a person reads out when reporting a
@@ -258,7 +267,7 @@ class VersionFlagTest(unittest.TestCase):
     def test_it_is_not_accepted_after_a_subcommand_and_that_is_deliberate(self):
         """`--json` is accepted on either side because it modifies a report.
         A version request modifies nothing: it is its own command, and
-        `pegasus install --cli x --version` printing a number instead of
+        `darq install --cli x --version` printing a number instead of
         installing would be a surprising way to not install something. So it
         is refused there, and argparse's own usage line names where it goes.
         """
@@ -283,17 +292,17 @@ class VersionFlagTest(unittest.TestCase):
 #: one version while releasing its own product under a different one, mirroring a real
 #: distribution's own build (the engine at one version, the product tagged at another).
 _DISTRIBUTION_IDENTITY_PAYLOAD = {
-    "product_id": "darq-cli",
-    "display_name": "Darq",
-    "program_name": "darq",
+    "product_id": "nova-cli",
+    "display_name": "Nova",
+    "program_name": "nova",
     "version": "1.0.0",
-    "wordmark_words": ["DARQ"],
+    "wordmark_words": ["NOVA"],
     "release": {
-        "asset_url_template": "https://example.invalid/darq/releases/download/{tag}/{asset}",
-        "binary_asset": "darq",
-        "latest_release_api_url": "https://example.invalid/darq/api/releases/latest",
-        "release_page_url": "https://example.invalid/darq/releases",
-        "install_base_url_default": "https://example.invalid/darq/releases/latest/download",
+        "asset_url_template": "https://example.invalid/nova/releases/download/{tag}/{asset}",
+        "binary_asset": "nova",
+        "latest_release_api_url": "https://example.invalid/nova/api/releases/latest",
+        "release_page_url": "https://example.invalid/nova/releases",
+        "install_base_url_default": "https://example.invalid/nova/releases/latest/download",
     },
 }
 
@@ -318,7 +327,7 @@ class DistributionVersionFlagTest(unittest.TestCase):
                 cli.main(["--version"], runtime=runtime)
         self.assertEqual(exit_code.exception.code, 0)
         printed = out.getvalue()
-        self.assertIn("darq 1.0.0", printed)
+        self.assertIn("nova 1.0.0", printed)
         self.assertNotIn(darq.__version__, printed)
 
 
@@ -375,7 +384,7 @@ class InstallTest(RealHomeTestCase):
         prunable when a later run empties it, but union alone never subtracts,
         so a pruned path stayed in the record naming a directory that was gone.
         Two harms, not one: the record asserted something false about the disk,
-        and it stayed claimable -- recreate that directory by hand, let Pegasus
+        and it stayed claimable -- recreate that directory by hand, let DARQ
         write into it again, and retirement would prune a directory this
         installation never created.
 
@@ -463,7 +472,7 @@ class InstallTest(RealHomeTestCase):
         _, report = self.run_cli("uninstall", "--cli", CLI)
         self.assertTrue(report["removed"])
 
-    def test_reinstalling_keeps_the_date_pegasus_first_landed(self):
+    def test_reinstalling_keeps_the_date_darq_first_landed(self):
         self.present()
         self.run_cli("install", "--cli", CLI)
         later = cli.Runtime(
@@ -486,11 +495,11 @@ class InstallTest(RealHomeTestCase):
     def test_a_file_the_user_edited_is_overwritten_by_a_reinstall(self):
         self.present()
         self.run_cli("install", "--cli", CLI)
-        target = self.layout().system_prompt_file
+        target = self.system_prompt_path()
         original = target.read_bytes()
         target.write_bytes(b"the user's own words\n")
         _, report = self.run_cli("install", "--cli", CLI)
-        self.assertIn("system-prompt:pegasus-AGENTS.md", [item["id"] for item in report["updated"]])
+        self.assertIn("system-prompt:darq-AGENTS.md", [item["id"] for item in report["updated"]])
         self.assertEqual(target.read_bytes(), original)
 
     def test_the_prose_names_what_it_updated(self):
@@ -656,7 +665,7 @@ class UnverifiedDependencyReportTest(RealHomeTestCase):
     `materialize_npm` deja los dos campos del programa en `None` cuando no
     puede releer el script de entrada — el `entry` del descriptor quedó viejo,
     por ejemplo. La instalación sigue, y con razón: eso es una escritura de
-    `npm ci` que faltó, no una de Pegasus que falló. Lo que no puede seguir es
+    `npm ci` que faltó, no una de DARQ que falló. Lo que no puede seguir es
     en silencio, porque desde ahí `doctor` trata ese árbol igual que uno
     anterior a la verificación: sin drift para siempre, aunque lo cambien
     entero.
@@ -1037,7 +1046,7 @@ class InstallMcpTest(RealHomeTestCase):
         self.assertEqual(code, 0)
         self.assertNotIn("mcp", self.settings())
         self.assertFalse(self.filesystem.exists(self.convention_path("engram")))
-        prompt_text = self.layout().system_prompt_file.read_text(encoding="utf-8")
+        prompt_text = self.system_prompt_path().read_text(encoding="utf-8")
         self.assertNotIn("Engram Persistent Memory", prompt_text)
         self.assertNotIn("PROACTIVE SAVE TRIGGERS", prompt_text)
         self.assertNotIn("Session Close Protocol", prompt_text)
@@ -1137,7 +1146,7 @@ class InstallMcpTest(RealHomeTestCase):
         code, report = self.run_cli("install", "--cli", CLI, "--mcp", "engram", "--dry-run")
         self.assertEqual(code, 0)
         created_ids = {item["id"] for item in report["created"]}
-        self.assertIn("system-prompt:pegasus-AGENTS.md", created_ids)
+        self.assertIn("system-prompt:darq-AGENTS.md", created_ids)
 
     def test_an_unknown_server_id_fails_cleanly_and_places_nothing(self):
         self.present()
@@ -1492,8 +1501,8 @@ class UninstallTest(RealHomeTestCase):
 
     def test_a_preexisting_empty_directory_survives_uninstall_and_is_not_reported_pruned(self):
         """The repro this whole change exists for: someone who already had
-        `~/.config/opencode/plugins/` before ever installing Pegasus loses it
-        on `uninstall` if Pegasus later wrote a file inside it and the prune
+        `~/.config/opencode/plugins/` before ever installing DARQ loses it
+        on `uninstall` if DARQ later wrote a file inside it and the prune
         pass cannot tell "I made this directory" from "this was here all
         along" -- both look identical once the file inside is gone and the
         directory is empty.
@@ -1508,7 +1517,7 @@ class UninstallTest(RealHomeTestCase):
         config_dir = self.layout().config_dir
         preexisting = config_dir / "a-directory-the-person-already-had"
         preexisting.mkdir()
-        target = preexisting / "a-file-pegasus-later-wrote.md"
+        target = preexisting / "a-file-darq-later-wrote.md"
         content = b"whatever this release rendered"
         target.write_bytes(content)
 
@@ -1653,7 +1662,7 @@ class DoctorTest(RealHomeTestCase):
         disk now, so being there is the whole of what can be checked. Read as
         a configuration document instead — which is what happens to any kind
         the reader does not know — a directory refuses to be read at all, and
-        the entry lands in `unreadable`: a report that Pegasus could not tell,
+        the entry lands in `unreadable`: a report that DARQ could not tell,
         about something it can tell perfectly well.
         """
         self.install()
@@ -1707,7 +1716,7 @@ class DoctorTest(RealHomeTestCase):
         there too -- but its bytes no longer hash to `program_digest`, which
         is exactly the substitution this check exists to catch: the one file
         whose replacement would matter, being something other than what
-        Pegasus placed.
+        DARQ placed.
         """
         self.install()
         tree = self.home / "deps" / "probe" / "1.0.0"
@@ -1719,7 +1728,7 @@ class DoctorTest(RealHomeTestCase):
             program_relpath="probe",
             program_digest=ownership.digest_of_bytes(b"the real program bytes"),
         )
-        program.write_bytes(b"a substituted binary, not what pegasus placed")
+        program.write_bytes(b"a substituted binary, not what darq placed")
 
         _, report = self.run_cli("doctor")
 
@@ -1881,7 +1890,7 @@ class UnprunableEmptyDirectoryReportTest(RealHomeTestCase):
     can never reach anything under it, forever -- and `doctor` used to say
     nothing about the empty directories that leaves behind. It still never
     prunes them here; it only names them, without claiming they are
-    Pegasus's own to reclaim.
+    DARQ's own to reclaim.
     """
 
     def install(self):
@@ -1990,7 +1999,7 @@ class SnapshotTest(RealHomeTestCase):
         self.present()
         self.run_cli("install", "--cli", CLI)
         manifest = self.snapshots().read(1)
-        entry = next(e for e in manifest.entries if e.path == self.layout().system_prompt_file)
+        entry = next(e for e in manifest.entries if e.path == self.system_prompt_path())
         self.assertFalse(entry.existed)
         self.assertIsNone(entry.mode)
         self.assertIsNone(entry.blob)
@@ -2093,7 +2102,7 @@ class RestoreTest(RealHomeTestCase):
     def test_restoring_returns_a_files_previous_bytes_and_mode_exactly(self):
         self.present()
         self.run_cli("install", "--cli", CLI)
-        target = self.layout().system_prompt_file
+        target = self.system_prompt_path()
         self.filesystem.write_atomic(target, b"hand-edited by the user", mode=0o600)
         # Installing again overwrites the hand edit without asking, but not
         # before this second snapshot captures it.
@@ -2117,7 +2126,7 @@ class RestoreTest(RealHomeTestCase):
         """
         self.present()
         self.run_cli("install", "--cli", CLI)
-        target = self.layout().system_prompt_file
+        target = self.system_prompt_path()
         self.filesystem.write_atomic(target, b"hand-edited by the user", mode=0o600)
         self.run_cli("install", "--cli", CLI)
         # The journal sorts after the prompt file, so the prompt is already back
@@ -2134,7 +2143,7 @@ class RestoreTest(RealHomeTestCase):
     def test_restoring_an_entry_recorded_as_absent_removes_the_path(self):
         self.present()
         self.run_cli("install", "--cli", CLI)
-        target = self.layout().system_prompt_file
+        target = self.system_prompt_path()
         self.assertTrue(target.exists())
 
         code, report = self.run_cli("restore", "1")
@@ -2204,7 +2213,7 @@ class RestoreTest(RealHomeTestCase):
 
 
 class RestoreListTest(RealHomeTestCase):
-    """`pegasus restore --list`: a person is asked for a generation number
+    """`darq restore --list`: a person is asked for a generation number
     they had no way to discover before this existed."""
 
     def test_listing_with_nothing_ever_installed_is_empty_not_a_failure(self):
@@ -2427,7 +2436,7 @@ class ActivationTest(RealHomeTestCase):
         _, report = self.run_cli("doctor")
         self.assertTrue(cli_entry(report)["activation"])
 
-    def test_doctor_stays_quiet_when_pegasus_is_not_installed(self):
+    def test_doctor_stays_quiet_when_darq_is_not_installed(self):
         self.present()
         _, report = self.run_cli("doctor")
         self.assertNotIn("activation", cli_entry(report))

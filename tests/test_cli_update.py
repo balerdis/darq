@@ -1,4 +1,4 @@
-"""`pegasus update`: reapply an installation's own selection, with no flags.
+"""`darq update`: reapply an installation's own selection, with no flags.
 
 A bare reinstall retires every MCP server not named on `--mcp` again, so
 updating an existing installation used to mean remembering and repeating the
@@ -128,7 +128,7 @@ class UpdateReapplyTest(RealHomeTestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(report["status"], "failed")
         self.assertIn("cbm", report["error"])
-        self.assertIn(f"pegasus install --cli {CLI} --mcp cbm=<key>", report["error"])
+        self.assertIn(f"darq install --cli {CLI} --mcp cbm=<key>", report["error"])
         self.assertIn("update", report["error"])
 
     def test_the_refusal_tells_the_person_to_replace_the_placeholder(self):
@@ -169,5 +169,5 @@ class UpdateReapplyTest(RealHomeTestCase):
         code, report = self.run_cli("update", "--cli", CLI)
         self.assertNotEqual(code, 0)
         self.assertIn(
-            f"pegasus install --cli {CLI} --mcp cbm=<key> --mcp context7=<key>", report["error"]
+            f"darq install --cli {CLI} --mcp cbm=<key> --mcp context7=<key>", report["error"]
         )

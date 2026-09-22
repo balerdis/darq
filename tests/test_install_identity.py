@@ -120,17 +120,17 @@ class NoProductIdentityOutsideHeaderTest(unittest.TestCase):
                     offenders.append(f"{number}: {line.strip()!r}")
         self.assertEqual(offenders, [], "brand literal(s) found outside the identity header:\n" + "\n".join(offenders))
 
-    def test_the_header_block_itself_still_carries_pegasus_own_identity(self):
+    def test_the_header_block_itself_still_carries_darq_own_identity(self):
         """Sanity check on the extraction itself: the banner-delimited block is
-        exactly where Pegasus's own identity values live today, so a change that
+        exactly where DARQ's own identity values live today, so a change that
         accidentally widened or narrowed the header boundaries would be caught
         here rather than by a silently-passing scan above."""
         text = INSTALL_SH.read_text(encoding="utf-8")
         parts = text.split(HEADER_BANNER)
         self.assertEqual(len(parts), 3)
         header = parts[1]
-        self.assertIn("pegasus-harness", header)
-        self.assertIn("Pegasus", header)
+        self.assertIn("darq", header)
+        self.assertIn("DARQ", header)
 
 
 class BuildInstallerTest(unittest.TestCase):
@@ -181,8 +181,8 @@ class BuildInstallerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertFalse(out.exists())
 
-    def test_pegasus_own_identity_reproduces_the_committed_installer(self):
-        """Building with Pegasus's own `identity.json` must yield the exact same
+    def test_darq_own_identity_reproduces_the_committed_installer(self):
+        """Building with DARQ's own `identity.json` must yield the exact same
         header values already committed in `install.sh` -- the generator and the
         checked-in file can never be allowed to drift apart."""
         out = self.root / "install.sh"
@@ -276,13 +276,13 @@ class BuildInstallerTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("install.sh", run.stdout)
 
-    def test_generated_acme_installer_help_mentions_acme_not_pegasus(self):
+    def test_generated_acme_installer_help_mentions_acme_not_darq(self):
         """Behavioural, not just textual: running the generated installer's
         `--help` under a throwaway HOME must print ACME's own usage text --
         and, the other half of the same property (see
         `test_generated_acme_installer_help_names_acme_and_omits_build_mechanism_talk`
         below), must actually NAME Acme rather than merely fail to name
-        Pegasus: a usage comment anonymised down to "this product" would
+        DARQ: a usage comment anonymised down to "this product" would
         also pass a check that only asserts what is absent."""
         out = self.root / "install.sh"
         result = self._run("--identity", str(self._acme_identity()), "--out", str(out))
@@ -295,7 +295,7 @@ class BuildInstallerTest(unittest.TestCase):
             capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertNotIn("pegasus", run.stdout.lower())
+        self.assertNotIn("darq", run.stdout.lower())
 
     def test_generated_acme_installer_help_names_acme_and_omits_build_mechanism_talk(self):
         """The mirror of the brand test above: it is not enough for a
@@ -321,14 +321,14 @@ class BuildInstallerTest(unittest.TestCase):
         for fragment in BUILD_MECHANISM_FRAGMENTS:
             self.assertNotIn(fragment.lower(), lowered, f"generated ACME --help mentions {fragment!r}")
 
-    def test_pegasus_own_generated_installer_help_names_pegasus_and_omits_build_mechanism_talk(self):
-        """Same property, exercised for Pegasus's own identity rather than
+    def test_darq_own_generated_installer_help_names_darq_and_omits_build_mechanism_talk(self):
+        """Same property, exercised for DARQ's own identity rather than
         ACME's, so the assertion is proven against the real product this
         repository ships, not only against the fictional stand-in."""
         out = self.root / "install.sh"
         result = self._run("--identity", str(REAL_IDENTITY), "--out", str(out))
         self.assertEqual(result.returncode, 0, result.stderr)
-        home = self.root / "pegasus-home-mirror"
+        home = self.root / "darq-home-mirror"
         home.mkdir()
         run = subprocess.run(
             ["bash", str(out), "--help"],
@@ -336,10 +336,10 @@ class BuildInstallerTest(unittest.TestCase):
             capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn("Pegasus", run.stdout)
+        self.assertIn("DARQ", run.stdout)
         lowered = run.stdout.lower()
         for fragment in BUILD_MECHANISM_FRAGMENTS:
-            self.assertNotIn(fragment.lower(), lowered, f"generated Pegasus --help mentions {fragment!r}")
+            self.assertNotIn(fragment.lower(), lowered, f"generated DARQ --help mentions {fragment!r}")
 
 
 if __name__ == "__main__":

@@ -88,7 +88,7 @@ def _present(home: Path) -> None:
 
 def _declare_own_mcp_server(home: Path, key: str) -> None:
     """What a user administering their own MCP server leaves behind in the
-    CLI's own configuration -- a key under `/mcp` Pegasus never wrote. Same
+    CLI's own configuration -- a key under `/mcp` DARQ never wrote. Same
     fixture `tests/test_cli_mcp.py` already uses for `cli.mcp_grant` itself,
     reproduced here since `GrantMcpScreen` sits on the same seam."""
     layout = _layout(home)
@@ -158,7 +158,7 @@ def _journal_shape(home: Path) -> dict:
     to hash the same is not, and comparing it as raw bytes elsewhere would
     fail the way `test_a_tui_install_matches...` did before this existed.
     """
-    document = json.loads(journal_path(PosixFileSystem(product_id="pegasus-harness"), home).read_text())
+    document = json.loads(journal_path(PosixFileSystem(product_id="darq"), home).read_text())
     return _drop_digests(_sans(document, str(home)))
 
 
@@ -196,7 +196,7 @@ class SessionTestCase(RealHomeTestCase):
     def runtime(self, home: Path | None = None, *, identity=None) -> cli.Runtime:
         kwargs = {} if identity is None else {"identity": identity}
         return cli.Runtime(
-            filesystem=PosixFileSystem(product_id="pegasus-harness"), home=home or self.home, now=AT, out=io.StringIO(), variables=NO_BINARY,
+            filesystem=PosixFileSystem(product_id="darq"), home=home or self.home, now=AT, out=io.StringIO(), variables=NO_BINARY,
             **kwargs,
         )
 
@@ -321,7 +321,7 @@ class McpSelectionDefaultsTest(SessionTestCase):
 
 class BoundServerSurvivesTheSelectionScreenTest(SessionTestCase):
     """A bound server is part of the installation exactly as much as one
-    Pegasus administers itself, so opening the selection screen and moving
+    DARQ administers itself, so opening the selection screen and moving
     straight to Continue has to reproduce both of them.
 
     What is asserted here is the resulting *plan*, never a checkbox: a row
@@ -333,7 +333,7 @@ class BoundServerSurvivesTheSelectionScreenTest(SessionTestCase):
     agent stripped of two servers' instructions) instead of 3.
     """
 
-    #: One server Pegasus obtains and administers (`context7`) and one it
+    #: One server DARQ obtains and administers (`context7`) and one it
     #: only ships the contract for, against a key this installation already
     #: runs it under (`cbm`) -- the two spellings `parse_mcp_choice` reads.
     SELECTION = ["cbm=codebase-memory-mcp", "context7"]
@@ -381,7 +381,7 @@ class BoundServerSurvivesTheSelectionScreenTest(SessionTestCase):
     def test_a_binding_whose_key_was_never_recorded_shows_the_specific_blocker(self):
         """The one installation whose selection cannot be reconstructed at
         all. A checklist here could only draw the bound row wrong -- retired
-        if left unchecked, silently converted into a server Pegasus obtains
+        if left unchecked, silently converted into a server DARQ obtains
         if checked and re-emitted bare -- so this shows the same refusal
         `update`, `mcp grant` and `mcp revoke` already give, naming the
         one-time command that clears it."""
@@ -467,7 +467,7 @@ class GrantMcpThroughTheTuiTest(SessionTestCase):
         )
 
     def test_a_shipped_server_is_never_offered_on_this_screen(self):
-        """A server Pegasus itself installed is declared in the CLI's own
+        """A server DARQ itself installed is declared in the CLI's own
         configuration too, but it means something different here -- see
         `GrantMcpScreen`'s own docstring -- so it must never appear as a row."""
         _present(self.home)
@@ -700,7 +700,7 @@ class ParityWithCliInstallTest(SessionTestCase):
             self.assertEqual(
                 _sans(cli_report, str(self.home)), _sans(navigator.current.report, str(other_home))
             )
-            journal_relative = str(journal_path(PosixFileSystem(product_id="pegasus-harness"), self.home).relative_to(self.home))
+            journal_relative = str(journal_path(PosixFileSystem(product_id="darq"), self.home).relative_to(self.home))
             self.assertEqual(
                 _tree(self.home, skip=frozenset({journal_relative})),
                 _tree(other_home, skip=frozenset({journal_relative})),
@@ -742,7 +742,7 @@ class ParityWithCliInstallMcpTest(SessionTestCase):
             self.assertEqual(
                 _sans(cli_report, str(self.home)), _sans(navigator.current.report, str(other_home))
             )
-            journal_relative = str(journal_path(PosixFileSystem(product_id="pegasus-harness"), self.home).relative_to(self.home))
+            journal_relative = str(journal_path(PosixFileSystem(product_id="darq"), self.home).relative_to(self.home))
             self.assertEqual(
                 _tree(self.home, skip=frozenset({journal_relative})),
                 _tree(other_home, skip=frozenset({journal_relative})),
@@ -936,7 +936,7 @@ class LocalUpdateNoticeIdentityTest(BrandAssertionMixin, SessionTestCase):
     own module docstring for the same reasoning at the `cli.py` layer).
     This test builds a `Runtime` around ACME -- an obviously fictional
     product, never a real organization -- so a remedy command that quietly
-    named Pegasus instead cannot be mistaken for a coincidental match.
+    named DARQ instead cannot be mistaken for a coincidental match.
     """
 
     def runtime(self, home: Path | None = None) -> cli.Runtime:
@@ -1041,7 +1041,7 @@ class UpdateThroughTheTuiTest(SessionTestCase):
         report = navigator.current.report
         self.assertEqual(report["status"], "failed")
         self.assertIn("cbm", report["error"])
-        self.assertIn(f"pegasus install --cli {CLI} --mcp cbm=<key>", report["error"])
+        self.assertIn(f"darq install --cli {CLI} --mcp cbm=<key>", report["error"])
 
     def test_update_task_reports_progress_through_the_sink_and_matches_the_synchronous_result(self):
         with tempfile.TemporaryDirectory(dir=self.home.parent) as other:
@@ -1315,7 +1315,7 @@ class RestoreThroughTheTuiTest(SessionTestCase):
         note = next(line for line in navigator.current.preface if "could not be read" in line)
         # The corrupt folder here is generation 2, the NEWEST one, so the note
         # has to name it and the surviving entry must not claim to be the most
-        # recent snapshot Pegasus took -- it is only the most recent it can open.
+        # recent snapshot DARQ took -- it is only the most recent it can open.
         self.assertIn("Generation 2", note)
         self.assertNotIn("(most recent)", navigator.current.entries[0].label)
 
@@ -1472,7 +1472,7 @@ class _NeverDeclaresPerAgentModel:
 class NoPerAgentModelCapabilityTest(ModelsScreenTestCase):
     """The most fundamental of the three explanations this screen can show:
     a CLI whose adapter never declared per-agent models has nothing here to
-    configure whether or not Pegasus is installed into it -- so this is
+    configure whether or not DARQ is installed into it -- so this is
     checked ahead of the installation state, not after it."""
 
     def _installed_cli_option(self, adapter, runtime):
@@ -1780,7 +1780,7 @@ class ModelsAllOrNothingTest(ModelsScreenTestCase):
 class ModelsWriteActivationTest(ModelsScreenTestCase):
     """Whatever the engine says is still left to do reaches the screen.
 
-    The bug this started as: the models screen only ever showed what Pegasus's
+    The bug this started as: the models screen only ever showed what DARQ's
     own state remembered, never what the running CLI configuration actually
     held, and the two only lined up again after a separate install. Confirming
     now reaches the rendered file in one `cli.models_apply` call for the whole

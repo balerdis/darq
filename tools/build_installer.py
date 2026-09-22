@@ -10,9 +10,9 @@ change, exactly what the distribution build path exists to prevent. Instead the 
 
     python3 tools/build_installer.py --identity src/darq/identity.json --out dist/install.sh
 
-Pegasus's own release build runs this with its own `src/darq/identity.json`, exactly like any
+DARQ's own release build runs this with its own `src/darq/identity.json`, exactly like any
 other distribution: there is no default identity, so forgetting `--identity` is an `argparse`
-error, never a silent fallback that ships a distribution branded as Pegasus.
+error, never a silent fallback that ships a distribution branded as DARQ.
 """
 from __future__ import annotations
 
@@ -260,7 +260,7 @@ def render(template_text: str, identity: object, package_source: Path) -> str:
     `CLI_CATALOGO` and `CLI_BINARIO`, unlike the four values above, are not distribution
     identity at all -- they are engine data (which CLIs `package_source`'s own
     `darq.adapters.available()` ships, and what each one's own `binary` attribute says to
-    run `command -v` on), the same for Pegasus's own build as for any other distribution built
+    run `command -v` on), the same for DARQ's own build as for any other distribution built
     off the same engine. Both still get replaced on every build rather than left as whatever
     the template happened to carry, so a third adapter shows up in both the day it registers
     rather than when someone remembers to hand-edit `install.sh`.

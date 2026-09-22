@@ -860,12 +860,12 @@ def _permission(layout: Layout, item: Agent) -> dict[str, Any]:
     Nothing times the wait out on the other side: the tool call that
     triggered the ask just hangs forever, because the runtime is correctly
     waiting for an approval that no surface will ever let a person give.
-    Pegasus ships `subagent_depth: 10` (since 5.39.0), which is what turns a
+    DARQ ships `subagent_depth: 10` (since 5.39.0), which is what turns a
     depth-two chain from an edge case into an ordinary shape -- the failure
-    was hit live through exactly that chain, `pegasus-orchestrator` ->
-    `pegasus-general` -> `pegasus-explorer`, where the explorer's own
+    was hit live through exactly that chain, `darq-orchestrator` ->
+    `darq-general` -> `darq-explorer`, where the explorer's own
     `external_directory` ask simply never appeared anywhere and the run sat
-    stuck. Pegasus created the exposure by shipping a depth deep enough to
+    stuck. DARQ created the exposure by shipping a depth deep enough to
     reach the bug on every ordinary run; it did not create the bug itself,
     which is OpenCode's to fix.
 

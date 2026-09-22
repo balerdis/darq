@@ -56,7 +56,7 @@ def _scratch_root() -> str | None:
 
 
 class _RealTerminalSession:
-    """A real `pegasus` process, talking to a real pty, against a throwaway
+    """A real `darq` process, talking to a real pty, against a throwaway
     home. Bytes sent and received exactly as a person's terminal would."""
 
     def __init__(self, home: Path):
@@ -134,7 +134,7 @@ class LiveFeedbackTest(unittest.TestCase):
 
     def setUp(self):
         if os.geteuid() == 0:
-            self.skipTest("root is not refused by permission bits, and Pegasus refuses to install as root")
+            self.skipTest("root is not refused by permission bits, and DARQ refuses to install as root")
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
@@ -144,10 +144,10 @@ class LiveFeedbackTest(unittest.TestCase):
     def test_a_startup_message_appears_before_the_first_menu(self):
         output = self.session.output_so_far()
         self.assertIn(STARTUP_NEEDLE, output)
-        self.assertIn("Pegasus", output)
+        self.assertIn("DARQ", output)
         self.assertLess(
             output.index(STARTUP_NEEDLE),
-            output.index("Pegasus"),
+            output.index("DARQ"),
             "the startup message must be drawn before the main menu it precedes",
         )
 
@@ -185,7 +185,7 @@ class WordmarkRenderingTest(unittest.TestCase):
 
     def setUp(self):
         if os.geteuid() == 0:
-            self.skipTest("root is not refused by permission bits, and Pegasus refuses to install as root")
+            self.skipTest("root is not refused by permission bits, and DARQ refuses to install as root")
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
@@ -196,7 +196,7 @@ class WordmarkRenderingTest(unittest.TestCase):
         layout = available().get(cli_id).layout(Environment(home=self.home))
         layout.config_dir.mkdir(parents=True, exist_ok=True)
         runtime = cli.Runtime(
-            filesystem=PosixFileSystem(product_id="pegasus-harness"),
+            filesystem=PosixFileSystem(product_id="darq"),
             home=self.home,
             now="2026-08-14T00:00:00+00:00",
             out=io.StringIO(),
@@ -207,18 +207,16 @@ class WordmarkRenderingTest(unittest.TestCase):
         self.addCleanup(self.session.close)
 
     def test_the_main_menu_draws_the_wordmark_once_something_is_installed(self):
-        """The two halves of the mark are drawn as separate spans -- a dim
-        `PEGASUS` and a plain `HARNESS` -- so a real terminal writes an
-        attribute-reset escape between them, and the row no longer appears
-        as one contiguous string the way `view._wordmark_lines` builds it.
-        Each half's own text, still contiguous within its own span, is what
-        proves the real loop drew the art rather than only the pure layer.
+        """This engine's own identity ships a single-word mark (`DARQ`), so
+        the loop draws one dim span, not two contrasting halves -- the same
+        `view._wordmark_lines` path a two-word identity would take, just
+        with one word instead of two. The row's own text, contiguous within
+        its span, is what proves the real loop drew the art rather than
+        only the pure layer.
         """
         output = self.session.output_so_far()
-        pegasus_rows = wordmark.word_rows("PEGASUS")
-        harness_rows = wordmark.word_rows("HARNESS")
-        self.assertIn(pegasus_rows[0], output)
-        self.assertIn(harness_rows[0], output)
+        darq_rows = wordmark.word_rows("DARQ")
+        self.assertIn(darq_rows[0], output)
 
 
 class LocalUpdateNoticeTest(unittest.TestCase):
@@ -229,7 +227,7 @@ class LocalUpdateNoticeTest(unittest.TestCase):
 
     def setUp(self):
         if os.geteuid() == 0:
-            self.skipTest("root is not refused by permission bits, and Pegasus refuses to install as root")
+            self.skipTest("root is not refused by permission bits, and DARQ refuses to install as root")
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
@@ -239,7 +237,7 @@ class LocalUpdateNoticeTest(unittest.TestCase):
         cli_id = "opencode"
         layout = available().get(cli_id).layout(Environment(home=self.home))
         layout.config_dir.mkdir(parents=True, exist_ok=True)
-        filesystem = PosixFileSystem(product_id="pegasus-harness")
+        filesystem = PosixFileSystem(product_id="darq")
         runtime = cli.Runtime(
             filesystem=filesystem,
             home=self.home,

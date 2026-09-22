@@ -11,5 +11,5 @@ def main(argv: list[str]) -> int:
     if argv and argv[0] == "doctor":
         print(json.dumps({"pegasus_version": __version__}))
         return 0
-    print("usage: pegasus doctor", file=sys.stderr)
+    print("usage: darq doctor", file=sys.stderr)
     return 1

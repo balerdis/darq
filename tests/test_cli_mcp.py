@@ -1,18 +1,18 @@
-"""`pegasus mcp grant|revoke|list`: MCP server keys the user administers.
+"""`darq mcp grant|revoke|list`: MCP server keys the user administers.
 
-Pegasus renders every agent with a deny-all baseline plus an allowlist of only
+DARQ renders every agent with a deny-all baseline plus an allowlist of only
 the servers it ships descriptors for. An agent's own permission block is
 merged last by OpenCode, so a server the user installed and administers
-themselves -- one Pegasus never heard of -- is a tool no agent can ever reach
+themselves -- one DARQ never heard of -- is a tool no agent can ever reach
 unless something in this list names it. `mcp grant` is that lever: it records
 the key on the installation's journal entry and reapplies the rendered
 configuration so every agent's wildcard actually includes it.
 
 `figma` plays that "user's own server" role throughout this file, standing in
-for something Pegasus genuinely never heard of. It used to be `jira`, but
+for something DARQ genuinely never heard of. It used to be `jira`, but
 `jira` shipped as a real descriptor (see `content/mcp/jira.md`) and nothing
 here failed -- the module's whole premise depends on its stand-in key being
-unknown to Pegasus, and `jira` quietly stopped being that. See
+unknown to DARQ, and `jira` quietly stopped being that. See
 `test_the_stand_in_key_is_not_a_shipped_server` below, which now pins it.
 
 Follows the same discipline as `test_cli_update.py`: real disk, a throwaway
@@ -69,7 +69,7 @@ class RealHomeTestCase(_RealHomeTestCase):
 
     def declare_own_mcp_server(self, key: str, value: dict | None = None) -> None:
         """What a user administering their own MCP server leaves behind in
-        the CLI's own configuration -- a key under `/mcp` Pegasus never wrote."""
+        the CLI's own configuration -- a key under `/mcp` DARQ never wrote."""
         layout = self.layout()
         document = codecs.loads(Codec.JSON, layout.settings_file.read_text(encoding="utf-8"))
         document = pointer.set_at(document, f"/mcp/{key}", value or {"type": "local", "command": ["figma-server"]})
@@ -308,7 +308,7 @@ class ListTest(RealHomeTestCase):
         self.assertEqual(report["already_covered"], ["context7"])
 
     def test_a_bound_key_this_install_resolved_is_reported_as_already_covered(self):
-        """A server Pegasus only holds the contract for (`cbm=<key>`) is
+        """A server DARQ only holds the contract for (`cbm=<key>`) is
         still reached per-agent through that binding -- granting the
         resolved key again, uniformly, would be exactly as redundant as
         granting a shipped id directly."""
@@ -535,7 +535,7 @@ class StandInKeyIsNotShippedTest(RealHomeTestCase):
     def test_the_stand_in_key_is_not_a_shipped_server(self):
         """This module's entire premise is that `figma` -- the key every test
         above declares and grants as "a server the user administers" -- is a
-        server Pegasus has never heard of. `jira` used to play that role and
+        server DARQ has never heard of. `jira` used to play that role and
         stopped without anything here failing: it shipped a real descriptor
         (`content/mcp/jira.md`) and every test above kept passing anyway,
         because none of them ever chose `jira` as a shipped server. Derived

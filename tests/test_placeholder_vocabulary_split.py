@@ -38,7 +38,7 @@ IDENTITY = cli.default_identity()
 
 def _layout_with_skills():
     home = PurePath("/home/probe")
-    environment = Environment(home=home, data_dir=home / ".local/share/pegasus")
+    environment = Environment(home=home, data_dir=home / ".local/share/darq")
     return adapter_module.Adapter().layout(environment)
 
 

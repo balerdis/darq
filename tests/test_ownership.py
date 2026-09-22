@@ -1,6 +1,6 @@
 """Fingerprints and collisions.
 
-A fingerprint is what lets Pegasus recognise its own work later. If the digest
+A fingerprint is what lets DARQ recognise its own work later. If the digest
 the catalog publishes and the digest the journal stores ever disagree for the
 same artifact, every uninstall would find a mismatch and preserve everything
 forever — so one of these tests exists purely to keep the two from drifting.

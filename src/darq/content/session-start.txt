@@ -1,1 +1,1 @@
-pegasus-orchestrator
+darq-orchestrator

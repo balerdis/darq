@@ -20,10 +20,10 @@ ROOT = Path("/home/probe")
 class FakeFileSystemIsWritableTest(unittest.TestCase):
     def test_a_path_not_named_unwritable_is_writable_by_default(self):
         filesystem = FakeFileSystem()
-        self.assertTrue(filesystem.is_writable(ROOT / "pegasus"))
+        self.assertTrue(filesystem.is_writable(ROOT / "darq"))
 
     def test_a_path_named_unwritable_answers_false(self):
-        target = ROOT / "pegasus"
+        target = ROOT / "darq"
         filesystem = FakeFileSystem(unwritable={target})
         self.assertFalse(filesystem.is_writable(target))
 

@@ -3,7 +3,7 @@
 `tests/no_network.py` keeps the whole suite off the network; nothing here
 reaches out either. It spawns a real, local, throwaway process --
 `tests/fixtures/mcp_servers/fixture_server.py`, run with this same
-interpreter -- so the launch-and-handshake path Pegasus owns is proven
+interpreter -- so the launch-and-handshake path DARQ owns is proven
 against something real, without the suite depending on `engram` or any
 other shipped server. Whether a real server speaks correctly is a question
 only a live run on a test account answers.

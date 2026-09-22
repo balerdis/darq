@@ -3,7 +3,7 @@
 This is also, verbatim, the `__main__.py` `zipapp` finds at the archive root -- `tools/build_zipapp.py`
 stages it there unmodified rather than letting `zipapp` synthesize its own wrapper, so there is only
 ever one entry point to keep correct. That is why the version guard below has to live here and run
-before `darq.cli` (or anything it imports) does: this is the first line of Pegasus code an old
+before `darq.cli` (or anything it imports) does: this is the first line of DARQ code an old
 interpreter ever reaches, whether run from a checkout or from the built artifact.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ def _too_old_message(version_info, minimum=MINIMUM_PYTHON):
     """
     if tuple(version_info[:2]) >= minimum:
         return None
-    return "pegasus requires Python %s.%s or newer; this is Python %s.%s" % (
+    return "darq requires Python %s.%s or newer; this is Python %s.%s" % (
         minimum[0], minimum[1], version_info[0], version_info[1],
     )
 

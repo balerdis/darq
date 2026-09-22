@@ -8,7 +8,7 @@ checksum: sha256:7dc3003318e303bee269a4772144f3ce01c8ec700bfd524aaec76770acd389c
 archive_members: [CHANGELOG.md, LICENSE, README.md, engram]
 archive_executable: engram
 argv: [mcp, --tools=agent]
-reaches: [king-pegasus, pegasus-explorer, pegasus-general, pegasus-implementer, pegasus-orchestrator, pegasus-verifier, sdd-apply, sdd-archive, sdd-design, sdd-explore, sdd-init, sdd-onboard, sdd-propose, sdd-spec, sdd-tasks, sdd-verify]
+reaches: [arquitecto-darq, darq-explorer, darq-general, darq-implementer, darq-orchestrator, darq-verifier, sdd-apply, sdd-archive, sdd-design, sdd-explore, sdd-init, sdd-onboard, sdd-propose, sdd-spec, sdd-tasks, sdd-verify]
 ---
 
 # Engram Convention (persistent memory)

@@ -8,9 +8,9 @@ split, and this test guards the seam from both directions.
 
 The baseline (`content/system-prompt/AGENTS.md`) must be self-contained and
 runtime-neutral: no persona, no absolute path from anybody's machine, and no
-pointer to a skill Pegasus does not ship -- a dangling pointer is worse than an
+pointer to a skill DARQ does not ship -- a dangling pointer is worse than an
 inline paragraph, because it fails in the middle of somebody's task instead of
-here. The persona (`content/agents/king-pegasus.md`) must carry voice only.
+here. The persona (`content/agents/arquitecto-darq.md`) must carry voice only.
 
 Headings are read with fenced blocks removed on purpose. The session-summary
 template is written with `##` lines, and it is a literal payload the agent hands
@@ -31,13 +31,13 @@ from darq.core import content as content_module
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "darq" / "content"
 BASELINE = ROOT / "system-prompt" / "AGENTS.md"
-PERSONA = ROOT / "agents" / "king-pegasus.md"
+PERSONA = ROOT / "agents" / "arquitecto-darq.md"
 ENGRAM = ROOT / "mcp" / "engram.md"
 
 HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 
-#: Deliberately wider than the spellings Pegasus writes: a marker malformed with an
+#: Deliberately wider than the spellings DARQ writes: a marker malformed with an
 #: underscore or a capital still has to be seen, or it goes unbalanced in silence.
 MARKER = re.compile(r"<!--\s*(/?)([A-Za-z0-9_:-]+)\s*-->")
 
@@ -61,7 +61,7 @@ BASELINE_HEADINGS = (
 #: The voice sections. `## Persona Scope` in the baseline promises a persona has
 #: Language, Tone, Speech Patterns and Personality, so those four are load-bearing.
 PERSONA_HEADINGS = (
-    ("#", "King Pegasus"),
+    ("#", "Arquitecto DARQ"),
     ("##", "Rules"),
     ("##", "Personality"),
     ("##", "Language"),
@@ -120,7 +120,7 @@ class SharedContentRules:
         for fragment in MACHINE_PATHS:
             self.assertNotIn(fragment, self.text, f"{self.path.name} names a local path: {fragment!r}")
 
-    def test_no_pointer_to_a_skill_pegasus_does_not_ship(self):
+    def test_no_pointer_to_a_skill_darq_does_not_ship(self):
         """A dangling pointer fails in the middle of a task instead of here."""
         shipped = shipped_skills()
         named = set(SKILL_POINTER.findall(self.text))
@@ -156,7 +156,7 @@ class BaselineContentTest(SharedContentRules, unittest.TestCase):
         """Two hardcoded rows nobody regenerated, superseded by the inventory rule.
 
         The ban is on the table, not on the names in it: `skill-creator` is a skill
-        Pegasus really ships, and the baseline is free to mention it one day.
+        DARQ really ships, and the baseline is free to mention it one day.
         """
         self.assertNotIn("Skills (Auto-load based on context)", self.text)
         self.assertNotIn("| Context | Skill to load |", self.text)
@@ -211,17 +211,17 @@ class MarkerAbsenceTest(unittest.TestCase):
     def test_the_baseline_carries_no_marked_block(self):
         """Nothing reads a marker, and nothing needs to.
 
-        Markers were the mechanism for merging Pegasus's block into a file the
+        Markers were the mechanism for merging DARQ's block into a file the
         user also owns: without them a re-install cannot rewrite one block
         without touching what surrounds it. That is not how the prompt ships.
-        Pegasus writes its own file and points the CLI at it, so the file is
+        DARQ writes its own file and points the CLI at it, so the file is
         created, replaced and removed whole. A marker no reader looks for is
         inert text in the always-on context of every agent.
         """
         self.assertEqual(self.events(self.text), [])
 
     def test_no_marker_carries_the_old_capitalised_spelling(self):
-        self.assertNotIn("Pegasus baseline:", self.text)
+        self.assertNotIn("DARQ baseline:", self.text)
 
     def test_the_gentle_ai_vocabulary_is_gone_from_the_whole_tree(self):
         offenders = [
@@ -237,12 +237,12 @@ class PersonaTest(SharedContentRules, unittest.TestCase):
         cls.path = PERSONA
         cls.text = PERSONA.read_text(encoding="utf-8")
         cls.content = content_module.load()
-        cls.agent = next((a for a in cls.content.agents if a.name == "king-pegasus"), None)
+        cls.agent = next((a for a in cls.content.agents if a.name == "arquitecto-darq"), None)
 
     def test_the_persona_is_registered_as_an_agent(self):
         """Not "the file exists": the loader has to have picked it up as an agent."""
-        self.assertIsNotNone(self.agent, "king-pegasus is not among the loaded agents")
-        self.assertEqual(self.agent.source.as_posix(), "agents/king-pegasus.md")
+        self.assertIsNotNone(self.agent, "arquitecto-darq is not among the loaded agents")
+        self.assertEqual(self.agent.source.as_posix(), "agents/arquitecto-darq.md")
         self.assertTrue(self.agent.description.strip())
         self.assertTrue(self.agent.model_configurable)
 

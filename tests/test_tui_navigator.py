@@ -113,7 +113,7 @@ class MainMenuTest(unittest.TestCase):
         placeholder, never a specific product's own name -- this module
         must never spell one (see its own module docstring)."""
         navigator = Navigator.starting()
-        self.assertNotIn("Pegasus", navigator.current.title)
+        self.assertNotIn("DARQ", navigator.current.title)
 
     def test_the_cursor_starts_on_the_first_entry(self):
         navigator = Navigator.starting()
@@ -221,7 +221,7 @@ class QuittingTest(unittest.TestCase):
 
 
 class InstallMenuTest(unittest.TestCase):
-    """The `¿Dónde instalar Pegasus?` screen: built from whichever CLIs were
+    """The `¿Dónde instalar DARQ?` screen: built from whichever CLIs were
     detected present, with nothing here doing any of that detecting."""
 
     def test_a_detected_cli_opens_a_menu_naming_it(self):
@@ -376,7 +376,7 @@ class McpSelectionSpellingTest(unittest.TestCase):
     against the one I already run under this key" -- the two spellings
     `core.content.parse_mcp_choice` reads."""
 
-    def test_a_pegasus_administered_row_is_re_emitted_bare(self):
+    def test_a_darq_administered_row_is_re_emitted_bare(self):
         screen = _mcp_screen(chosen=("context7",))
         self.assertEqual(navigator_module.mcp_selection(screen), ("context7",))
 
@@ -1100,7 +1100,7 @@ class EveryEngineTargetSaysWhatItIsDoingTest(unittest.TestCase):
 
 
 class UpdateMenuTest(unittest.TestCase):
-    """`update_menu`: only a CLI Pegasus is actually installed into can be
+    """`update_menu`: only a CLI DARQ is actually installed into can be
     offered -- `update` refuses otherwise, and offering an action that can
     only fail is worse than not offering it at all."""
 
@@ -1176,7 +1176,7 @@ class UpdatePlanAndResultWordingTest(unittest.TestCase):
 
 class UpgradeMenuEntryTest(unittest.TestCase):
     """`Upgrade`: unlike `Update`, needs no CLI and no submenu -- one entry on
-    the main menu, naming `pegasus upgrade` directly."""
+    the main menu, naming `darq upgrade` directly."""
 
     def test_the_main_menu_names_an_upgrade_target(self):
         target = next(entry.target for entry in main_menu().entries if entry.label == "Upgrade")
@@ -1257,7 +1257,7 @@ class UpdateNoticeTest(unittest.TestCase):
                 BehindInstall(
                     display_name="Demo CLI",
                     recorded="5.9.0",
-                    remedy_command="pegasus install --cli demo --mcp cbm=<key>",
+                    remedy_command="darq install --cli demo --mcp cbm=<key>",
                 ),
             ),
         )
@@ -1265,7 +1265,7 @@ class UpdateNoticeTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertNotIn("choose Update", lines[0])
         self.assertIn("Demo CLI", lines[0])
-        self.assertIn("pegasus install --cli demo --mcp cbm=<key>", lines[0])
+        self.assertIn("darq install --cli demo --mcp cbm=<key>", lines[0])
 
     def test_two_behind_installs_are_both_named_on_their_own_lines(self):
         notice = UpdateNotice(

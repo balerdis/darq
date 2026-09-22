@@ -5,7 +5,7 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
   version: "3.0"
 ---
 
@@ -71,13 +71,13 @@ that reference is missing or unreadable, report with your own judgement and say 
 - [sdd-verify/strict-tdd-verify.md](sdd-verify/strict-tdd-verify.md) — load only when Strict TDD is active.
 - `_shared/sdd-phase-common.md` — skill loading, retrieval, persistence, and return envelope.
 
-<!-- pegasus-local:sdd-verify-executor-boundary -->
+<!-- darq-local:sdd-verify-executor-boundary -->
 ## Executor Boundary
 
 You are already the dedicated `sdd-verify` executor. Perform source inspection, CBM analysis, test/build commands, and verification report production directly. Never launch subagents, call `task(...)` or any delegation primitive, or bounce verification back because delegation permission is unavailable. Orchestrator routing delegates work to you; it is not part of this executor prompt.
-<!-- /pegasus-local:sdd-verify-executor-boundary -->
+<!-- /darq-local:sdd-verify-executor-boundary -->
 
-<!-- pegasus-local:cbm-protocol -->
+<!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Verification
 
 Use CBM to focus verification when implementation touched shared logic or when affected tests are not obvious. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
@@ -87,9 +87,9 @@ Do NOT replace the actual project test runner with CBM. CBM guides verification;
 ## CBM Index Evidence Gate
 
 Index-based evidence is provisional unless `apply-progress` recorded adequate coherence evidence or verification establishes current evidence. Tests and direct inspection remain authoritative; do not reject or pass behavior solely from graph status.
-<!-- /pegasus-local:cbm-protocol -->
+<!-- /darq-local:cbm-protocol -->
 
-<!-- pegasus-local:sdd-evidence-maintenance-policy -->
+<!-- darq-local:sdd-evidence-maintenance-policy -->
 ## Evidence Maintenance and Verification Precedence
 
 Verification evidence is ranked in this order:
@@ -105,4 +105,4 @@ When an isolated persisted factual claim is stale or inaccurate, while current c
 If the proposed correction would change scope or requirements, or could conceal an implementation, runtime, test, or specification failure, do not edit it. Report the blocker and use normal remediation for the real failure.
 
 The orchestrator treats a qualifying correction as one atomic evidence-maintenance operation. It may perform or delegate one focused correction and a fresh focused `sdd-verify`; it must not restart the SDD pipeline for that correction alone.
-<!-- /pegasus-local:sdd-evidence-maintenance-policy -->
+<!-- /darq-local:sdd-evidence-maintenance-policy -->

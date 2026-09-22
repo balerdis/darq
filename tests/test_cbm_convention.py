@@ -142,8 +142,8 @@ class AgentPointerResolutionTest(unittest.TestCase):
     #: entry here without a declaration, or a declaration without the pointer,
     #: still fails at load.
     CBM_AGENTS = (
-        "king-pegasus.md",
-        "pegasus-orchestrator.md",
+        "arquitecto-darq.md",
+        "darq-orchestrator.md",
         "sdd-explore.md",
         "sdd-design.md",
         "sdd-apply.md",
@@ -238,14 +238,14 @@ class SkillPointerTest(unittest.TestCase):
         self.assertEqual(missing, [], f"skills missing the CBM pointer: {missing}")
 
 
-class KingPegasusToolsTest(unittest.TestCase):
-    """king-pegasus reads the graph itself, because it is the one voice that
+class KingDARQToolsTest(unittest.TestCase):
+    """arquitecto-darq reads the graph itself, because it is the one voice that
     does its own discovery instead of delegating it."""
 
     @classmethod
     def setUpClass(cls):
         cls.agent = next(
-            agent for agent in content_module.load().agents if agent.name == "king-pegasus"
+            agent for agent in content_module.load().agents if agent.name == "arquitecto-darq"
         )
 
     def test_declares_the_servers_whose_contract_is_ambient(self):

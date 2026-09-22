@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-pegasus = "darq.cli:main"
+darq = "darq.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

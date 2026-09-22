@@ -17,7 +17,7 @@ from darq.core.content import Distribution, Mcp
 from darq.infra.fs_posix import PosixFileSystem
 from real_home import _scratch_root
 
-DEPENDENCIES_DIR = Path("/home/probe/.local/share/pegasus-harness/mcp")
+DEPENDENCIES_DIR = Path("/home/probe/.local/share/darq/mcp")
 AT = "2026-08-14T00:00:00+00:00"
 INTEGRITY = "sha512-" + "a" * 86 + "=="
 
@@ -286,8 +286,8 @@ class MaterializeArchiveTest(unittest.TestCase):
 #: stands in for the driver a synthesized, single-package lockfile could never
 #: have named, which is exactly the gap `materialize_npm` must not reintroduce.
 NPM_LOCKFILE = (
-    b'{"name": "pegasus-probe", "lockfileVersion": 3, "requires": true, "packages": {'
-    b'"": {"name": "pegasus-probe", "dependencies": {"probe-mcp": "1.2.3"}}, '
+    b'{"name": "darq-probe", "lockfileVersion": 3, "requires": true, "packages": {'
+    b'"": {"name": "darq-probe", "dependencies": {"probe-mcp": "1.2.3"}}, '
     b'"node_modules/probe-mcp": {"version": "1.2.3", '
     b'"resolved": "https://registry.npmjs.org/probe-mcp/-/probe-mcp-1.2.3.tgz", '
     b'"integrity": "' + INTEGRITY.encode("ascii") + b'", '
@@ -311,7 +311,7 @@ def npm_server(**overrides) -> Mcp:
         integrity=INTEGRITY,
         entry="cli.js",
         npm_lockfile=NPM_LOCKFILE,
-        npm_package_name="pegasus-probe",
+        npm_package_name="darq-probe",
     )
     fields.update(overrides)
     return Mcp(**fields)
@@ -471,7 +471,7 @@ class MaterializeOnRealDiskTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.dependencies_dir = Path(self.directory.name) / "mcp"
-        self.filesystem = PosixFileSystem(product_id="pegasus-harness")
+        self.filesystem = PosixFileSystem(product_id="darq")
 
     def test_a_downloaded_binary_lands_on_disk_with_its_executable_mode(self):
         item, content = download_server()

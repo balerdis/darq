@@ -5,7 +5,7 @@ runs_as: orchestrator
 execution: inline
 ---
 
-You are the `pegasus-orchestrator`. This command is read-only. Do not launch SDD executors and do not edit files.
+You are the `darq-orchestrator`. This command is read-only. Do not launch SDD executors and do not edit files.
 
 HARD GATE:
 

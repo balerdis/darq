@@ -1,7 +1,7 @@
 """Persisting the ownership journal.
 
 The store is the only thing between a correct journal and a home directory
-Pegasus can no longer retire from cleanly, so its refusals matter as much as its
+DARQ can no longer retire from cleanly, so its refusals matter as much as its
 writes. Everything here runs against a fake filesystem: the store's job is
 policy, and the port already proves the writing.
 """
@@ -52,7 +52,7 @@ def store(filesystem: FakeFileSystem) -> FileJournalStore:
 class JournalPathTest(unittest.TestCase):
     def test_the_path_is_arithmetic_on_the_filesystems_own_data_dir(self):
         filesystem = FakeFileSystem()
-        home = Path("/nonexistent/pegasus-probe")
+        home = Path("/nonexistent/darq-probe")
         self.assertEqual(
             journal_path(filesystem, home),
             filesystem.data_dir(home) / "journal-v4.json",
@@ -92,7 +92,7 @@ class FileJournalStoreTest(unittest.TestCase):
             store(filesystem).load()
 
     def test_a_journal_the_core_rejects_is_refused(self):
-        payload = json.dumps({"schema": "pegasus-harness/journal/v3", "pegasus_version": VERSION}).encode("utf-8")
+        payload = json.dumps({"schema": "darq/journal/v3", "pegasus_version": VERSION}).encode("utf-8")
         filesystem = FakeFileSystem(files={journal_path(FakeFileSystem(), HOME): payload})
         with self.assertRaises(JournalStoreError):
             store(filesystem).load()
@@ -155,7 +155,7 @@ class FileJournalStoreTest(unittest.TestCase):
 
     def test_a_journal_whose_existence_cannot_be_told_refuses_rather_than_loading_as_empty(self):
         """`load`'s `if not exists(): return empty()` would turn "cannot tell"
-        into "there is no journal at all" — everything Pegasus ever recorded
+        into "there is no journal at all" — everything DARQ ever recorded
         installing would vanish from this call's point of view, and every
         command built on top of it would proceed as if none of it happened.
         This runs before anything is written, so refusing costs nothing."""

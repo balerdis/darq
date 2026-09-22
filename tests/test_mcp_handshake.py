@@ -26,7 +26,7 @@ class InitializeRequestTest(unittest.TestCase):
         self.assertEqual(document["id"], mcp_handshake.REQUEST_ID)
         self.assertEqual(document["params"]["protocolVersion"], mcp_handshake.PROTOCOL_VERSION)
 
-    def test_the_client_name_sent_to_third_party_servers_is_pegasus_doctor(self):
+    def test_the_client_name_sent_to_third_party_servers_is_darq_doctor(self):
         """Engine plumbing keeps the engine's own name regardless of which
         distribution runs -- product identity varies, engine plumbing does
         not. This wire identifier is what a third-party MCP server sees in

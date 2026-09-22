@@ -1,18 +1,18 @@
 # Distribución de releases (v5)
 
-v5 publica un solo archivo: `pegasus`, un `zipapp` de la biblioteca estándar con shebang, construido
+v5 publica un solo archivo: `darq`, un `zipapp` de la biblioteca estándar con shebang, construido
 por `tools/build_zipapp.py` a partir de `src/darq/`. Es el archivo entero que la persona instala —
 el asset que [INSTALL.md](../INSTALL.md) e [INSTALL_BY_AGENT.md](../INSTALL_BY_AGENT.md) instruyen
-descargar y verificar. No hay wheel, no hay venv, no hay shim aparte: Pegasus no declara ninguna
+descargar y verificar. No hay wheel, no hay venv, no hay shim aparte: DARQ no declara ninguna
 dependencia y lee su contenido desde adentro del propio zip, así que no queda nada más que empaquetar.
 No hay pipeline de CI en este repositorio: los pasos siguientes son manuales, corridos por quien
 prepara el release.
 
-**`--identity` es obligatorio, sin excepción, incluso para el propio release de Pegasus.** Desde
+**`--identity` es obligatorio, sin excepción, incluso para el propio release de DARQ.** Desde
 que el motor puede construir un binario con una identidad distinta (nombre, wordmark, directorio de
 datos y fuente de release propia — ver `docs/arquitectura/arquitectura.md`), `tools/build_zipapp.py`
 exige el flag siempre: es la única forma de que "una distribución no puede olvidarse de dar su propia
-identidad" sea literalmente cierto. El propio release de Pegasus pasa `src/darq/identity.json`
+identidad" sea literalmente cierto. El propio release de DARQ pasa `src/darq/identity.json`
 explícitamente, igual que cualquier otra distribución pasaría el suyo.
 
 **`install.sh` también se genera por identidad, con `tools/build_installer.py`.** El instalador
@@ -23,43 +23,43 @@ líneas `# ====...====` cerca del principio del archivo, es el equivalente shell
 <identity.json> --out <ruta>` reemplaza esas cuatro líneas por los valores del `identity.json` que
 se le da, carácter por carácter idéntico en el resto del archivo, y valida el `identity.json` con
 las mismas reglas de `core/identity.py` que usa `build_zipapp.py`. `--identity` y `--out` son
-obligatorios igual que en `build_zipapp.py`, y `--out` se niega si ya existe. El release de Pegasus
+obligatorios igual que en `build_zipapp.py`, y `--out` se niega si ya existe. El release de DARQ
 corre este mismo comando con `src/darq/identity.json`, igual que cualquier otra distribución.
 
 1. Sobre un commit con la suite verde (`PYTHONPATH=src:tests python3 -m unittest discover -s tests -q`), confirmá que `pyproject.toml` declara la versión que vas a publicar y creá el tag anotado `vX.Y.Z` sobre ese commit.
 2. Construí el artefacto:
 
    ```sh
-   python3 tools/build_zipapp.py --identity src/darq/identity.json --out dist/pegasus
+   python3 tools/build_zipapp.py --identity src/darq/identity.json --out dist/darq
    ```
 
    `--identity` se valida contra las reglas de `src/darq/core/identity.py` antes de escribir nada
    — nombre con sólo letras y números (sin acentos, sin guiones), no más ancho de lo que entra en la
    grilla del wordmark, URLs de release `https` con host real — y `--source` tiene que ser el propio
-   directorio del paquete (`.../pegasus`, con `core/content.py` adentro), no el directorio que lo
-   contiene: pasar el de arriba arma un archivo anidado `pegasus/pegasus/` que hoy se rechaza en el
+   directorio del paquete (`.../darq`, con `core/content.py` adentro), no el directorio que lo
+   contiene: pasar el de arriba arma un archivo anidado `darq/darq/` que hoy se rechaza en el
    momento de construir, con el error nombrando el motivo, en vez de fallar recién al ejecutar el
-   binario con un `ModuleNotFoundError`. Deja `dist/pegasus` (ejecutable, con shebang) y
-   `dist/pegasus.sha256` al lado.
+   binario con un `ModuleNotFoundError`. Deja `dist/darq` (ejecutable, con shebang) y
+   `dist/darq.sha256` al lado.
 3. Generá la evidencia del release con `tools/build_release_evidence.py`, apuntando al tag:
 
    ```sh
    python3 tools/build_release_evidence.py \
-     --artifact dist/pegasus \
+     --artifact dist/darq \
      --tag vX.Y.Z \
      --output dist/release-manifest.json
    ```
 
-   El script no construye el artefacto — lo toma tal cual existe, lo corre (`pegasus doctor --json`)
+   El script no construye el artefacto — lo toma tal cual existe, lo corre (`darq doctor --json`)
    para confirmar que el `pegasus_version` que reporta coincide con `pyproject.toml` en ese commit, y
    sólo entonces certifica el commit y el hash (`release-manifest.json` y un `.sha256`). Sin `--tag`,
    describe el `HEAD` limpio; con el worktree sucio, se niega. `assets` en el manifest ahora nombra
-   cuatro archivos, no uno: además de `pegasus`, certifica `install.sh`, `tools/build_zipapp.py` y
+   cuatro archivos, no uno: además de `darq`, certifica `install.sh`, `tools/build_zipapp.py` y
    `tools/build_installer.py` leyendo los bytes exactos de cada uno del commit con
    `git show <commit>:<ruta>` (no del working tree) y comparándolos contra la copia del working
    tree — los archivos que este mismo paso 4 sube. `build_zipapp.py` y `build_installer.py` se
    publican con su propio nombre plano (sin el prefijo `tools/`, porque los assets de un release de
-   GitHub no tienen subcarpetas) y su propio `.sha256` al lado, igual que `pegasus`: una
+   GitHub no tienen subcarpetas) y su propio `.sha256` al lado, igual que `darq`: una
    distribución que descarga el release no tiene que clonar el repositorio entero sólo para
    conseguir los scripts que construyen su propio binario y su propio instalador. El script se
    niega si el commit no tiene alguno de los cuatro archivos, o si el del working tree no coincide
@@ -68,11 +68,11 @@ corre este mismo comando con `src/darq/identity.json`, igual que cualquier otra 
 4. Publicá en GitHub Releases, sobre ese mismo tag, estos ocho archivos -- `release-manifest.json`
    mismo, los cuatro que certifica su lista `assets`, y el `.sha256` de cada uno de los tres que lo
    necesita, tal como los escribe el paso anterior:
-   `pegasus`, su `.sha256`, `release-manifest.json`, `install.sh` (el archivo en la raíz del
+   `darq`, su `.sha256`, `release-manifest.json`, `install.sh` (el archivo en la raíz del
    repositorio, tal cual está en ese commit — no se genera en este paso, se sube directo, y es el
    mismo cuyo hash quedó certificado en el paso anterior; es, además, exactamente lo que
    `tools/build_installer.py --identity src/darq/identity.json` reproduciría, así que el propio
-   release de Pegasus no necesita correr ese comando para publicar el suyo), `build_zipapp.py` con
+   release de DARQ no necesita correr ese comando para publicar el suyo), `build_zipapp.py` con
    su propio `.sha256` (el archivo en `tools/build_zipapp.py`, subido con el nombre plano que el
    manifest certificó), y `build_installer.py` con su propio `.sha256` (el archivo en
    `tools/build_installer.py`, subido con el nombre plano que el manifest certificó). `install.sh`,
@@ -81,7 +81,7 @@ corre este mismo comando con `src/darq/identity.json`, igual que cualquier otra 
    instala vive detrás de `releases/latest/download/`, así que si alguno de los scripts viviera en
    una URL aparte podría quedar apuntando a un binario de un release distinto del que lo acompaña —
    exactamente el tipo de desincronización que este esquema existe para evitar, y la razón por la
-   que el paso 3 ya lo certifica antes de que llegues a subir nada. El checksum de `pegasus`
+   que el paso 3 ya lo certifica antes de que llegues a subir nada. El checksum de `darq`
    registra sólo el basename, nunca una ruta de staging, para que `sha256sum -c` funcione tal como
    se descargó.
 5. El release de GitHub debe ser no-draft y no-prerelease para que el contrato `latest` lo ofrezca.

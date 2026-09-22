@@ -1,4 +1,4 @@
-"""`cli.check_for_update`: the one place Pegasus ever asks the network what
+"""`cli.check_for_update`: the one place DARQ ever asks the network what
 the newest published release is.
 
 Every failure mode this module can hit -- disabled, no cache and no network,

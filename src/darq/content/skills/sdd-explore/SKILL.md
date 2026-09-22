@@ -5,7 +5,7 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
   version: "2.0"
   delegate_only: true
 ---
@@ -113,10 +113,10 @@ heading and the order, and adds `Ready for Proposal`.
 - Follow the exploration rules in `_shared/exploration-craft.md`
 - Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
 
-<!-- pegasus-local:cbm-protocol -->
+<!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Exploration
 
 Use CBM when exploration needs semantic code understanding: architecture, request/data flows, symbols, routes, dependency relationships, callers/callees, or impact mapping. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
 
 Do NOT use CBM for tiny tasks where the relevant file is already known.
-<!-- /pegasus-local:cbm-protocol -->
+<!-- /darq-local:cbm-protocol -->

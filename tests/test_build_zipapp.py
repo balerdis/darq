@@ -106,7 +106,7 @@ class ValidateIdentityTest(unittest.TestCase):
     """Build-time identity validation, reusing `core/identity.py`'s own rules -- never a second,
     separately maintained copy of the wordmark charset."""
 
-    def test_accepts_pegasus_own_identity_against_the_real_source(self):
+    def test_accepts_darq_own_identity_against_the_real_source(self):
         validate_identity(REAL_SOURCE, REAL_IDENTITY)  # must not raise
 
     def test_rejects_a_missing_identity_file(self):
@@ -155,7 +155,7 @@ class BuildTest(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.addCleanup(self._directory.cleanup)
-        self.output = Path(self._directory.name) / "pegasus"
+        self.output = Path(self._directory.name) / "darq"
 
     def test_the_artifact_starts_with_a_shebang(self):
         build(FIXTURE_ROOT, self.output, FIXTURE_IDENTITY)
@@ -205,7 +205,7 @@ class ReproducibilityTest(unittest.TestCase):
         shutil.copytree(FIXTURE_ROOT, copy_root)
         for path in copy_root.rglob("*"):
             os.utime(path, (mtime, mtime))
-        output = self.root / f"pegasus-{mtime}"
+        output = self.root / f"darq-{mtime}"
         build(copy_root, output, FIXTURE_IDENTITY)
         return hashlib.sha256(output.read_bytes()).hexdigest()
 
@@ -216,9 +216,9 @@ class ReproducibilityTest(unittest.TestCase):
 
 
 class MainRequiresIdentityTest(unittest.TestCase):
-    """`--identity` is required unconditionally, including for Pegasus's own release build --
+    """`--identity` is required unconditionally, including for DARQ's own release build --
     the only shape in which forgetting it is literally impossible: `argparse.error`, never a
-    silent default that ships a distribution branded as Pegasus."""
+    silent default that ships a distribution branded as DARQ."""
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
         script = Path(__file__).resolve().parents[1] / "tools" / "build_zipapp.py"
@@ -228,24 +228,24 @@ class MainRequiresIdentityTest(unittest.TestCase):
 
     def test_missing_identity_is_an_argparse_error_not_a_silent_default(self):
         with tempfile.TemporaryDirectory() as out_dir:
-            out = Path(out_dir) / "pegasus"
+            out = Path(out_dir) / "darq"
             result = self._run("--out", str(out))
             self.assertEqual(result.returncode, 2)
             self.assertIn("--identity", result.stderr)
             self.assertFalse(out.exists())
 
-    def test_pegasus_own_release_build_also_requires_identity(self):
-        """Even a build with no `--source` override (Pegasus's own package) must supply
+    def test_darq_own_release_build_also_requires_identity(self):
+        """Even a build with no `--source` override (DARQ's own package) must supply
         `--identity` explicitly -- there is no default that falls back to the packaged file."""
         with tempfile.TemporaryDirectory() as out_dir:
-            out = Path(out_dir) / "pegasus"
+            out = Path(out_dir) / "darq"
             result = self._run("--out", str(out))
             self.assertEqual(result.returncode, 2)
             self.assertFalse(out.exists())
 
     def test_a_valid_identity_and_source_builds_successfully(self):
         with tempfile.TemporaryDirectory() as out_dir:
-            out = Path(out_dir) / "pegasus"
+            out = Path(out_dir) / "darq"
             result = self._run("--source", str(REAL_SOURCE), "--identity", str(REAL_IDENTITY), "--out", str(out))
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertTrue(out.is_file())
@@ -270,7 +270,7 @@ class MainRequiresIdentityTest(unittest.TestCase):
                 }),
                 encoding="utf-8",
             )
-            out = Path(directory) / "pegasus"
+            out = Path(directory) / "darq"
             result = self._run(
                 "--source", str(REAL_SOURCE), "--identity", str(bad_identity), "--out", str(out)
             )
@@ -283,7 +283,7 @@ class MainRequiresIdentityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as extraction_root:
             root = Path(extraction_root)
             stage(REAL_SOURCE, root, REAL_IDENTITY)
-            out = root / "pegasus-artifact"
+            out = root / "darq-artifact"
             result = self._run(
                 "--source", str(root), "--identity", str(REAL_IDENTITY), "--out", str(out)
             )

@@ -5,7 +5,7 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
   version: "2.0"
   delegate_only: true
 ---
@@ -197,10 +197,10 @@ Ready for tasks (sdd-tasks).
 
 - [sdd-design/references/threat-matrix.md](sdd-design/references/threat-matrix.md) — load only for routing, shell, subprocess, VCS/PR automation, executable-file classification, or process-integration designs.
 
-<!-- pegasus-local:cbm-protocol -->
+<!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Design
 
 Use CBM to validate design decisions when the change touches non-trivial coupling, shared abstractions, public APIs, routes, persistence flows, or cross-module behavior. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
 
 Skip CBM for isolated UI/copy/docs/config-only design where graph relationships do not matter.
-<!-- /pegasus-local:cbm-protocol -->
+<!-- /darq-local:cbm-protocol -->

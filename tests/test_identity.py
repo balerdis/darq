@@ -15,17 +15,17 @@ from darq.core.identity import Identity, IdentityError, ReleaseSource
 
 def document(**overrides) -> bytes:
     payload = {
-        "product_id": "pegasus-harness",
-        "display_name": "Pegasus",
-        "program_name": "pegasus",
+        "product_id": "darq",
+        "display_name": "DARQ",
+        "program_name": "darq",
         "version": "1.0.0",
-        "wordmark_words": ["PEGASUS", "HARNESS"],
+        "wordmark_words": ["DARQ", "HARNESS"],
         "release": {
-            "asset_url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/{asset}",
-            "binary_asset": "pegasus",
-            "latest_release_api_url": "https://api.github.com/repos/balerdis/pegasus-harness/releases/latest",
-            "release_page_url": "https://github.com/balerdis/pegasus-harness/releases",
-            "install_base_url_default": "https://github.com/balerdis/pegasus-harness/releases/latest/download",
+            "asset_url_template": "https://github.com/balerdis/darq/releases/download/{tag}/{asset}",
+            "binary_asset": "darq",
+            "latest_release_api_url": "https://api.github.com/repos/balerdis/darq/releases/latest",
+            "release_page_url": "https://github.com/balerdis/darq/releases",
+            "install_base_url_default": "https://github.com/balerdis/darq/releases/latest/download",
         },
     }
     payload.update(overrides)
@@ -38,17 +38,17 @@ class ParseAcceptsAValidDocumentTest(unittest.TestCase):
         self.assertEqual(
             parsed,
             Identity(
-                product_id="pegasus-harness",
-                display_name="Pegasus",
-                program_name="pegasus",
+                product_id="darq",
+                display_name="DARQ",
+                program_name="darq",
                 version="1.0.0",
-                wordmark_words=("PEGASUS", "HARNESS"),
+                wordmark_words=("DARQ", "HARNESS"),
                 release=ReleaseSource(
-                    asset_url_template="https://github.com/balerdis/pegasus-harness/releases/download/{tag}/{asset}",
-                    binary_asset="pegasus",
-                    latest_release_api_url="https://api.github.com/repos/balerdis/pegasus-harness/releases/latest",
-                    release_page_url="https://github.com/balerdis/pegasus-harness/releases",
-                    install_base_url_default="https://github.com/balerdis/pegasus-harness/releases/latest/download",
+                    asset_url_template="https://github.com/balerdis/darq/releases/download/{tag}/{asset}",
+                    binary_asset="darq",
+                    latest_release_api_url="https://api.github.com/repos/balerdis/darq/releases/latest",
+                    release_page_url="https://github.com/balerdis/darq/releases",
+                    install_base_url_default="https://github.com/balerdis/darq/releases/latest/download",
                 ),
             ),
         )

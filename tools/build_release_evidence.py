@@ -6,10 +6,10 @@ that evidence for the tags that shipped it, and stays untouched for exactly that
 its inputs with `git show <tag>:path`, so it can still answer for `v3.1.1` after `install.sh` is
 gone from the working tree. v4 shipped a wheel plus a boot shim, verified by an earlier version of
 this script through the wheel's own METADATA and the shim's tracked Git mode. Neither exists any
-more: Pegasus has zero runtime dependencies and reads its content from inside a zip as readily as
+more: DARQ has zero runtime dependencies and reads its content from inside a zip as readily as
 from a directory, so the wheel and the venv it needed are both gone, and with them the second file.
 
-v5 ships several things: `pegasus`, a `zipapp` built by `tools/build_zipapp.py` -- a single
+v5 ships several things: `darq`, a `zipapp` built by `tools/build_zipapp.py` -- a single
 executable file that is the whole command -- `install.sh`, the script `README.md` and
 `INSTALL.md` advertise as a one-liner served from `releases/latest/download/`, and the two builder
 scripts themselves (`tools/build_zipapp.py` and `tools/build_installer.py`), published so a
@@ -31,7 +31,7 @@ rebuilding `commit` with `build_zipapp.py`, on the same Python feature release, 
 what makes `commit` in the manifest worth anything beyond a label.
 
     python3 tools/build_release_evidence.py \\
-        --artifact dist/pegasus \\
+        --artifact dist/darq \\
         --output dist/release-manifest.json
 
 Add `--tag v5.0.0` once a release actually gets an annotated tag; the commit and the expected version
@@ -50,8 +50,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = "pegasus-harness-release/v5"
-ARTIFACT_NAME = "pegasus"
+SCHEMA = "darq-release/v5"
+ARTIFACT_NAME = "darq"
 DOCTOR_TIMEOUT_SECONDS = 30
 
 # Not pinned to a specific version the way v3's `RC_TAG`/`FINAL_TAG` were -- that hardcoding is
@@ -65,7 +65,7 @@ TAG = re.compile(r"^v(?:\d+)\.(?:\d+)\.(?:\d+)(?:-rc\.[1-9][0-9]*)?$")
 #: the commit this evidence describes -- and be the exact bytes GitHub Releases serves -- or this
 #: URL 404s (or serves a stale script) for every user until someone notices by hand.
 INSTALL_ONE_LINER = (
-    "curl -fsSL https://github.com/balerdis/pegasus-harness/releases/latest/download/install.sh | bash"
+    "curl -fsSL https://github.com/balerdis/darq/releases/latest/download/install.sh | bash"
 )
 INSTALL_SH_NAME = "install.sh"
 
@@ -296,7 +296,7 @@ def main() -> int:
         "commit": commit,
         "package_version": expected_version,
         "assets": [artifact, install_sh, build_zipapp, build_installer],
-        "install": {"artifact": f"install -m 755 {artifact['name']} <bin_dir>/pegasus"},
+        "install": {"artifact": f"install -m 755 {artifact['name']} <bin_dir>/darq"},
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

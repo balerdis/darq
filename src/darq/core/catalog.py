@@ -319,11 +319,11 @@ def _delegation_targets(content: Content) -> tuple[DelegationTarget, ...]:
     """Every agent named in at least one `may_delegate_to`, with its real capabilities.
 
     The subject set is the union of every agent's `may_delegate_to`, including a
-    name an agent lists for itself: `pegasus-general` naming itself is still a real
-    delegation another agent's brief may target through `pegasus-general`'s own
+    name an agent lists for itself: `darq-general` naming itself is still a real
+    delegation another agent's brief may target through `darq-general`'s own
     fan-out, and the row exists so THAT delegator can look it up too. An agent
     nobody's `may_delegate_to` ever names -- the two primaries this content ships,
-    `king-pegasus` and `pegasus-orchestrator` -- is never the answer to "what can my
+    `arquitecto-darq` and `darq-orchestrator` -- is never the answer to "what can my
     delegation target do", so it earns no row: listing it would be noise with no
     question it answers.
 

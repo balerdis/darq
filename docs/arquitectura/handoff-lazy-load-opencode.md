@@ -5,8 +5,8 @@
 **Status:** complete and runtime-validated (13 probes)
 
 > **Later note (C3a, 2026-08-18).** The agent measured here as `king-gentleman` ships in v4
-> as `king-pegasus`, and its prompt moved from `agents/pegasus-AGENTS.md` to
-> `agents/king-pegasus.md`. The old name is kept throughout this document on purpose: it is
+> as `arquitecto-darq`, and its prompt moved from `agents/darq-AGENTS.md` to
+> `agents/arquitecto-darq.md`. The old name is kept throughout this document on purpose: it is
 > what the probes actually addressed, and renaming it would turn a measurement into a claim
 > about an agent that did not exist on the date above.
 >
@@ -34,9 +34,9 @@ which matters as much as what was changed.
 |---|---:|---:|
 | `prompts/sdd/` (10 phase prompts) | 85.281 b / ~16.175 tok | 20.068 b / **~3.810 tok** |
 | `AGENTS.md` | 13.015 b / ~2.591 tok | 10.486 b / **~2.109 tok** |
-| `agents/pegasus-AGENTS.md` | 6.236 b / ~1.260 tok | 1.692 b / **~350 tok** |
+| `agents/darq-AGENTS.md` | 6.236 b / ~1.260 tok | 1.692 b / **~350 tok** |
 | Duplication between those two | 82 identical lines | **0** |
-| Always-on for `pegasus-orchestrator` | ~2.743 tok | **~2.390 tok** |
+| Always-on for `darq-orchestrator` | ~2.743 tok | **~2.390 tok** |
 | Always-on for `king-gentleman` | ~3.851 tok | **~2.459 tok** |
 
 For reference, the same treatment on the Claude Code side took `~/.claude/CLAUDE.md`
@@ -51,7 +51,7 @@ Token estimates use `ceil(words * 1.33)`, the formula in `lazy-load-framework.md
 `prompts/sdd/sdd-tasks.md` was byte-identical to `skills/sdd-tasks/SKILL.md`.
 `sdd-apply` differed in exactly one line (a path-prefix variant). Across all 10 phases
 only 12 lines existed in a prompt but not in its skill, and all 12 were the same rules
-rewritten with a `../../skills/...` prefix — plus `sdd-verify`'s genuine Pegasus identity
+rewritten with a `../../skills/...` prefix — plus `sdd-verify`'s genuine DARQ identity
 text, which was preserved verbatim.
 
 So this was never a risky identity/procedure split. The procedure already lived in the
@@ -98,9 +98,9 @@ Every one of the ten macros fits in 27–33 lines, against the framework's 80-li
 `AGENTS.md` is OpenCode's global instruction file and loads for **every** agent. That was
 probe-verified, not assumed: `king-gentleman` answered questions whose content exists only
 in `AGENTS.md` (the CBM Priority Order, the "Persona Scope" section) *and* a question whose
-content exists only in `pegasus-AGENTS.md` ("Never build after changes").
+content exists only in `darq-AGENTS.md` ("Never build after changes").
 
-Consequently `pegasus-AGENTS.md` needed no sharing mechanism — only deletion. Of its 6.236
+Consequently `darq-AGENTS.md` needed no sharing mechanism — only deletion. Of its 6.236
 bytes, 83% was a copy of `AGENTS.md`; 17 lines were genuinely its own.
 
 It was also **divergent, not merely duplicated**:
@@ -116,7 +116,7 @@ It was also **divergent, not merely duplicated**:
 Resolution: keep AGENTS.md's restrained version as the global rule, and re-state
 king-gentleman's as an explicit, labelled **override** rather than a silent contradiction.
 
-`agents/pegasus-orchestrator.md` was already correctly thin (834 b) and was left alone
+`agents/darq-orchestrator.md` was already correctly thin (834 b) and was left alone
 apart from the preflight gate added in section 9.
 
 ---
@@ -155,7 +155,7 @@ adapter layout, or the generated macros are not portable.
 
 ### Third hazard — ownership gap
 
-`src/darq/content/agents/` currently ships only `pegasus-orchestrator.md` and
+`src/darq/content/agents/` currently ships only `darq-orchestrator.md` and
 `sdd-verify.md`. The other 9 phase prompts came from gentle-ai. If v4 is to replace the
 live install it must own all 11 prompts. The 10 rewritten macros are working drafts.
 
@@ -194,7 +194,7 @@ configured `skills.paths`:
 ~/.config/opencode/skill(s)/<name>/SKILL.md
 ```
 
-Verified by string-inspecting the binary and observed live — the `pegasus-orchestrator`
+Verified by string-inspecting the binary and observed live — the `darq-orchestrator`
 loaded a skill that exists only in `~/.claude/skills/`.
 
 **Precedence was then probe-tested and resolved: local OpenCode skills WIN.** Two colliding
@@ -215,7 +215,7 @@ Consequences:
   could change between OpenCode versions. v4 should treat path-based loading as the
   contract, not a convenience.
 - If v4 ships skills whose names could collide with another runtime's, consider a
-  `pegasus-` prefix, or a runtime gate at the top of anything discoverable elsewhere.
+  `darq-` prefix, or a runtime gate at the top of anything discoverable elsewhere.
 
 ### 7.3 The system prompt is wrapped
 
@@ -414,8 +414,8 @@ Live install, after the work:
 |---|---|
 | `prompts/sdd/*.md` | 10 thin identity macros with absolute-path loading gates |
 | `AGENTS.md` | eager identity, persona, Engram triggers, CBM gate + index freshness |
-| `agents/pegasus-orchestrator.md` | thin orchestrator identity + preflight gate |
-| `agents/pegasus-AGENTS.md` | king-gentleman persona only, with declared overrides |
+| `agents/darq-orchestrator.md` | thin orchestrator identity + preflight gate |
+| `agents/darq-AGENTS.md` | king-gentleman persona only, with declared overrides |
 | `skills/engram-operations/SKILL.md` | new — lazy Engram operational detail |
 | `skills/_shared/sdd-session-preflight.md` | new — canonical preflight definition |
 | `skills/sdd-*/SKILL.md` | unchanged; they always held the real procedure |

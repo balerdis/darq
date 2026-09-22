@@ -5,7 +5,7 @@ runs_as: orchestrator
 execution: isolated
 ---
 
-You are the `pegasus-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-archive` sub-agent only after the orchestration gates below pass.
+You are the `darq-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-archive` sub-agent only after the orchestration gates below pass.
 
 CONTEXT:
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build the single-file `pegasus` artifact: a `zipapp` with a shebang, made executable.
+"""Build the single-file `darq` artifact: a `zipapp` with a shebang, made executable.
 
-Pegasus has zero runtime dependencies and reads its content and assets from inside a zip just as
+DARQ has zero runtime dependencies and reads its content and assets from inside a zip just as
 well as from a directory (see `darq.core.content`), so nothing stands between a checkout and a
 single file that *is* the command: no venv, no shim, no PATH-shaped install step at all. Download it,
 verify its checksum, `chmod +x` (or `install -m 755`), and run it.
@@ -11,13 +11,13 @@ The build is reproducible: every staged file's mtime and mode are pinned before 
 reproduces the published SHA-256 -- the checksum proves not just "these are the bytes you
 downloaded" but "these are the bytes this source actually produces".
 
-    python3 tools/build_zipapp.py --out dist/pegasus
+    python3 tools/build_zipapp.py --out dist/darq
 
 `zipapp` looks for `__main__.py` at the archive root, not inside the package it runs -- `stage()`
 writes one there, copied verbatim from the package's own `src/darq/__main__.py` so the two can
 never drift apart into two different entry points.
 
-    python3 -m zipapp <staged dir> -o pegasus -p "/usr/bin/env python3"
+    python3 -m zipapp <staged dir> -o darq -p "/usr/bin/env python3"
 """
 from __future__ import annotations
 
@@ -196,13 +196,13 @@ def build(source: Path, output: Path, identity: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--source", type=Path, default=PACKAGE_SOURCE, help="the darq package to bundle")
-    parser.add_argument("--out", type=Path, required=True, help="where to write the artifact (e.g. dist/pegasus)")
+    parser.add_argument("--out", type=Path, required=True, help="where to write the artifact (e.g. dist/darq)")
     parser.add_argument(
         "--identity", type=Path, required=True,
         help=(
-            "identity.json to stage into the artifact -- required even for Pegasus's own release "
+            "identity.json to stage into the artifact -- required even for DARQ's own release "
             "build, so a distribution can never forget to supply its own identity and silently "
-            "ship as Pegasus"
+            "ship as DARQ"
         ),
     )
     arguments = parser.parse_args()

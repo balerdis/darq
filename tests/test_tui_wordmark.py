@@ -11,7 +11,7 @@ from darq.tui import wordmark
 
 class WordRowsTest(unittest.TestCase):
     def test_a_word_is_three_rows_tall(self):
-        rows = wordmark.word_rows("PEGASUS")
+        rows = wordmark.word_rows("DARQ")
         self.assertEqual(len(rows), 3)
 
     def test_each_letter_is_looked_up_in_the_glyph_table(self):
@@ -68,11 +68,11 @@ class MarkWidthTest(unittest.TestCase):
         self.assertEqual(wordmark.mark_width(("DARQ",)), wordmark.solo_width(("DARQ",)))
 
     def test_solo_width_of_two_words_is_only_the_first(self):
-        self.assertEqual(wordmark.solo_width(("PEGASUS", "HARNESS")), wordmark.word_width("PEGASUS"))
+        self.assertEqual(wordmark.solo_width(("DARQ", "HARNESS")), wordmark.word_width("DARQ"))
 
     def test_mark_width_of_two_words_adds_a_two_space_gap(self):
-        words = ("PEGASUS", "HARNESS")
-        expected = wordmark.word_width("PEGASUS") + 2 + wordmark.word_width("HARNESS")
+        words = ("DARQ", "HARNESS")
+        expected = wordmark.word_width("DARQ") + 2 + wordmark.word_width("HARNESS")
         self.assertEqual(wordmark.mark_width(words), expected)
 
     def test_empty_words_is_zero_width(self):

@@ -924,9 +924,14 @@ class NoEngineBrandInVerbatimAssetBodiesTest(unittest.TestCase):
         )
 
     def test_a_literal_brand_fragment_is_flagged(self):
+        """The injected literal is derived from the engine's own
+        `identity.json` through `_engine_brand_fragments()` rather than
+        typed here, so this meta-test keeps proving the scan works no
+        matter which brand this engine currently ships under."""
         fragments = _engine_brand_fragments()
-        probe = _write_probe(self, '"""Build the portable Pegasus skill index."""\n')
-        self.assertEqual(_brand_offenders(probe, fragments), ["pegasus"])
+        fragment = fragments[0]
+        probe = _write_probe(self, f'"""Build the portable {fragment.capitalize()} skill index."""\n')
+        self.assertEqual(_brand_offenders(probe, fragments), [fragment])
 
     def test_a_placeholder_use_is_not_flagged(self):
         fragments = _engine_brand_fragments()

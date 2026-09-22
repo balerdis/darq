@@ -5,7 +5,7 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
   version: "3.0"
   delegate_only: true
 ---
@@ -237,7 +237,7 @@ This phase adds, on top of that:
 - When Strict TDD is active, the `sdd-apply/strict-tdd.md` module's rules OVERRIDE Step 4 entirely
 - Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
 
-<!-- pegasus-local:cbm-protocol -->
+<!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Implementation
 
 Use CBM before writing code when the task changes central/shared symbols, public APIs, controllers/handlers, service methods, routing, persistence flows, or anything likely to have non-obvious callers. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
@@ -247,4 +247,4 @@ Do NOT call CBM for simple one-file mechanical edits where the affected surface 
 ## CBM Index Coherence Gate
 
 After implementation and before persisting `apply-progress`, trigger only for a High workload forecast, chained/exception delivery, apply-owned structural/generated changes, an apply-owned public/shared API/route/module boundary, or five or more apply-owned files. Do not attribute a dirty global diff blindly: use the orchestrator baseline and apply-owned manifest when present. When triggered, read `sdd-apply/references/cbm-index-coherence.md` before collecting coherence evidence; it owns derivation, moderate-first indexing, coverage evidence, escalation, dirty-baseline handling, and `apply-progress` reporting. If it is missing or unreadable, record coherence as unavailable and do not claim index evidence.
-<!-- /pegasus-local:cbm-protocol -->
+<!-- /darq-local:cbm-protocol -->

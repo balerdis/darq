@@ -39,11 +39,11 @@ INTEGRITY = "sha512-" + "a" * 86 + "=="
 #: it supplies the same bytes the loader would have read.
 PROBE_LOCKFILE = json.dumps(
     {
-        "name": "pegasus-probe",
+        "name": "darq-probe",
         "lockfileVersion": 3,
         "requires": True,
         "packages": {
-            "": {"name": "pegasus-probe", "dependencies": {"probe-mcp": "1.2.3"}},
+            "": {"name": "darq-probe", "dependencies": {"probe-mcp": "1.2.3"}},
             "node_modules/probe-mcp": {
                 "version": "1.2.3",
                 "resolved": "https://registry.npmjs.org/probe-mcp/-/probe-mcp-1.2.3.tgz",
@@ -65,7 +65,7 @@ PROBE = Mcp(
     integrity=INTEGRITY,
     entry="cli.js",
     npm_lockfile=PROBE_LOCKFILE,
-    npm_package_name="pegasus-probe",
+    npm_package_name="darq-probe",
 )
 #: `render` derives `orchestrator_name` unconditionally now, so a `Content`
 #: used with the real adapter through `cli.install` needs a default agent too.
@@ -136,7 +136,7 @@ class InstallNpmTest(RealHomeTestCase):
         self.assertTrue((self.target() / "package.json").exists())
         self.assertTrue((self.target() / "package-lock.json").exists())
         manifest = json.loads((self.target() / "package.json").read_text())
-        self.assertEqual(manifest["name"], "pegasus-probe")
+        self.assertEqual(manifest["name"], "darq-probe")
         self.assertEqual(
             (self.target() / "package-lock.json").read_bytes(), PROBE_LOCKFILE
         )

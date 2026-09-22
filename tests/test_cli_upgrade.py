@@ -1,8 +1,8 @@
-"""`pegasus upgrade`: replace the running binary with the newest published one.
+"""`darq upgrade`: replace the running binary with the newest published one.
 
 Separate from `update`, deliberately: `update` reapplies an installation's own
 recorded selection into a CLI's configuration, while `upgrade` replaces the
-`pegasus` program itself -- it takes no `--cli`, and it never touches a
+`darq` program itself -- it takes no `--cli`, and it never touches a
 journal, a snapshot, or any CLI's configuration at all.
 
 Every test here drives `cli.upgrade` through `FakeDownloader` and
@@ -44,10 +44,10 @@ def release_body(tag: str) -> bytes:
 
 def sha256sum_line(content: bytes) -> bytes:
     digest = ownership.digest_of_bytes(content).removeprefix(ownership.PREFIX)
-    return f"{digest}  pegasus\n".encode("utf-8")
+    return f"{digest}  darq\n".encode("utf-8")
 
 
-def upgrade_downloader(*, version: str = NEWER_VERSION, content: bytes = b"new pegasus bytes") -> FakeDownloader:
+def upgrade_downloader(*, version: str = NEWER_VERSION, content: bytes = b"new darq bytes") -> FakeDownloader:
     release = cli.default_identity().release
     return FakeDownloader(
         {
@@ -69,7 +69,7 @@ class UpgradeTestCase(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self._directory.cleanup)
-        self.destination = Path(self._directory.name) / "pegasus"
+        self.destination = Path(self._directory.name) / "darq"
         with zipfile.ZipFile(self.destination, "w") as archive:
             archive.writestr("__main__.py", "pass\n")
 
@@ -176,7 +176,7 @@ class NotRunningFromAZipappTest(UpgradeTestCase):
     def test_a_sys_path0_that_is_not_a_zip_refuses_honestly(self):
         with tempfile.TemporaryDirectory(dir=_scratch_root()) as directory:
             # A real directory, exactly what `sys.path[0]` is for `python -m
-            # pegasus` run from a source checkout with `PYTHONPATH=src` --
+            # darq` run from a source checkout with `PYTHONPATH=src` --
             # the very case this whole refusal exists for.
             runtime = self.runtime(sys_path0=directory)
             with self.assertRaises(cli.CommandError) as caught:
@@ -327,7 +327,7 @@ class SuccessfulUpgradeTest(UpgradeTestCase):
         self.assertEqual(report["new_version"], NEWER_VERSION)
         self.assertEqual(report["destination"], str(self.destination))
         self.assertTrue(report["restart_required"])
-        self.assertEqual(filesystem.files[self.destination], b"new pegasus bytes")
+        self.assertEqual(filesystem.files[self.destination], b"new darq bytes")
         self.assertEqual(filesystem.modes[self.destination], filesystem.mode_for(executable=True))
 
     def test_the_temporary_file_is_created_in_the_destinations_own_directory(self):

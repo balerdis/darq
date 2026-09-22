@@ -22,7 +22,7 @@ name: alpha
 description: Does alpha things
 license: MIT
 metadata:
-  author: pegasus-balerdis
+  author: darq-balerdis
 ---
 
 # Alpha
@@ -131,11 +131,11 @@ Convention body.
 """
 
 NPM_LOCKFILE = f"""{{
-  "name": "pegasus-probe-mcp",
+  "name": "darq-probe-mcp",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {{
-    "": {{"name": "pegasus-probe-mcp", "dependencies": {{"probe-mcp": "1.2.3"}}}},
+    "": {{"name": "darq-probe-mcp", "dependencies": {{"probe-mcp": "1.2.3"}}}},
     "node_modules/probe-mcp": {{
       "version": "1.2.3",
       "resolved": "https://registry.npmjs.org/probe-mcp/-/probe-mcp-1.2.3.tgz",
@@ -199,7 +199,7 @@ class FrontmatterTest(unittest.TestCase):
 
     def test_nested_fields_are_parsed(self):
         fields, _ = content.split_frontmatter(SKILL)
-        self.assertEqual(fields["metadata"], {"author": "pegasus-balerdis"})
+        self.assertEqual(fields["metadata"], {"author": "darq-balerdis"})
 
     def test_missing_frontmatter_yields_no_fields(self):
         fields, body = content.split_frontmatter("# Just a body\n")
@@ -1027,8 +1027,8 @@ class CommandTest(TemporaryContent):
 
     def test_unknown_role_is_rejected(self):
         with self.assertRaises(ContentError) as raised:
-            self.load_command(COMMAND.replace("orchestrator", "pegasus-orchestrator"))
-        self.assertIn("pegasus-orchestrator", str(raised.exception))
+            self.load_command(COMMAND.replace("orchestrator", "darq-orchestrator"))
+        self.assertIn("darq-orchestrator", str(raised.exception))
 
     def test_unknown_execution_is_rejected(self):
         with self.assertRaises(ContentError):
@@ -1157,12 +1157,12 @@ class McpTest(TemporaryContent):
         to differ in this fixture precisely so a re-derivation would be
         caught rather than passing by coincidence.
         """
-        mcp = self.load_mcp(NPM_MCP, lockfile=NPM_LOCKFILE.replace("pegasus-probe-mcp", "totally-different-name"))
+        mcp = self.load_mcp(NPM_MCP, lockfile=NPM_LOCKFILE.replace("darq-probe-mcp", "totally-different-name"))
         self.assertEqual(mcp.npm_package_name, "totally-different-name")
 
     def test_a_lockfile_with_no_root_name_is_rejected(self):
         with self.assertRaises(ContentError) as raised:
-            self.load_mcp(NPM_MCP, lockfile=NPM_LOCKFILE.replace('"name": "pegasus-probe-mcp", ', ""))
+            self.load_mcp(NPM_MCP, lockfile=NPM_LOCKFILE.replace('"name": "darq-probe-mcp", ', ""))
         self.assertIn("name", str(raised.exception))
 
     def test_a_lockfile_naming_a_file_that_does_not_exist_is_rejected(self):
@@ -1456,16 +1456,16 @@ class ShippedContentTest(unittest.TestCase):
 
         The set now holds four different reasons, and saying so is the point.
         Four agents declare it because they drive a browser: `sdd-apply`,
-        `sdd-explore`, `sdd-verify`, `pegasus-general`. `king-pegasus` declares
+        `sdd-explore`, `sdd-verify`, `darq-general`. `arquitecto-darq` declares
         it because the reconversion made that voice declare every server this
         release ships -- see
         `test_the_teaching_voice_declares_every_server_this_release_ships`,
-        which derives its side from the content tree. `pegasus-orchestrator`
+        which derives its side from the content tree. `darq-orchestrator`
         declares it for neither reason: it does not drive a browser as a
         trade, but its own Direct Work Threshold lets it resolve a small
         change on its own, and when that change touches a page it needs to be
-        able to see the page it touched. `pegasus-explorer`, `pegasus-verifier`
-        and `pegasus-implementer` declare it for the fourth reason: each is the
+        able to see the page it touched. `darq-explorer`, `darq-verifier`
+        and `darq-implementer` declare it for the fourth reason: each is the
         phase-less twin of an SDD phase agent already in this set (`sdd-explore`,
         `sdd-verify`, `sdd-apply` respectively), extracted to carry the same
         craft without the SDD chain, and craft parity means tool parity --
@@ -1481,12 +1481,12 @@ class ShippedContentTest(unittest.TestCase):
                 "sdd-apply",
                 "sdd-explore",
                 "sdd-verify",
-                "pegasus-general",
-                "king-pegasus",
-                "pegasus-orchestrator",
-                "pegasus-explorer",
-                "pegasus-verifier",
-                "pegasus-implementer",
+                "darq-general",
+                "arquitecto-darq",
+                "darq-orchestrator",
+                "darq-explorer",
+                "darq-verifier",
+                "darq-implementer",
             },
         )
 
@@ -1512,12 +1512,12 @@ class ShippedContentTest(unittest.TestCase):
         self.assertEqual(
             {a.name for a in self.content.agents},
             {
-                "king-pegasus",
-                "pegasus-explorer",
-                "pegasus-general",
-                "pegasus-implementer",
-                "pegasus-orchestrator",
-                "pegasus-verifier",
+                "arquitecto-darq",
+                "darq-explorer",
+                "darq-general",
+                "darq-implementer",
+                "darq-orchestrator",
+                "darq-verifier",
                 "sdd-apply",
                 "sdd-archive",
                 "sdd-design",
@@ -1532,15 +1532,15 @@ class ShippedContentTest(unittest.TestCase):
         )
 
     def test_the_orchestrator_declares_its_delegation(self):
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
         self.assertEqual(orchestrator.mode, AgentMode.PRIMARY)
-        # `explore` and `general` are OpenCode's own built-ins -- Pegasus ships no
+        # `explore` and `general` are OpenCode's own built-ins -- DARQ ships no
         # descriptor or permission for either, and their names would not exist under
-        # another CLI. `pegasus-general` is the shipped, portable stand-in, so it is
+        # another CLI. `darq-general` is the shipped, portable stand-in, so it is
         # what the orchestrator declares now instead of the two built-ins.
         self.assertNotIn("explore", orchestrator.may_delegate_to)
         self.assertNotIn("general", orchestrator.may_delegate_to)
-        self.assertIn("pegasus-general", orchestrator.may_delegate_to)
+        self.assertIn("darq-general", orchestrator.may_delegate_to)
         # Named on purpose: it is the sole readiness authority, so losing the right to
         # launch it would disable verification rather than one phase.
         self.assertIn("sdd-verify", orchestrator.may_delegate_to)
@@ -1554,7 +1554,7 @@ class ShippedContentTest(unittest.TestCase):
         # threshold in its own body, not by a codebase-memory server, so `write`
         # and `edit` join the native tools it needs to read, search and make a
         # small, already-known, single-file edit without delegating it away.
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
         self.assertEqual(
             set(orchestrator.requires_tools),
             {"read", "bash", "grep", "glob", "write", "edit", "skill", "ask"},
@@ -1574,7 +1574,7 @@ class ShippedContentTest(unittest.TestCase):
         # set of servers whose `reaches` names this agent.
         self.assertTrue(self.content.mcp, "this would pass vacuously with no servers")
         self.assertEqual(
-            {s.name for s in self.content.mcp if "pegasus-orchestrator" in s.reaches},
+            {s.name for s in self.content.mcp if "darq-orchestrator" in s.reaches},
             {"cbm", "context7", "engram", "jira", "playwright"},
         )
 
@@ -1582,14 +1582,14 @@ class ShippedContentTest(unittest.TestCase):
         """Both are demanded by text this repository ships, and neither survives
         the deny baseline unless it is declared.
 
-        `pegasus-AGENTS.md` opens its Contextual Skill Loading section with
+        `darq-AGENTS.md` opens its Contextual Skill Loading section with
         "this is a blocking requirement, not optional context" -- and the
         runtime only puts the skill inventory in front of an agent that holds
         the tool, so an agent without it is told to consult a list that is not
         there. The preflight gate is the same shape: "ask what it defines, and
         STOP" is not something an agent can do with no way to ask.
         """
-        for name in ("pegasus-orchestrator", "king-pegasus"):
+        for name in ("darq-orchestrator", "arquitecto-darq"):
             with self.subTest(agent=name):
                 agent = next(a for a in self.content.agents if a.name == name)
                 self.assertIn("skill", agent.requires_tools)
@@ -1599,7 +1599,7 @@ class ShippedContentTest(unittest.TestCase):
         """A primary agent is the one a person actually talks to, and a prompt
         that is all procedure and no register does not become neutral -- it
         inherits whatever the underlying model defaults to. That is how the
-        orchestrator came to read as a dispatcher next to `king-pegasus`: same
+        orchestrator came to read as a dispatcher next to `arquitecto-darq`: same
         product, same session, two unrelated voices, because only one of the
         two files said anything about how it speaks.
 
@@ -1642,7 +1642,7 @@ class ShippedContentTest(unittest.TestCase):
         `sdd-verify`, whose whole job is gathering the evidence a verdict
         rests on, and `sdd-archive` are graded here alongside every other
         shipped agent, not carved out for it -- the same craft their
-        phase-less twin `pegasus-verifier` already does with
+        phase-less twin `darq-verifier` already does with
         `[read, bash, grep, glob]`, with no reason on record for either of
         them to need a clumsier route to the same place.
         """
@@ -1679,16 +1679,16 @@ class ShippedContentTest(unittest.TestCase):
         )
 
     def test_the_orchestrator_does_not_delegate_to_the_voice(self):
-        # king-pegasus answers the user, it does not take work handed to it. It was in
+        # arquitecto-darq answers the user, it does not take work handed to it. It was in
         # this list only because it shipped as a subagent, and the rule below required
         # every shipped subagent to be delegable.
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
-        self.assertNotIn("king-pegasus", orchestrator.may_delegate_to)
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
+        self.assertNotIn("arquitecto-darq", orchestrator.may_delegate_to)
 
     def test_the_teaching_voice_is_not_more_limited_than_the_dispatching_one(self):
         """Both voices face the user; only their discipline differs.
 
-        `king-pegasus` used to declare `[read, write, edit, skill, ask]` -- no
+        `arquitecto-darq` used to declare `[read, write, edit, skill, ask]` -- no
         `bash`, no `grep`, no `glob` -- so the voice whose entire purpose is to
         explain could not search the code it was explaining, and had to ask the
         user to hand it the file. A test two modules over even reasoned that
@@ -1705,8 +1705,8 @@ class ShippedContentTest(unittest.TestCase):
         means for the voice as well. Forcing that decision is the point. The
         shape this replaced was never decided, it was inherited.
         """
-        voice = next(a for a in self.content.agents if a.name == "king-pegasus")
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
+        voice = next(a for a in self.content.agents if a.name == "arquitecto-darq")
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
         self.assertEqual(set(voice.requires_tools), set(orchestrator.requires_tools))
 
     def test_the_teaching_voice_declares_every_server_this_release_ships(self):
@@ -1732,7 +1732,7 @@ class ShippedContentTest(unittest.TestCase):
         are already writing.
         """
         self.assertTrue(self.content.mcp, "this would pass vacuously with no servers")
-        missing = sorted(s.name for s in self.content.mcp if "king-pegasus" not in s.reaches)
+        missing = sorted(s.name for s in self.content.mcp if "arquitecto-darq" not in s.reaches)
         self.assertEqual(missing, [])
 
     def test_the_voice_carries_no_rule_that_contradicts_its_own_mandate(self):
@@ -1742,7 +1742,7 @@ class ShippedContentTest(unittest.TestCase):
         whether the file worked. The rule is gone; this keeps habit from
         restoring it.
         """
-        voice = next(a for a in self.content.agents if a.name == "king-pegasus")
+        voice = next(a for a in self.content.agents if a.name == "arquitecto-darq")
         self.assertNotIn("Never build", voice.body)
 
     def test_the_orchestrator_may_delegate_to_every_subagent_it_ships_with(self):
@@ -1753,12 +1753,12 @@ class ShippedContentTest(unittest.TestCase):
         #
         # This asserts that every shipped subagent is delegable, which assumes shipped
         # subagents are all orchestrator-callable. That assumption held once the one agent
-        # it was wrong about stopped being a subagent: king-pegasus is the voice the user
+        # it was wrong about stopped being a subagent: arquitecto-darq is the voice the user
         # selects, and it is primary, so it is outside this set rather than forced into the
         # permission list. An agent that must not be launched directly and still has to be
         # a subagent would put the pressure back here, and the schema still has no
         # "delegable" field to answer it with.
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
         shipped = {a.name for a in self.content.agents if a.mode is AgentMode.SUBAGENT}
         self.assertEqual(shipped - set(orchestrator.may_delegate_to), set())
 
@@ -1769,11 +1769,11 @@ class ShippedContentTest(unittest.TestCase):
         #
         # No runtime-built-in tolerance survives here on purpose: `explore` and `general`
         # were OpenCode's own built-ins, tolerated only because the orchestrator used to
-        # name them without Pegasus shipping either. Now that `pegasus-general` is the
+        # name them without DARQ shipping either. Now that `darq-general` is the
         # shipped, portable stand-in and the orchestrator no longer names a built-in at
         # all, every name in `may_delegate_to` must resolve to a shipped agent -- a
         # strictly tighter invariant than the one this test used to hold.
-        orchestrator = next(a for a in self.content.agents if a.name == "pegasus-orchestrator")
+        orchestrator = next(a for a in self.content.agents if a.name == "darq-orchestrator")
         shipped = {a.name for a in self.content.agents}
         self.assertEqual(set(orchestrator.may_delegate_to) - shipped, set())
 
@@ -1802,7 +1802,7 @@ class ShippedContentTest(unittest.TestCase):
         it carry one. The two primaries earn it for different reasons -- the
         orchestrator to route, the voice to answer -- and the five phase agents
         (four SDD phases plus the generic worker) because discovery is their
-        work. `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer`
+        work. `darq-explorer`, `darq-verifier` and `darq-implementer`
         join for the same reason as their SDD twins: `sdd-explore`, `sdd-verify`
         and `sdd-apply` respectively already discover structure as part of
         their trade, and the phase-less specialist practises the identical
@@ -1811,16 +1811,16 @@ class ShippedContentTest(unittest.TestCase):
         self.assertEqual(
             {agent.name for agent in self.content.agents if "cbm" in agent.optional_mcp},
             {
-                "king-pegasus",
-                "pegasus-general",
-                "pegasus-orchestrator",
+                "arquitecto-darq",
+                "darq-general",
+                "darq-orchestrator",
                 "sdd-apply",
                 "sdd-design",
                 "sdd-explore",
                 "sdd-verify",
-                "pegasus-explorer",
-                "pegasus-verifier",
-                "pegasus-implementer",
+                "darq-explorer",
+                "darq-verifier",
+                "darq-implementer",
             },
         )
 
@@ -1855,12 +1855,12 @@ class ShippedContentTest(unittest.TestCase):
                 self.assertIn("engram", [s.name for s in agent.mcp_sections])
 
     def test_the_context7_agents_carry_the_shared_section_and_no_one_else_does(self):
-        """`king-pegasus` joined this set with the reconversion: a voice whose
+        """`arquitecto-darq` joined this set with the reconversion: a voice whose
         own Behavior says to "mention tools and resources" had no way to reach
         current library documentation. It carries the shared section, not an
         override -- its only agent-specific framing is for the graph server.
 
-        `pegasus-orchestrator` joined it for a different reason: its own
+        `darq-orchestrator` joined it for a different reason: its own
         Direct Work Threshold lets it resolve a small, mechanical change
         without delegating, and an agent doing that needs the same library
         documentation any implementer would need. It has nothing
@@ -1869,7 +1869,7 @@ class ShippedContentTest(unittest.TestCase):
         and shows the contrast: that one IS an override, because the graph
         framing is genuinely its own.
 
-        `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer` carry
+        `darq-explorer`, `darq-verifier` and `darq-implementer` carry
         it too, for the same reason they carry `cbm` and `playwright`: each is
         the phase-less twin of an SDD phase agent already in this set, and
         craft parity means tool parity.
@@ -1880,12 +1880,12 @@ class ShippedContentTest(unittest.TestCase):
             "sdd-explore",
             "sdd-verify",
             "sdd-onboard",
-            "pegasus-general",
-            "king-pegasus",
-            "pegasus-orchestrator",
-            "pegasus-explorer",
-            "pegasus-verifier",
-            "pegasus-implementer",
+            "darq-general",
+            "arquitecto-darq",
+            "darq-orchestrator",
+            "darq-explorer",
+            "darq-verifier",
+            "darq-implementer",
         }
         for agent in self.content.agents:
             with self.subTest(agent=agent.name):
@@ -1923,12 +1923,12 @@ class ShippedContentTest(unittest.TestCase):
             "sdd-explore",
             "sdd-verify",
             "sdd-onboard",
-            "pegasus-general",
-            "pegasus-explorer",
-            "pegasus-implementer",
-            "pegasus-verifier",
-            "king-pegasus",
-            "pegasus-orchestrator",
+            "darq-general",
+            "darq-explorer",
+            "darq-implementer",
+            "darq-verifier",
+            "arquitecto-darq",
+            "darq-orchestrator",
         }
         for agent in self.content.agents:
             with self.subTest(agent=agent.name):
@@ -1936,9 +1936,9 @@ class ShippedContentTest(unittest.TestCase):
                 self.assertEqual(carries, agent.name in jira_agents)
 
     def test_the_cbm_section_is_shared_for_seven_agents_and_overridden_for_three(self):
-        """`sdd-apply`, `sdd-design`, `sdd-explore`, `pegasus-general`,
-        `pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer` carry the
-        plain pointer; `king-pegasus`, `pegasus-orchestrator` and `sdd-verify` each
+        """`sdd-apply`, `sdd-design`, `sdd-explore`, `darq-general`,
+        `darq-explorer`, `darq-verifier` and `darq-implementer` carry the
+        plain pointer; `arquitecto-darq`, `darq-orchestrator` and `sdd-verify` each
         carry deliberate, agent-specific framing that a shared file would flatten.
 
         The three phase-less specialists land in the shared group rather than the
@@ -1950,12 +1950,12 @@ class ShippedContentTest(unittest.TestCase):
             "sdd-apply",
             "sdd-design",
             "sdd-explore",
-            "pegasus-general",
-            "pegasus-explorer",
-            "pegasus-verifier",
-            "pegasus-implementer",
+            "darq-general",
+            "darq-explorer",
+            "darq-verifier",
+            "darq-implementer",
         }
-        overridden_agents = {"king-pegasus", "pegasus-orchestrator", "sdd-verify"}
+        overridden_agents = {"arquitecto-darq", "darq-orchestrator", "sdd-verify"}
         by_name = {agent.name: agent for agent in self.content.agents}
 
         shared_sources = set()
@@ -2066,13 +2066,13 @@ class ShippedContentTest(unittest.TestCase):
     def test_no_verifier_is_reachable_from_anything_that_implements(self):
         """The one new hard structural invariant this change adds: `sdd-verify`
         must not sit in the transitive closure of `may_delegate_to` starting from
-        any executor that can write or edit code. `pegasus-general` only
+        any executor that can write or edit code. `darq-general` only
         delegates to itself today, so this holds by construction -- this test
         exists to keep it enforced rather than merely true, computed from the
         data rather than hand-listed.
 
         Scoped to `AgentMode.SUBAGENT`, on purpose: the coordinator itself
-        (`pegasus-orchestrator`, `AgentMode.PRIMARY`) also declares `write` and
+        (`darq-orchestrator`, `AgentMode.PRIMARY`) also declares `write` and
         `edit` for its own small, already-known edits, and reaching `sdd-verify`
         is precisely its job -- `sdd-phase-common.md`'s "sole readiness
         authority" gate depends on that reach existing. The invariant this test
@@ -2457,7 +2457,7 @@ class GrantMcpTest(unittest.TestCase):
 class GrantDirectoriesTest(unittest.TestCase):
     """`grant_directories` hands a working directory the person administers
     to every agent's `external_directory` permission uniformly -- the same
-    shape `grant_mcp` already established, for a fact Pegasus cannot know on
+    shape `grant_mcp` already established, for a fact DARQ cannot know on
     its own.
     """
 
@@ -2584,24 +2584,24 @@ class GrantDirectoriesTest(unittest.TestCase):
         for agent in granted.agents:
             self.assertEqual(agent.granted_directories, ("/srv/work",))
 
-    def test_the_pegasus_data_directory_itself_is_refused(self):
-        data_dir = Path("/home/probe/.local/share/pegasus-harness")
+    def test_the_darq_data_directory_itself_is_refused(self):
+        data_dir = Path("/home/probe/.local/share/darq")
         with self.assertRaises(ContentError) as raised:
             content.grant_directories(
                 self.content, [str(data_dir)], config_dir=self.config_dir, data_dir=data_dir
             )
         self.assertIn("data directory", str(raised.exception))
 
-    def test_an_ancestor_of_the_pegasus_data_directory_is_refused(self):
-        data_dir = Path("/home/probe/.local/share/pegasus-harness")
+    def test_an_ancestor_of_the_darq_data_directory_is_refused(self):
+        data_dir = Path("/home/probe/.local/share/darq")
         with self.assertRaises(ContentError) as raised:
             content.grant_directories(
                 self.content, [str(data_dir.parent)], config_dir=self.config_dir, data_dir=data_dir
             )
         self.assertIn("data directory", str(raised.exception))
 
-    def test_a_directory_beside_the_pegasus_data_directory_is_not_refused(self):
-        data_dir = Path("/home/probe/.local/share/pegasus-harness")
+    def test_a_directory_beside_the_darq_data_directory_is_not_refused(self):
+        data_dir = Path("/home/probe/.local/share/darq")
         granted = content.grant_directories(
             self.content, ["/home/probe/.local/share/other-app"], config_dir=self.config_dir, data_dir=data_dir
         )
@@ -2661,13 +2661,13 @@ class SelectMcpShippedContentTest(unittest.TestCase):
 
 
 class BoundMcpTest(unittest.TestCase):
-    """A server the user already administers: Pegasus owns the contract, not the binary.
+    """A server the user already administers: DARQ owns the contract, not the binary.
 
     An installation that already runs a server has it under a key of its own
     choosing, at a version of its own choosing. Today `optional_mcp: [cbm]`
     means two things at once -- fetch and manage this server, and grant its
     tools -- and only the second is wanted there. Binding separates them: the
-    grants point at the key that installation really uses, and Pegasus fetches
+    grants point at the key that installation really uses, and DARQ fetches
     nothing.
     """
 
@@ -2732,7 +2732,7 @@ class BoundMcpTest(unittest.TestCase):
     def test_an_agent_grant_follows_the_binding(self):
         """The grant is matched by the runtime against the server key, so a
         bound server has to be granted under the key the runtime resolves --
-        not under Pegasus's own name for it, which that installation never
+        not under DARQ's own name for it, which that installation never
         writes."""
         selected = content.select_mcp(self.content, ["cbm=codebase-memory-mcp"])
         self.assertEqual(selected.agents[0].optional_mcp, ("codebase-memory-mcp",))
@@ -2939,7 +2939,7 @@ def _run_grant_directories_data_dir_ancestor(root: Path) -> tuple[None, str]:
             content.Content(),
             ["/home/probe/.local/share"],
             config_dir=Path("/home/probe/.config/opencode"),
-            data_dir=Path("/home/probe/.local/share/pegasus-harness"),
+            data_dir=Path("/home/probe/.local/share/darq"),
         )
     except ContentError as error:
         return None, str(error)
@@ -3160,7 +3160,7 @@ class ContentErrorSitesTest(unittest.TestCase):
         ),
         "_require_lockfile_pins#3": (
             _via_load(
-                {"mcp/probe-mcp.md": NPM_MCP, f"mcp/{NPM_LOCKFILE_NAME}": NPM_LOCKFILE.replace('"name": "pegasus-probe-mcp", ', "")},
+                {"mcp/probe-mcp.md": NPM_MCP, f"mcp/{NPM_LOCKFILE_NAME}": NPM_LOCKFILE.replace('"name": "darq-probe-mcp", ', "")},
                 "mcp/probe-mcp.md",
             ),
             "",
@@ -3222,7 +3222,7 @@ class ContentErrorSitesTest(unittest.TestCase):
             "",
         ),
         "_choice#0": (
-            _via_load({"commands/probe-command.md": COMMAND.replace("orchestrator", "pegasus-orchestrator")}, "commands/probe-command.md"), ""),
+            _via_load({"commands/probe-command.md": COMMAND.replace("orchestrator", "darq-orchestrator")}, "commands/probe-command.md"), ""),
         "_flag#0": (_session_start_case('model_configurable: "false"\n'), ""),
         "_names#0": (_session_start_case("requires_tools: bash\n"), ""),
         "_names#1": (_session_start_case('requires_tools: [""]\n'), ""),
@@ -3350,7 +3350,7 @@ class WithheldMcpToolsTest(unittest.TestCase):
     def test_a_bound_grant_denies_tool_names_built_from_the_bound_key(self):
         """The deny has to name a tool the runtime can actually resolve --
         which only exists under the key the grant was rewritten to, not under
-        Pegasus's own id for the server.
+        DARQ's own id for the server.
         """
         selected = content.select_mcp(
             self.content, ["cbm=codebase-memory-mcp", "context7"]

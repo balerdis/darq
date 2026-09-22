@@ -1,4 +1,4 @@
-"""The ownership journal: what Pegasus may take back, and what it must leave alone."""
+"""The ownership journal: what DARQ may take back, and what it must leave alone."""
 from __future__ import annotations
 
 import unittest
@@ -9,7 +9,7 @@ from darq.core.journal import Install, Journal, JournalError, Link, Record
 
 HOME = Path("/home/probe")
 CONFIG = HOME / ".config" / "opencode"
-DATA_DIR = HOME / ".local" / "share" / "pegasus-harness"
+DATA_DIR = HOME / ".local" / "share" / "darq"
 AT = "2026-08-14T00:00:00+00:00"
 
 
@@ -44,7 +44,7 @@ def dependency_record(**overrides) -> Record:
     fields = dict(
         id="dependency:some-mcp",
         kind="dependency-tree",
-        target=HOME / ".local" / "share" / "pegasus-harness" / "deps" / "some-mcp" / "1.2.3",
+        target=HOME / ".local" / "share" / "darq" / "deps" / "some-mcp" / "1.2.3",
         after_digest="sha256:" + "d" * 64,
         created_at=AT,
     )
@@ -147,7 +147,7 @@ class RoundTripTest(unittest.TestCase):
         self.assertNotIn("mcp_bindings", payload["installs"][0])
 
     def test_a_journal_from_before_bindings_existed_still_loads(self):
-        """A journal written by an earlier Pegasus has no `mcp_bindings` key at
+        """A journal written by an earlier DARQ has no `mcp_bindings` key at
         all -- that must load exactly as cleanly as one that carries it, and
         the resulting install must carry an empty mapping rather than raise or
         invent a key."""
@@ -256,7 +256,7 @@ class ValidationTest(unittest.TestCase):
 
     def test_an_unknown_schema_is_refused(self):
         with self.assertRaises(JournalError) as raised:
-            journal_module.from_dict(self.payload(schema="pegasus-harness/journal/v3"), HOME)
+            journal_module.from_dict(self.payload(schema="darq/journal/v3"), HOME)
         self.assertIn("v3", str(raised.exception))
 
     def test_a_target_outside_the_home_is_refused(self):
@@ -512,11 +512,11 @@ class ValidationTest(unittest.TestCase):
         parsed = journal_module.from_dict(payload, HOME)
         self.assertEqual(parsed.installs[0].granted_directories, ("/srv/worktrees/extra",))
 
-    def test_granted_directories_the_pegasus_data_directory_and_its_ancestors_are_quarantined_when_data_dir_is_given(
+    def test_granted_directories_the_darq_data_directory_and_its_ancestors_are_quarantined_when_data_dir_is_given(
         self,
     ):
         """The same replay-escalation guard `config_dir` already gets must
-        also cover Pegasus's own data directory -- a hand-edited journal
+        also cover DARQ's own data directory -- a hand-edited journal
         must not be able to smuggle write access to the journal's own home
         past a check that only ever runs once, at the moment a person types
         `directory grant`. As with `config_dir`, the refusal to *grant* is
@@ -529,7 +529,7 @@ class ValidationTest(unittest.TestCase):
                 self.assertEqual(parsed.installs[0].granted_directories, ())
                 self.assertEqual(parsed.installs[0].quarantined_directories, (candidate,))
 
-    def test_granted_directories_the_pegasus_data_directory_still_loads_without_data_dir(self):
+    def test_granted_directories_the_darq_data_directory_still_loads_without_data_dir(self):
         """`data_dir` is optional: a caller with no `FileSystem` port to ask
         -- most callers of `from_dict` in this suite -- gets the structural
         checks only, not this one extra refusal."""
@@ -538,7 +538,7 @@ class ValidationTest(unittest.TestCase):
         parsed = journal_module.from_dict(payload, HOME)
         self.assertEqual(parsed.installs[0].granted_directories, (str(DATA_DIR),))
 
-    def test_granted_directories_beside_the_pegasus_data_directory_still_load(self):
+    def test_granted_directories_beside_the_darq_data_directory_still_load(self):
         payload = self.payload()
         sibling = str(DATA_DIR.parent / "other-app")
         payload["installs"][0]["granted_directories"] = [sibling]

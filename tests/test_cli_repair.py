@@ -1,4 +1,4 @@
-"""`pegasus repair`: journal hazards `doctor` can only name.
+"""`darq repair`: journal hazards `doctor` can only name.
 
 Step 1: a `granted_directories` entry a hand edit put in the journal that
 `content.validate_granted_directory` refuses gets quarantined at load time

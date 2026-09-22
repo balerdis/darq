@@ -1,6 +1,6 @@
 """`sdd-verify`'s readiness-authority claim is scoped to the SDD archive gate.
 
-`sdd-verify` used to describe itself as Pegasus's "sole readiness authority for
+`sdd-verify` used to describe itself as DARQ's "sole readiness authority for
 executable and configuration changes" -- wording broad enough to read as
 authority over every change anywhere, which forced anyone who only wanted a
 verification run to enter the whole SDD flow to reach it. What the claim
@@ -51,7 +51,7 @@ ARCHIVE_SCOPE = re.compile(r"\barchive\b", re.IGNORECASE)
 CHANGE_CLASS_SCOPE = re.compile(r"\b(executable|configuration)\b", re.IGNORECASE)
 
 #: The two files entitled to make the claim at all.
-OWNERS = ("sdd-verify.md", "pegasus-orchestrator.md")
+OWNERS = ("sdd-verify.md", "darq-orchestrator.md")
 
 
 def claim_units(text: str) -> list[str]:
@@ -90,7 +90,7 @@ class ReadinessAuthorityScopeTest(unittest.TestCase):
 
     def test_the_orchestrator_actually_makes_the_claim(self):
         self.assertTrue(
-            claim_units((AGENTS / "pegasus-orchestrator.md").read_text(encoding="utf-8"))
+            claim_units((AGENTS / "darq-orchestrator.md").read_text(encoding="utf-8"))
         )
 
     def test_every_claim_sentence_names_the_archive_scope_itself(self):
@@ -135,7 +135,7 @@ class GuardIsNotAWordBagTest(unittest.TestCase):
         "description: Sole authority for declaring an SDD change ready to archive\n"
         "---\n\n"
         "# SDD Verify\n\n"
-        "You are Pegasus's sole authority for declaring that an executable or\n"
+        "You are DARQ's sole authority for declaring that an executable or\n"
         "configuration change is ready. (An archive follows once a change is ready.)\n"
     )
 

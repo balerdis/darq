@@ -125,7 +125,7 @@ class InstallAndRetireTest(_RealHomeTestCase):
 
     def test_subagent_depth_is_ten_and_claimed(self):
         """OpenCode refuses `task` from a sub-agent unless `subagent_depth` is
-        raised above its default of 1. Pegasus owns this top-level key at 10,
+        raised above its default of 1. DARQ owns this top-level key at 10,
         a circuit breaker rather than a policy value, and the key must be
         claimed in the journal the same as any other owned key or `uninstall`
         would leave it behind forever.

@@ -6,10 +6,10 @@ block on a required loading gate. A person who only wants one thing looked at,
 one check run, or one small change made had no shipped agent to reach, so the
 only way in was the whole SDD flow.
 
-`pegasus-explorer`, `pegasus-verifier` and `pegasus-implementer` close that gap.
+`darq-explorer`, `darq-verifier` and `darq-implementer` close that gap.
 Each practises the same craft as its SDD namesake -- the craft files are shared,
 pointed at, never restated -- and differs in exactly one thing: what it returns.
-`sdd-verify` returns a verdict and is an authority; `pegasus-verifier` returns
+`sdd-verify` returns a verdict and is an authority; `darq-verifier` returns
 evidence and says plainly that it declares nothing ready, which is what makes it
 safe to reach from an agent that writes.
 
@@ -43,15 +43,15 @@ AGENTS = CONTENT / "agents"
 SKILLS = CONTENT / "skills"
 
 HOME = Path("/home/probe")
-ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
 
-SPECIALISTS = ("pegasus-explorer", "pegasus-verifier", "pegasus-implementer")
+SPECIALISTS = ("darq-explorer", "darq-verifier", "darq-implementer")
 
 #: Each specialist and the craft reference it must defer to, lazily.
 CRAFT = {
-    "pegasus-explorer": "_shared/exploration-craft.md",
-    "pegasus-verifier": "_shared/verification-craft.md",
-    "pegasus-implementer": "_shared/implementation-craft.md",
+    "darq-explorer": "_shared/exploration-craft.md",
+    "darq-verifier": "_shared/verification-craft.md",
+    "darq-implementer": "_shared/implementation-craft.md",
 }
 
 #: A distinctive instruction from each craft file. Restating the craft in an
@@ -85,7 +85,7 @@ AUTHORITY_CLAIM = re.compile(r"\bsole\b.{0,60}\bauthority\b", re.IGNORECASE | re
 #: tokens the prose holds. Front matter is not counted: it is a fixed
 #: declaration block, not the lazy-load contract this budget exists to hold.
 #:
-#: The heaviest specialist today (`pegasus-verifier`) is 428 words. The
+#: The heaviest specialist today (`darq-verifier`) is 428 words. The
 #: retired line ceiling carried roughly 20.6% headroom over its measured
 #: baseline (6.5 / 31.5); applied to word count that same proportion gives
 #: 428 * 1.206 ~= 516, rounded to 516. That is room for a body that carries
@@ -129,7 +129,7 @@ def body(name: str) -> str:
 
     This helper used to return the whole file, which made every presence check
     satisfiable by the `description:` line. An adversarial review removed every
-    occurrence of "what changed" from `pegasus-implementer.md`'s prose, left its
+    occurrence of "what changed" from `darq-implementer.md`'s prose, left its
     description untouched, and `WhatEachOneReturnsTest` stayed fully green. A
     guard about what the agent is told now reads what the agent is told.
     """
@@ -208,7 +208,7 @@ def no_write_claim_subjects() -> list[str]:
 
     - it holds no `edit` and no `write` itself, so "I do not write" would be
       a true statement about its own tool set in the first place -- an agent
-      that holds `edit`/`write` (`pegasus-implementer`, the SDD phase agents)
+      that holds `edit`/`write` (`darq-implementer`, the SDD phase agents)
       makes no such claim to check, and this excludes it automatically; and
     - despite that, it holds a write-capable tool
       (`WRITE_CAPABLE_TOOLS`) the render permission maps do not deny
@@ -231,7 +231,7 @@ def no_write_claim_subjects() -> list[str]:
 #: How each write-capable tool may be named in prose, for the positive
 #: "you must say which tool this is" check. `bash` is the only tool the
 #: derived subject set currently grants ungoverned, and this codebase's own
-#: prose (`pegasus-explorer.md`) calls it "the shell" as often as "bash", so
+#: prose (`darq-explorer.md`) calls it "the shell" as often as "bash", so
 #: both count. A tool with no entry here falls back to its own front-matter
 #: name -- the fallback is untested today because no shipped agent exercises
 #: it, which is disclosed rather than silently assumed correct.
@@ -249,13 +249,13 @@ TOOL_MENTION_WORDS = {
 WRITE_CAPABLE_TOOLS = {"edit", "write", "bash"}
 
 #: Of those, the two the renderer's permission maps genuinely deny for
-#: `pegasus-explorer` (see `RenderedPermissionTest`). The gap between this and
+#: `darq-explorer` (see `RenderedPermissionTest`). The gap between this and
 #: `WRITE_CAPABLE_TOOLS` is exactly the set a body may describe as enforced
 #: without lying, and exactly the set a body may NOT extend that claim to.
 PERMISSION_DENIED_WRITE_TOOLS = {"edit", "write"}
 
 #: Phrases that describe writing as impossible without qualification -- the
-#: shape of claim that was true of `pegasus-explorer` when it held only
+#: shape of claim that was true of `darq-explorer` when it held only
 #: `read`, `grep`, `glob`, and stops being true the moment a write-capable
 #: tool the permission maps do not deny (namely `bash`) is granted alongside
 #: it. Matched only when that condition actually holds, so the guard is a
@@ -282,9 +282,9 @@ class SpecialistsShipTest(unittest.TestCase):
 
     def test_each_specialist_declares_the_fan_out_its_work_divides_into(self):
         expected = {
-            "pegasus-explorer": ("pegasus-explorer",),
-            "pegasus-verifier": ("pegasus-verifier",),
-            "pegasus-implementer": ("pegasus-explorer", "pegasus-verifier"),
+            "darq-explorer": ("darq-explorer",),
+            "darq-verifier": ("darq-verifier",),
+            "darq-implementer": ("darq-explorer", "darq-verifier"),
         }
         for name, targets in expected.items():
             with self.subTest(agent=name):
@@ -311,7 +311,7 @@ class RenderedPermissionTest(unittest.TestCase):
         return [a for a in artifacts if isinstance(a, ConfigKeyArtifact)][0].value
 
     def test_the_explorer_and_the_verifier_cannot_write(self):
-        for name in ("pegasus-explorer", "pegasus-verifier"):
+        for name in ("darq-explorer", "darq-verifier"):
             with self.subTest(agent=name):
                 value = self.rendered(name)
                 self.assertEqual(value["permission"]["*"], "deny")
@@ -330,22 +330,22 @@ class RenderedPermissionTest(unittest.TestCase):
         it prints), which is not a read-only tool in general, only one this
         agent is trusted to use without altering the tree.
         """
-        explorer = self.rendered("pegasus-explorer")
+        explorer = self.rendered("darq-explorer")
         self.assertEqual(resolve(explorer["permission"], "read"), "allow")
         self.assertEqual(resolve(explorer["permission"], "grep"), "allow")
         self.assertEqual(resolve(explorer["permission"], "bash"), "allow")
-        verifier = self.rendered("pegasus-verifier")
+        verifier = self.rendered("darq-verifier")
         self.assertEqual(resolve(verifier["permission"], "read"), "allow")
         self.assertEqual(resolve(verifier["permission"], "bash"), "allow")
 
     def test_the_implementer_can_write(self):
-        value = self.rendered("pegasus-implementer")
+        value = self.rendered("darq-implementer")
         self.assertEqual(resolve(value["permission"], "edit"), "allow")
         self.assertIs(resolve(value["tools"], "write"), True)
 
 
 class ProseDoesNotOverclaimEnforcementTest(unittest.TestCase):
-    """Pegasus refuses to ship a sentence that claims an enforcement it does
+    """DARQ refuses to ship a sentence that claims an enforcement it does
     not have -- a guard, or a prose claim, approving by proxy instead of by
     the thing itself is the recurring defect class this codebase keeps
     finding and fixing.
@@ -354,8 +354,8 @@ class ProseDoesNotOverclaimEnforcementTest(unittest.TestCase):
     every shipped agent's own `requires_tools`/`optional_tools` and picks out
     the ones that both (a) make no `edit`/`write` claim of their own to check
     and (b) hold a write-capable tool (`bash`) the render permission maps do
-    not deny. That is `pegasus-explorer` and `pegasus-verifier` today,
-    pinned by the drift guard below; `pegasus-implementer` and the SDD phase
+    not deny. That is `darq-explorer` and `darq-verifier` today,
+    pinned by the drift guard below; `darq-implementer` and the SDD phase
     agents hold `edit`/`write` themselves and make no such claim to check.
 
     Two layers, for two different failure modes:
@@ -395,7 +395,7 @@ class ProseDoesNotOverclaimEnforcementTest(unittest.TestCase):
         A change to any agent's tool list that alters who this guard watches
         should show up here as a failing assertion, not silently -- the same
         role `PHASE_MARKERS`' drift guard plays elsewhere in this file."""
-        self.assertEqual(set(no_write_claim_subjects()), {"pegasus-explorer", "pegasus-verifier"})
+        self.assertEqual(set(no_write_claim_subjects()), {"darq-explorer", "darq-verifier"})
 
     def test_a_subject_names_the_tool_its_permissions_do_not_govern(self):
         for name in no_write_claim_subjects():
@@ -488,11 +488,11 @@ class WhatEachOneReturnsTest(unittest.TestCase):
     """The single contract that separates a specialist from its SDD namesake."""
 
     def test_the_verifier_returns_evidence_and_says_it_declares_nothing_ready(self):
-        self.assertIn("I do not declare anything ready", body("pegasus-verifier"))
-        self.assertIn("evidence", body("pegasus-verifier").lower())
+        self.assertIn("I do not declare anything ready", body("darq-verifier"))
+        self.assertIn("evidence", body("darq-verifier").lower())
 
     def test_the_verifier_makes_no_readiness_authority_claim(self):
-        self.assertIsNone(AUTHORITY_CLAIM.search(whole("pegasus-verifier")))
+        self.assertIsNone(AUTHORITY_CLAIM.search(whole("darq-verifier")))
 
     def test_sdd_verify_still_makes_the_claim_the_specialist_refuses(self):
         """The contrast is the point: if the claim vanished from `sdd-verify`,
@@ -500,8 +500,8 @@ class WhatEachOneReturnsTest(unittest.TestCase):
         self.assertIsNotNone(AUTHORITY_CLAIM.search(whole("sdd-verify")))
 
     def test_the_explorer_returns_a_finding_and_the_implementer_what_changed(self):
-        self.assertIn("finding", body("pegasus-explorer").lower())
-        self.assertIn("what changed", body("pegasus-implementer").lower())
+        self.assertIn("finding", body("darq-explorer").lower())
+        self.assertIn("what changed", body("darq-implementer").lower())
 
     def test_each_contract_is_advertised_where_a_caller_reads_it_too(self):
         """The one place a contract legitimately lives twice.
@@ -512,9 +512,9 @@ class WhatEachOneReturnsTest(unittest.TestCase):
         whole file -- that accident is what let the prose lose the contract
         while every guard stayed green."""
         for name, promise in (
-            ("pegasus-explorer", "finding"),
-            ("pegasus-verifier", "evidence"),
-            ("pegasus-implementer", "what changed"),
+            ("darq-explorer", "finding"),
+            ("darq-verifier", "evidence"),
+            ("darq-implementer", "what changed"),
         ):
             with self.subTest(agent=name):
                 self.assertIn(promise, description(name).lower())

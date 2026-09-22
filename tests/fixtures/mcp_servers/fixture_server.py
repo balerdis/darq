@@ -4,7 +4,7 @@
 It ships inside the test tree, never inside the package, and it never
 touches the network. It exists to let the suite exercise the real launch
 path and the real MCP `initialize` handshake against a process that
-misbehaves in specific, chosen ways — which is the part Pegasus owns and
+misbehaves in specific, chosen ways — which is the part DARQ owns and
 the part `tests/no_network.py` cannot let the suite prove against a real
 server such as `engram`. It proves nothing about any real MCP server.
 """

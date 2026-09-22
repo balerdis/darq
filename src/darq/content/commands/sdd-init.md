@@ -5,7 +5,7 @@ runs_as: orchestrator
 execution: isolated
 ---
 
-You are the `pegasus-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-init` sub-agent only after the SDD Session Preflight gate passes.
+You are the `darq-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-init` sub-agent only after the SDD Session Preflight gate passes.
 
 CONTEXT:
 

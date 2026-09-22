@@ -8,7 +8,7 @@ negotiated with.
 **All or nothing.** A run that fails half way undoes what it created, so the
 journal never describes a home that does not exist.
 
-**Retirable.** What Pegasus recorded, Pegasus can take back — and only that.
+**Retirable.** What DARQ recorded, DARQ can take back — and only that.
 
 **Real disk.** Every test in this module runs against a throwaway home and
 the real `PosixFileSystem`, via `RealHomeTestCase`. Conditions are produced
@@ -276,7 +276,7 @@ class RetirementsTest(RealHomeTestCase):
 
     def test_a_link_is_never_returned(self):
         """`retirements` excludes links by type, the same way `retire` does:
-        a link is never something Pegasus owns, so it is never something to
+        a link is never something DARQ owns, so it is never something to
         take back."""
         link = Link(id="cbm", target="/usr/local/bin/some-tool")
         install = self.install(links=(link,))
@@ -287,7 +287,7 @@ class AppendTest(RealHomeTestCase):
     """Appending to a list is a create with no address of its own.
 
     Nothing resolves at ``/instructions/-``, so the ordinary collision question
-    cannot be asked. The fingerprint answers it instead: an item Pegasus already
+    cannot be asked. The fingerprint answers it instead: an item DARQ already
     placed is one it must not place twice, and on the way out it is found by
     what it is rather than by where it sits, because indices move.
     """
@@ -695,7 +695,7 @@ class UpdateTest(RealHomeTestCase):
         self.assertEqual([step.action for step in result.steps], [planner.SKIP])
         self.assertEqual([step.reason for step in result.steps], [planner.COLLISION])
 
-    def test_a_file_pegasus_wrote_and_nobody_touched_is_an_update(self):
+    def test_a_file_darq_wrote_and_nobody_touched_is_an_update(self):
         step = self.plan_with(self.record()).steps[0]
         self.assertEqual(step.action, planner.UPDATE)
 
@@ -812,7 +812,7 @@ class UpdateTest(RealHomeTestCase):
 
 
 class KeyUpdateTest(RealHomeTestCase):
-    """A configuration key Pegasus owns is updated in place; the user's is not touched.
+    """A configuration key DARQ owns is updated in place; the user's is not touched.
 
     An append has the harder version of the question. It has no address, so its
     item is found by fingerprint, and a new value must replace the old one where
@@ -845,7 +845,7 @@ class KeyUpdateTest(RealHomeTestCase):
 
     # --- An addressable key ---
 
-    def test_a_value_pegasus_wrote_and_nobody_touched_is_an_update(self):
+    def test_a_value_darq_wrote_and_nobody_touched_is_an_update(self):
         old = {"model": "vendor/old"}
         self.given({"agent": {"alpha": old}})
         step = self.plan_with(self.a_key(), self.entry(old)).steps[0]
@@ -885,11 +885,11 @@ class KeyUpdateTest(RealHomeTestCase):
         """Appending the new one instead would leave two of ours and move theirs."""
         self.given({"instructions": ["./theirs.md", "./pegasus-AGENTS.md", "./also-theirs.md"]})
         entry = self.entry("./pegasus-AGENTS.md", ptr="/instructions/-", identifier="system-prompt-instruction")
-        plan = self.plan_with(self.an_append("./pegasus-baseline.md"), entry)
+        plan = self.plan_with(self.an_append("./darq-baseline.md"), entry)
         self.assertEqual(plan.steps[0].action, planner.UPDATE)
         planner.apply(self.filesystem, plan, at=AT)
         self.assertEqual(
-            self.settings()["instructions"], ["./theirs.md", "./pegasus-baseline.md", "./also-theirs.md"]
+            self.settings()["instructions"], ["./theirs.md", "./darq-baseline.md", "./also-theirs.md"]
         )
 
     def test_an_append_already_holding_the_new_value_is_left_alone(self):
@@ -915,7 +915,7 @@ class KeyUpdateTest(RealHomeTestCase):
         self.assertEqual(self.SETTINGS.read_bytes(), before)
 
     def test_a_document_this_run_created_is_not_something_to_put_back(self):
-        """Pegasus owns keys inside a configuration file, never the file itself."""
+        """DARQ owns keys inside a configuration file, never the file itself."""
         applied = planner.apply(self.filesystem, self.plan_with(self.a_key()), at=AT)
         self.assertEqual(applied.replaced, ())
 
@@ -1278,15 +1278,15 @@ class PruneEmptyDirectoriesTest(RealHomeTestCase):
         self.assertTrue(beta.exists())
         self.assertEqual(retired.pruned, ("skills/alpha",))
 
-    def test_a_directory_pegasus_only_wrote_into_survives_retirement(self):
+    def test_a_directory_darq_only_wrote_into_survives_retirement(self):
         """The repro this whole change exists for: someone who already had
-        `~/.config/opencode/plugins/` before ever installing Pegasus. Pegasus
+        `~/.config/opencode/plugins/` before ever installing DARQ. DARQ
         wrote a file into it because the address was free, but `make_dir`
         found the directory already there and so never reported creating it
-        -- `created_dirs` never names it. A sibling directory Pegasus *did*
+        -- `created_dirs` never names it. A sibling directory DARQ *did*
         create, `skills/alpha`, is pruned exactly as before; `skills/beta`,
         the directory the person already had, survives retiring the very
-        file Pegasus wrote inside it, and is never named in `pruned`."""
+        file DARQ wrote inside it, and is never named in `pruned`."""
         alpha = self.CONFIG / "skills" / "alpha" / "SKILL.md"
         beta = self.CONFIG / "skills" / "beta" / "SKILL.md"
         self.seed(files={alpha: b"a"})
@@ -1359,11 +1359,11 @@ class PruneEmptyDirectoriesTest(RealHomeTestCase):
         as done", the same posture `remove` takes -- so a journal entry whose
         file an aborted install never actually wrote still feeds an ascent
         from its parent. Before this change that ascent had nothing else to
-        stop it; now `created_dirs` does, because a directory Pegasus never
+        stop it; now `created_dirs` does, because a directory DARQ never
         actually wrote into was never reported by `make_dir` either."""
         never_written = self.CONFIG / "skills" / "orphan" / "SKILL.md"
         theirs = self.CONFIG / "skills" / "orphan" / "their-own-file.txt"
-        self.seed(files={theirs: b"not Pegasus's"})
+        self.seed(files={theirs: b"not DARQ's"})
         self.assertFalse(never_written.exists())
         retired = planner.retire(self.filesystem, self.install(self.file_entry(never_written)))
         self.assertTrue((self.CONFIG / "skills" / "orphan").exists())
@@ -1506,12 +1506,12 @@ class PruneEmptyDirectoriesTest(RealHomeTestCase):
 
     def test_no_empty_directory_survives_a_full_retire_anywhere_below_config_dir(self):
         """The derived mirror of the basic pruning tests above: after
-        retiring everything an install owns, nothing Pegasus created is left
+        retiring everything an install owns, nothing DARQ created is left
         standing empty anywhere under `config_dir`, measured by walking the
         real disk rather than by enumerating what was expected by hand.
 
         This does **not** claim every empty directory disappears -- only
-        those `created_dirs` names as Pegasus's own. A directory the person
+        those `created_dirs` names as DARQ's own. A directory the person
         brought with them, empty or not, is a different scenario, covered by
         `test_a_preexisting_empty_directory_is_never_pruned_and_never_reported`
         above; folding that claim into this one would make this test false
@@ -1759,13 +1759,13 @@ class OverwrittenByHandTest(unittest.TestCase):
     def test_an_update_over_a_hand_edit_is_reported_as_overwritten(self):
         wanted = self.artifact(b"what this release renders\n")
         self.filesystem.write_atomic(wanted.path, b"what the user typed\n")
-        # The journal remembers what Pegasus itself last wrote, which is neither.
+        # The journal remembers what DARQ itself last wrote, which is neither.
         installed = self.install(wanted, ownership.digest(self.artifact(b"what an older release rendered\n")))
         plan = planner.plan(self.filesystem, cli="probe-cli", artifacts=[wanted], installed=installed)
         self.assertEqual([step.action for step in plan.steps], [planner.UPDATE])
         self.assertEqual([step.artifact.id for step in plan.overwritten], ["probe"])
 
-    def test_an_update_over_what_pegasus_itself_last_wrote_is_not(self):
+    def test_an_update_over_what_darq_itself_last_wrote_is_not(self):
         """The ordinary upgrade. Nobody touched anything, so nobody is told."""
         wanted = self.artifact(b"what this release renders\n")
         previous = self.artifact(b"what an older release rendered\n")

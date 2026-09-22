@@ -1,7 +1,7 @@
 """Reconnaissance is the missing upstream half of "a brief is compression in
 the wrong direction".
 
-Observed in a real session: `pegasus-orchestrator` decided to delegate and
+Observed in a real session: `darq-orchestrator` decided to delegate and
 wrote the brief without first establishing the facts that would make the
 brief worth anything, so a subagent rediscovered what two targeted reads
 would have settled. The Direct Work Threshold's file-count rule ("read up to
@@ -26,7 +26,7 @@ a virtue word applied wherever a model likes. This module pins:
     brief can be written; it is never license to quietly do the work that
     was supposed to be handed out.
 3.  DELIBERATE duplication, not restatement-by-reference. The first version
-    of this change had `pegasus-orchestrator.md` point at
+    of this change had `darq-orchestrator.md` point at
     `sub-delegation-criterion.md`'s reconnaissance rule with a WHEN clause
     borrowed from an unrelated invariant
     (`tests/test_content.py::test_the_criterion_reference_is_never_loaded_unconditionally`,
@@ -54,7 +54,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT / "src" / "darq" / "content"
 CRITERION = CONTENT / "skills" / "_shared" / "sub-delegation-criterion.md"
-ORCHESTRATOR = CONTENT / "agents" / "pegasus-orchestrator.md"
+ORCHESTRATOR = CONTENT / "agents" / "darq-orchestrator.md"
 
 #: The decidable trigger in the shared criterion file, worded for its own
 #: audience (agents already fanning out several briefs at once).
@@ -116,7 +116,7 @@ def orchestrator_reconnaissance_bullet(text: str) -> str:
     for line in text.splitlines():
         if line.strip().startswith("- Reading to decide what to delegate"):
             return line
-    raise AssertionError("reconnaissance bullet not found in pegasus-orchestrator.md")
+    raise AssertionError("reconnaissance bullet not found in darq-orchestrator.md")
 
 
 class ReconnaissanceCriterionTest(unittest.TestCase):

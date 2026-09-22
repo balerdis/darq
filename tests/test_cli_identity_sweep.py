@@ -2,16 +2,16 @@
 engine's own brand.
 
 Every other test in this suite builds a `Runtime` with no `identity=`
-argument at all, which means it silently gets Pegasus's own packaged
+argument at all, which means it silently gets DARQ's own packaged
 `identity.json` back (`Runtime.identity`'s default factory) -- so none of
-them can ever notice a stray `"Pegasus"` literal sitting in `cli.py`'s
+them can ever notice a stray `"DARQ"` literal sitting in `cli.py`'s
 prose: the fixture and the bug would say the same word by coincidence.
 
 This module builds an obviously-fictional `Identity` (`ACME`, never a real
 organization) and drives every top-level command path through it, then
 greps the rendered output -- prose and machine-readable report alike -- for
 the engine's own brand. A distribution binary is exactly this scenario: its
-own packaged `identity.json` is never `pegasus`/`Pegasus`/`Harness`, so if
+own packaged `identity.json` is never `darq`/`DARQ`/`Harness`, so if
 any of these code paths still says so, a real distribution's user reads a
 sentence naming a product they never installed.
 
@@ -20,7 +20,7 @@ distribution (`cli.SCHEMA`, `journal-v4.json`, the `pegasus_version`/
 `pegasus_installed` JSON *keys*, `PEGASUS_SKILL_REGISTRY_BIN`,
 `PEGASUS_SKILL_ROOTS`, `PEGASUS_NO_UPDATE_CHECK`, and
 `mcp_handshake.CLIENT_NAME`) are explicitly excluded before the brand check,
-since those are supposed to say "pegasus" everywhere, forever.
+since those are supposed to say "darq" everywhere, forever.
 """
 from __future__ import annotations
 
@@ -87,19 +87,19 @@ def _scrub_wire_identifiers(text: str) -> str:
 class BrandAssertionMixin:
     def assertNoEngineBrand(self, text: str) -> None:
         scrubbed = _scrub_wire_identifiers(text).lower()
-        for brand in ("pegasus", "harness"):
+        for brand in ("darq", "harness"):
             self.assertNotIn(brand, scrubbed, f"engine brand {brand!r} leaked in: {text!r}")
 
 
 class AcmeRuntimeTestCase(BrandAssertionMixin, _RealHomeTestCase):
     """A throwaway home, the real filesystem, and ACME's identity instead of
-    Pegasus's own -- everything else follows the same discipline
+    DARQ's own -- everything else follows the same discipline
     `test_cli.py`'s own `RealHomeTestCase` holds every CLI surface test to.
     """
 
     def setUp(self):
         super().setUp()
-        # The base class's own `self.filesystem` is keyed to Pegasus's own
+        # The base class's own `self.filesystem` is keyed to DARQ's own
         # product id; a distribution's binary would never share that, so this
         # rebuilds it keyed to ACME's instead, matching what `default_runtime`
         # would actually do for a real ACME build.
@@ -179,7 +179,7 @@ class InstallBrandLeakTest(AcmeRuntimeTestCase):
 
         Deliberately NOT scoped to every entry: an agent, skill or command's
         own *name* is content-authored data (`core.content`), never a name
-        this adapter derives from `Identity` -- `king-pegasus`, one of this
+        this adapter derives from `Identity` -- `arquitecto-darq`, one of this
         repository's own shipped persona names, is exactly this shape, and
         would fail here as a false positive. Renaming a content-declared
         identifier is a real, still-open piece of brand debt, but it is a
@@ -204,7 +204,7 @@ class InstallBrandLeakTest(AcmeRuntimeTestCase):
             self.assertNoEngineBrand(entry["target"])
 
     def test_dropped_grant_warning_has_no_engine_brand(self):
-        """Covers the `pegasus mcp grant --cli ...` suggested-command literal
+        """Covers the `darq mcp grant --cli ...` suggested-command literal
         that used to live inside `install`'s own `grant_warnings` message."""
         self.install()
         self.declare_own_mcp_server("jira-mcp")
@@ -245,7 +245,7 @@ class McpBrandLeakTest(AcmeRuntimeTestCase):
 
     def test_unresolved_binding_blocks_list_with_no_engine_brand(self):
         """Covers `install_command_for` and `unresolved_bindings_message`,
-        both of which used to hardcode the `pegasus install --cli ...`
+        both of which used to hardcode the `darq install --cli ...`
         remedy command verbatim."""
         self.present()
         code, _ = self.run_cli("install", "--cli", CLI, "--mcp", "cbm=acme-widget-key")
@@ -268,7 +268,7 @@ class McpBrandLeakTest(AcmeRuntimeTestCase):
 
 class DoctorBrandLeakTest(AcmeRuntimeTestCase):
     def test_not_installed_prose_has_no_engine_brand(self):
-        """Covers `_cli_prose`'s "Pegasus not installed" literal."""
+        """Covers `_cli_prose`'s "DARQ not installed" literal."""
         self.present()
         _code, prose = self.run_prose("doctor")
         self.assertNoEngineBrand(prose)
@@ -279,7 +279,7 @@ class DoctorBrandLeakTest(AcmeRuntimeTestCase):
         self.assertNoEngineBrand(prose)
 
     def test_bound_server_detail_has_no_engine_brand(self):
-        """Covers `_bound_checks`'s "whose tools Pegasus grants" literal."""
+        """Covers `_bound_checks`'s "whose tools DARQ grants" literal."""
         self.present()
         code, _ = self.run_cli("install", "--cli", CLI, "--mcp", "cbm=acme-widget-key")
         self.assertEqual(code, 0)
@@ -328,7 +328,7 @@ class ModelsBrandLeakTest(AcmeRuntimeTestCase):
     through a second command. Scoped to what `cli.py` itself renders, for the
     reason that test states.
 
-    This used to cover `_NOT_INSTALLED_YET`'s own "pegasus install --cli ..."
+    This used to cover `_NOT_INSTALLED_YET`'s own "darq install --cli ..."
     literal, which was the one place these two commands built a branded
     sentence of their own. That sentence is gone: the assignment reaches the
     configuration in the same command now, so what is left to do is the

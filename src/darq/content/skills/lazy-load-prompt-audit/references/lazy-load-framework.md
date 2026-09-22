@@ -56,7 +56,7 @@ Macro growth without removal or generalization of equivalent text fails unless t
 6. Check the macro against the decision table. Flag workflow, persistence, readiness/status, schemas, examples, edge cases, recovery, or transport detail left inline.
 7. Verify every tool/capability mentioned belongs to the executing role and every delegation gate matches available capabilities.
 8. Compare canonical sources with templates, package manifests/assets, generated/runtime copies, and tests. Determine the generation command; do not hand-edit outputs.
-9. Run project-specific audit tooling first. For Pegasus, use `tests/audit_instruction_architecture.py` or `tests/smoke.sh audit-instructions` when present. Remain generic elsewhere.
+9. Run project-specific audit tooling first. For DARQ, use `tests/audit_instruction_architecture.py` or `tests/smoke.sh audit-instructions` when present. Remain generic elsewhere.
 10. Report findings by severity with exact path and line, owner, behavioral risk, and safe remediation. Audit mode stops here.
 
 ## Extraction And Correction Algorithm

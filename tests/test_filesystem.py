@@ -39,7 +39,7 @@ class PosixFileSystemTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(dir=_scratch_root())
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.fs = PosixFileSystem(product_id="pegasus-harness")
+        self.fs = PosixFileSystem(product_id="darq")
 
     def leftovers(self, folder: Path) -> list[str]:
         return sorted(item.name for item in folder.iterdir() if item.name.startswith("."))
@@ -52,20 +52,20 @@ class PosixFileSystemTest(unittest.TestCase):
     # --- Locating ---
 
     def test_data_dir_falls_back_to_local_share_when_xdg_data_home_is_empty(self):
-        filesystem = PosixFileSystem({"XDG_DATA_HOME": ""}, product_id="pegasus-harness")
+        filesystem = PosixFileSystem({"XDG_DATA_HOME": ""}, product_id="darq")
         home = Path("/home/probe")
-        self.assertEqual(filesystem.data_dir(home), home / ".local" / "share" / "pegasus-harness")
+        self.assertEqual(filesystem.data_dir(home), home / ".local" / "share" / "darq")
 
     def test_data_dir_honours_xdg_data_home_when_set(self):
-        filesystem = PosixFileSystem({"XDG_DATA_HOME": "/mnt/data"}, product_id="pegasus-harness")
-        self.assertEqual(filesystem.data_dir(Path("/home/probe")), Path("/mnt/data/pegasus-harness"))
+        filesystem = PosixFileSystem({"XDG_DATA_HOME": "/mnt/data"}, product_id="darq")
+        self.assertEqual(filesystem.data_dir(Path("/home/probe")), Path("/mnt/data/darq"))
 
     def test_data_dir_ignores_a_relative_xdg_data_home(self):
         """A relative setting names a directory that depends on where the
         process was started, which is not a home anyone chose."""
-        filesystem = PosixFileSystem({"XDG_DATA_HOME": "somewhere"}, product_id="pegasus-harness")
+        filesystem = PosixFileSystem({"XDG_DATA_HOME": "somewhere"}, product_id="darq")
         self.assertEqual(
-            filesystem.data_dir(Path("/home/probe")), Path("/home/probe/.local/share/pegasus-harness")
+            filesystem.data_dir(Path("/home/probe")), Path("/home/probe/.local/share/darq")
         )
 
     def test_data_dir_stays_inside_the_home_when_no_environment_was_handed_in(self):
@@ -74,8 +74,8 @@ class PosixFileSystemTest(unittest.TestCase):
         machine that exports the variable cannot pull a test's writes out of
         the throwaway home it made."""
         self.assertEqual(
-            PosixFileSystem(product_id="pegasus-harness").data_dir(Path("/home/probe")),
-            Path("/home/probe/.local/share/pegasus-harness"),
+            PosixFileSystem(product_id="darq").data_dir(Path("/home/probe")),
+            Path("/home/probe/.local/share/darq"),
         )
 
     def test_data_dir_uses_the_given_product_id(self):
@@ -95,28 +95,28 @@ class PosixFileSystemTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             PosixFileSystem()
 
-    def test_pegasus_harness_data_dir_is_byte_identical_to_the_5_17_0_literal(self):
-        """The non-negotiable acceptance criterion for this change: Pegasus's
-        own `product_id` is `"pegasus-harness"`, and the resolved data dir
-        must equal exactly `~/.local/share/pegasus-harness`, unchanged from
+    def test_darq_harness_data_dir_is_byte_identical_to_the_5_17_0_literal(self):
+        """The non-negotiable acceptance criterion for this change: DARQ's
+        own `product_id` is `"darq"`, and the resolved data dir
+        must equal exactly `~/.local/share/darq`, unchanged from
         every release up to and including 5.17.0."""
-        filesystem = PosixFileSystem(product_id="pegasus-harness")
+        filesystem = PosixFileSystem(product_id="darq")
         self.assertEqual(
             filesystem.data_dir(Path("/home/probe")),
-            Path("/home/probe/.local/share/pegasus-harness"),
+            Path("/home/probe/.local/share/darq"),
         )
 
     def test_bin_dir_falls_back_to_local_bin_when_xdg_bin_home_is_empty(self):
-        filesystem = PosixFileSystem({"XDG_BIN_HOME": ""}, product_id="pegasus-harness")
+        filesystem = PosixFileSystem({"XDG_BIN_HOME": ""}, product_id="darq")
         home = Path("/home/probe")
         self.assertEqual(filesystem.bin_dir(home), home / ".local" / "bin")
 
     def test_bin_dir_honours_xdg_bin_home_when_set(self):
-        filesystem = PosixFileSystem({"XDG_BIN_HOME": "/mnt/bin"}, product_id="pegasus-harness")
+        filesystem = PosixFileSystem({"XDG_BIN_HOME": "/mnt/bin"}, product_id="darq")
         self.assertEqual(filesystem.bin_dir(Path("/home/probe")), Path("/mnt/bin"))
 
     def test_bin_dir_ignores_a_relative_xdg_bin_home(self):
-        filesystem = PosixFileSystem({"XDG_BIN_HOME": "somewhere"}, product_id="pegasus-harness")
+        filesystem = PosixFileSystem({"XDG_BIN_HOME": "somewhere"}, product_id="darq")
         self.assertEqual(filesystem.bin_dir(Path("/home/probe")), Path("/home/probe/.local/bin"))
 
     def test_bin_dir_stays_inside_the_home_when_no_environment_was_handed_in(self):
@@ -124,7 +124,7 @@ class PosixFileSystemTest(unittest.TestCase):
         environment answers from the home alone, never the real machine's own
         `PATH` convention."""
         self.assertEqual(
-            PosixFileSystem(product_id="pegasus-harness").bin_dir(Path("/home/probe")), Path("/home/probe/.local/bin")
+            PosixFileSystem(product_id="darq").bin_dir(Path("/home/probe")), Path("/home/probe/.local/bin")
         )
 
     # --- Permissions ---
@@ -181,10 +181,10 @@ class PosixFileSystemTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"first")
         self.assertEqual(self.leftovers(self.root), [])
 
-    def test_an_orphaned_temporary_file_is_identifiable_as_pegasus(self):
+    def test_an_orphaned_temporary_file_is_identifiable_as_darq(self):
         """An orphaned `.{TEMPORARY_PREFIX}*` temp file from a half-finished
         atomic write must stay identifiable by name, the same reasoning
-        `test_the_client_name_sent_to_third_party_servers_is_pegasus_doctor`
+        `test_the_client_name_sent_to_third_party_servers_is_darq_doctor`
         pins for the MCP handshake's wire identifier: engine plumbing, not
         product identity, keeps the engine's own name regardless of which
         distribution runs."""
@@ -324,7 +324,7 @@ class PosixFileSystemTest(unittest.TestCase):
 
     def test_make_dir_reports_every_directory_it_actually_created(self):
         """The whole point of the new return value: a caller that later has
-        to know what Pegasus is allowed to take back needs to learn, at the
+        to know what DARQ is allowed to take back needs to learn, at the
         one moment this is knowable, every directory this call brought into
         existence -- not just the leaf it asked for."""
         target = self.root / "one" / "two" / "three"

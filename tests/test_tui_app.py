@@ -81,10 +81,10 @@ class _FakeWindow:
 class DrawSpanTest(unittest.TestCase):
     def test_each_span_becomes_its_own_addstr_call_advancing_the_column(self):
         window = _FakeWindow(height=5, width=80)
-        line = Line((Span("PEGASUS  ", Style.DIM), Span("HARNESS", Style.NORMAL)))
+        line = Line((Span("DARQ  ", Style.DIM), Span("HARNESS", Style.NORMAL)))
         draw(window, (line,))
         texts = [(column, text) for _, column, text, _ in window.calls]
-        self.assertEqual(texts, [(0, "PEGASUS  "), (9, "HARNESS")])
+        self.assertEqual(texts, [(0, "DARQ  "), (6, "HARNESS")])
 
     def test_dim_style_carries_the_dim_attribute(self):
         window = _FakeWindow(height=5, width=80)

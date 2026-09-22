@@ -91,7 +91,7 @@ class CraftOwnsNoPhaseEnvelopeTest(unittest.TestCase):
 
     `exploration-craft.md` used to reproduce the literal heading
     `## Exploration: {topic}` inside its `## Report Shape` fence -- the exact
-    string a phase-less specialist is forbidden to emit -- so `pegasus-explorer`
+    string a phase-less specialist is forbidden to emit -- so `darq-explorer`
     was pointed at a ready-made template of the one thing it may not produce.
     The agent body's prose mitigation ("borrow the sections that fit") is
     advisory and untestable; this is the fact instead.

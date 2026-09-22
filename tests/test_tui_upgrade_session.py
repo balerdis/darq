@@ -1,5 +1,5 @@
 """`Upgrade`, through `session`: the same menu-plan-confirm shape as `Update`
-and `Install`, but with no `CliOption` of its own -- `pegasus upgrade` takes
+and `Install`, but with no `CliOption` of its own -- `darq upgrade` takes
 no `--cli`, so `session._upgrade_preview` and `session.upgrade_task` build
 and confirm the plan with `navigator.program_option(...)`, built from the
 running identity, standing in for "the program itself" wherever
@@ -51,10 +51,10 @@ def release_body(tag: str) -> bytes:
 
 def sha256sum_line(content: bytes) -> bytes:
     digest = ownership.digest_of_bytes(content).removeprefix(ownership.PREFIX)
-    return f"{digest}  pegasus\n".encode("utf-8")
+    return f"{digest}  darq\n".encode("utf-8")
 
 
-def upgrade_downloader(*, version: str = NEWER_VERSION, content: bytes = b"new pegasus bytes") -> FakeDownloader:
+def upgrade_downloader(*, version: str = NEWER_VERSION, content: bytes = b"new darq bytes") -> FakeDownloader:
     from darq.core import upgrade as upgrade_module
 
     release = cli.default_identity().release
@@ -71,7 +71,7 @@ class UpgradeSessionTestCase(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.addCleanup(self._directory.cleanup)
-        self.destination = Path(self._directory.name) / "pegasus"
+        self.destination = Path(self._directory.name) / "darq"
         with zipfile.ZipFile(self.destination, "w") as archive:
             archive.writestr("__main__.py", "pass\n")
 
@@ -143,7 +143,7 @@ class ConfirmingTheUpgradePlanTest(UpgradeSessionTestCase):
         self.assertEqual(report["status"], "upgraded")
         self.assertEqual(report["old_version"], CURRENT_VERSION)
         self.assertEqual(report["new_version"], NEWER_VERSION)
-        self.assertEqual(filesystem.files[self.destination], b"new pegasus bytes")
+        self.assertEqual(filesystem.files[self.destination], b"new darq bytes")
 
     def test_upgrade_task_reports_progress_through_the_sink_and_matches_the_synchronous_result(self):
         sync_filesystem = FakeFileSystem(files={self.destination: b"old bytes"})

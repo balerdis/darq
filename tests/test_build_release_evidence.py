@@ -59,20 +59,20 @@ class ArtifactEvidenceTest(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.addCleanup(self._directory.cleanup)
-        self.artifact = Path(self._directory.name) / "pegasus"
+        self.artifact = Path(self._directory.name) / "darq"
         build(FIXTURE_ROOT, self.artifact, FIXTURE_IDENTITY)
 
     def test_evidences_an_artifact_whose_reported_version_matches(self):
         evidence = artifact_evidence(self.artifact, FIXTURE_VERSION)
-        self.assertEqual(evidence["name"], "pegasus")
+        self.assertEqual(evidence["name"], "darq")
         self.assertEqual(len(evidence["sha256"]), 64)
 
     def test_rejects_a_version_mismatch(self):
         with self.assertRaises(ValueError):
             artifact_evidence(self.artifact, "1.0.0")
 
-    def test_rejects_an_artifact_not_named_pegasus(self):
-        renamed = self.artifact.with_name("pegasus-renamed")
+    def test_rejects_an_artifact_not_named_darq(self):
+        renamed = self.artifact.with_name("darq-renamed")
         self.artifact.rename(renamed)
         with self.assertRaises(ValueError):
             artifact_evidence(renamed, FIXTURE_VERSION)
@@ -87,7 +87,7 @@ class InstallShEvidenceTest(unittest.TestCase):
     """`install_sh_evidence` against throwaway repositories, never the real one.
 
     Each test builds its own git repository under a temp directory and passes it as `root`, so
-    none of this ever runs `git` against the actual pegasus-harness checkout.
+    none of this ever runs `git` against the actual darq checkout.
     """
 
     def setUp(self):
@@ -137,14 +137,14 @@ class InstallShEvidenceTest(unittest.TestCase):
         commit = _commit_all(self.repo, "add install.sh")
         artifact_dir = tempfile.TemporaryDirectory()
         self.addCleanup(artifact_dir.cleanup)
-        artifact_path = Path(artifact_dir.name) / "pegasus"
+        artifact_path = Path(artifact_dir.name) / "darq"
         build(FIXTURE_ROOT, artifact_path, FIXTURE_IDENTITY)
 
         artifact = artifact_evidence(artifact_path, FIXTURE_VERSION)
         install_sh = install_sh_evidence(commit, root=self.repo)
         assets = [artifact, install_sh]
 
-        self.assertEqual({asset["name"] for asset in assets}, {"pegasus", "install.sh"})
+        self.assertEqual({asset["name"] for asset in assets}, {"darq", "install.sh"})
         self.assertEqual(
             install_sh["sha256"],
             hashlib.sha256(tagged_file(commit, "install.sh", root=self.repo)).hexdigest(),
@@ -206,7 +206,7 @@ class BuildZipappEvidenceTest(unittest.TestCase):
         commit = _commit_all(self.repo, "add install.sh and build_zipapp.py")
         artifact_dir = tempfile.TemporaryDirectory()
         self.addCleanup(artifact_dir.cleanup)
-        artifact_path = Path(artifact_dir.name) / "pegasus"
+        artifact_path = Path(artifact_dir.name) / "darq"
         build(FIXTURE_ROOT, artifact_path, FIXTURE_IDENTITY)
 
         artifact = artifact_evidence(artifact_path, FIXTURE_VERSION)
@@ -215,7 +215,7 @@ class BuildZipappEvidenceTest(unittest.TestCase):
         assets = [artifact, install_sh, build_zipapp]
 
         self.assertEqual(
-            {asset["name"] for asset in assets}, {"pegasus", "install.sh", BUILD_ZIPAPP_ASSET_NAME}
+            {asset["name"] for asset in assets}, {"darq", "install.sh", BUILD_ZIPAPP_ASSET_NAME}
         )
 
 
@@ -277,7 +277,7 @@ class BuildInstallerEvidenceTest(unittest.TestCase):
         commit = _commit_all(self.repo, "add install.sh, build_zipapp.py and build_installer.py")
         artifact_dir = tempfile.TemporaryDirectory()
         self.addCleanup(artifact_dir.cleanup)
-        artifact_path = Path(artifact_dir.name) / "pegasus"
+        artifact_path = Path(artifact_dir.name) / "darq"
         build(FIXTURE_ROOT, artifact_path, FIXTURE_IDENTITY)
 
         artifact = artifact_evidence(artifact_path, FIXTURE_VERSION)
@@ -288,7 +288,7 @@ class BuildInstallerEvidenceTest(unittest.TestCase):
 
         self.assertEqual(
             {asset["name"] for asset in assets},
-            {"pegasus", "install.sh", BUILD_ZIPAPP_ASSET_NAME, BUILD_INSTALLER_ASSET_NAME},
+            {"darq", "install.sh", BUILD_ZIPAPP_ASSET_NAME, BUILD_INSTALLER_ASSET_NAME},
         )
 
 

@@ -24,7 +24,7 @@ For archive routing, require completed persisted tasks, completed apply-progress
 Return status as markdown with these fields, or as equivalent JSON when the host supports it:
 
 ```yaml
-schemaName: Pegasus baseline.sdd-status
+schemaName: DARQ baseline.sdd-status
 schemaVersion: 1
 changeName: <change-name-or-null>
 artifactStore: openspec | engram | hybrid

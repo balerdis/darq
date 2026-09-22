@@ -76,12 +76,12 @@ def agent(
     artifacts`, not here: the session-starting agent
     (`content.SESSION_STARTS_IN`) becomes the CLI's single session identity
     through `settings.json`'s `agent` key, and any other `primary` agent (the
-    content core ships exactly one: `king-pegasus`) is demoted to an ordinary
+    content core ships exactly one: `arquitecto-darq`) is demoted to an ordinary
     delegation target with no special file shape of its own -- it renders
     through this same function, indistinguishable on disk from a subagent.
     That demotion happens in the adapter, never in the content core, because
     it is a fact about how *this* CLI expresses "the session runs as", not
-    about what `king-pegasus` *is*.
+    about what `arquitecto-darq` *is*.
 
     `assignment`, when given, names a model at the one field Claude Code's
     schema has for it. `assignment.model_id` is written, not `assignment.

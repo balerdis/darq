@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check relative Markdown links in tracked Pegasus documentation.
+"""Check relative Markdown links in tracked DARQ documentation.
 
 Most documents resolve a relative link the ordinary way: against the
 directory the linking file lives in. Skills are the deliberate exception.

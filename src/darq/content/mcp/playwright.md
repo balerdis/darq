@@ -8,7 +8,7 @@ version: 0.0.79
 integrity: sha512-VpqD4a3vFyGQMY9sh3UJiO6wjcurggkljKfAyCHL0QWGY5m6Ehr3MNsAAHPDHO//n13g0PCjpHatAOiulrqdZQ==
 entry: cli.js
 lockfile: playwright-package-lock.json
-reaches: [king-pegasus, pegasus-explorer, pegasus-general, pegasus-implementer, pegasus-orchestrator, pegasus-verifier, sdd-apply, sdd-explore, sdd-verify]
+reaches: [arquitecto-darq, darq-explorer, darq-general, darq-implementer, darq-orchestrator, darq-verifier, sdd-apply, sdd-explore, sdd-verify]
 ---
 
 # Playwright Convention (browser automation)

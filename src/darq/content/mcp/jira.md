@@ -3,7 +3,7 @@ name: jira
 description: Atlassian's own remote server, for the issues and pages an organisation tracks
 distribution: remote
 endpoint: https://mcp.atlassian.com/v1/mcp
-reaches: [king-pegasus, pegasus-explorer, pegasus-general, pegasus-implementer, pegasus-orchestrator, pegasus-verifier, sdd-apply, sdd-design, sdd-explore, sdd-onboard, sdd-verify]
+reaches: [arquitecto-darq, darq-explorer, darq-general, darq-implementer, darq-orchestrator, darq-verifier, sdd-apply, sdd-design, sdd-explore, sdd-onboard, sdd-verify]
 ---
 
 # Jira Convention (the organisation's system of record)

@@ -137,7 +137,7 @@ class ManifestCoherenceTest(unittest.TestCase):
 
     def test_model_configuration_requires_the_catalog_it_offers_to_choose_from(self):
         """Which models the machine can reach is the adapter's to answer.
-        Which agent got which one is not: that lives in Pegasus's own state,
+        Which agent got which one is not: that lives in DARQ's own state,
         so declaring the capability asks the adapter for the catalog and
         nothing else."""
         adapter = FakeAdapter(

@@ -44,8 +44,8 @@ CLI = "opencode"
 #: Two agents this release ships as configurable, so a batch can name more
 #: than one without inventing a fixture -- see `test_manual_figures.py`'s
 #: `EveryShippedAgentAcceptsAModelAssignmentTest` for the full derived list.
-AGENT_ONE = "king-pegasus"
-AGENT_TWO = "pegasus-explorer"
+AGENT_ONE = "arquitecto-darq"
+AGENT_TWO = "darq-explorer"
 
 
 class RealHomeTestCase(_RealHomeTestCase):

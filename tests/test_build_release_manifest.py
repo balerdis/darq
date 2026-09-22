@@ -93,7 +93,7 @@ def _write_common_release_files(root: Path) -> bytes:
     )
     (manifests / "release-contract.json").write_text(
         json.dumps({
-            "schema": "pegasus-harness-release-contract/v3",
+            "schema": "darq-release-contract/v3",
             "version": "3.1.0",
             "dependencies": [
                 {"id": "cbm", "source_url": "release-bundle:dependencies/fake-cbm.tar.gz"},
@@ -212,7 +212,7 @@ class SyntheticRepositorySuccessPathTest(unittest.TestCase):
         self.assertIn(hashlib.sha256(archive.read_bytes()).hexdigest(), checksum.read_text(encoding="utf-8"))
 
         payload = json.loads(output.read_text(encoding="utf-8"))
-        self.assertEqual(payload["schema"], "pegasus-harness-release/v3")
+        self.assertEqual(payload["schema"], "darq-release/v3")
         self.assertEqual(payload["tag"], "v3.1.0-rc.1")
         self.assertNotIn("release_kind", payload)  # only the final build sets this
         self.assertEqual(

@@ -29,9 +29,9 @@ from darq.core.registry import Registry
 from darq.core.types import Capability, ConfigKeyArtifact, Environment, FileArtifact, ModelAssignment
 
 HOME = Path("/home/probe")
-ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
 CONFIG = HOME / ".claude"
-ORCHESTRATOR = "pegasus-orchestrator"
+ORCHESTRATOR = "darq-orchestrator"
 IDENTITY = cli.default_identity()
 
 
@@ -102,7 +102,7 @@ class LayoutTest(unittest.TestCase):
 
     def test_dependencies_dir(self):
         self.assertEqual(
-            self.layout.dependencies_dir, HOME / ".local" / "share" / "pegasus-harness" / "mcp"
+            self.layout.dependencies_dir, HOME / ".local" / "share" / "darq" / "mcp"
         )
 
     def test_dependencies_dir_is_none_without_a_data_dir(self):
@@ -424,7 +424,7 @@ class CommandRenderTest(unittest.TestCase):
             source=PurePosixPath("commands/sdd-apply.md"),
         )
         fields.update(overrides)
-        return self.adapter.render_command(self.layout, Command(**fields), "pegasus-orchestrator")[0].content.decode()
+        return self.adapter.render_command(self.layout, Command(**fields), "darq-orchestrator")[0].content.decode()
 
     def test_lands_in_the_commands_directory(self):
         artifact = self.adapter.render_command(
@@ -437,7 +437,7 @@ class CommandRenderTest(unittest.TestCase):
                 execution=Execution.INLINE,
                 source=PurePosixPath("commands/sdd-apply.md"),
             ),
-            "pegasus-orchestrator",
+            "darq-orchestrator",
         )[0]
         self.assertEqual(artifact.path, CONFIG / "commands" / "sdd-apply.md")
 
@@ -448,7 +448,7 @@ class CommandRenderTest(unittest.TestCase):
 
     def test_orchestrator_name_does_not_leak_into_the_file(self):
         content = self.rendered(runs_as=RunsAs.ORCHESTRATOR)
-        self.assertNotIn("pegasus-orchestrator", content)
+        self.assertNotIn("darq-orchestrator", content)
 
     def test_the_body_survives(self):
         self.assertTrue(self.rendered().endswith("Do the work.\n"))
@@ -491,21 +491,21 @@ class OwnArtifactsTest(unittest.TestCase):
         # 2, not 1: `own_artifacts` now also emits the generated
         # delegation-capabilities reference (`render.delegation_capabilities`),
         # unconditionally, the same way OpenCode's own `own_artifacts` does.
-        artifacts = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())
+        artifacts = self.adapter.own_artifacts(self.layout, "darq-orchestrator", IDENTITY, ())
         self.assertEqual(len(artifacts), 2)
 
     def test_it_is_a_config_key_at_settings_pointing_at_agent(self):
-        artifact = self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ())[0]
+        artifact = self.adapter.own_artifacts(self.layout, "darq-orchestrator", IDENTITY, ())[0]
         self.assertIsInstance(artifact, ConfigKeyArtifact)
         self.assertEqual(artifact.path, CONFIG / "settings.json")
         self.assertEqual(artifact.pointer, "/agent")
 
     def test_the_value_is_the_content_declared_orchestrator_not_a_literal(self):
-        artifact = self.adapter.own_artifacts(self.layout, "king-pegasus-two", IDENTITY, ())[0]
-        self.assertEqual(artifact.value, "king-pegasus-two")
+        artifact = self.adapter.own_artifacts(self.layout, "arquitecto-darq-two", IDENTITY, ())[0]
+        self.assertEqual(artifact.value, "arquitecto-darq-two")
 
     def test_stays_inside_config_dir(self):
-        for artifact in self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, ()):
+        for artifact in self.adapter.own_artifacts(self.layout, "darq-orchestrator", IDENTITY, ()):
             self.assertTrue(artifact.path.is_relative_to(self.layout.config_dir))
 
 
@@ -521,7 +521,7 @@ class DelegationCapabilitiesRenderTest(unittest.TestCase):
 
     def _content(self, targets):
         artifact = only(
-            self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, targets),
+            self.adapter.own_artifacts(self.layout, "darq-orchestrator", IDENTITY, targets),
             FileArtifact,
         )[0]
         return artifact
@@ -535,13 +535,13 @@ class DelegationCapabilitiesRenderTest(unittest.TestCase):
         the exact vocabulary check the brief calls for: a table rendered in
         the wrong CLI's spelling would lie about what a target can run."""
         target = DelegationTarget(
-            name="pegasus-explorer",
+            name="darq-explorer",
             requires_tools=("read", "bash", "grep"),
             optional_tools=(),
             mcp=(),
         )
         text = self._content((target,)).content.decode("utf-8")
-        self.assertIn("`pegasus-explorer`", text)
+        self.assertIn("`darq-explorer`", text)
         self.assertIn("Bash", text)
         self.assertIn("Read", text)
         self.assertIn("Grep", text)
@@ -550,20 +550,20 @@ class DelegationCapabilitiesRenderTest(unittest.TestCase):
 
     def test_an_unmapped_tool_name_raises_rather_than_render_silently(self):
         target = DelegationTarget(
-            name="pegasus-explorer",
+            name="darq-explorer",
             requires_tools=("no-such-tool",),
             optional_tools=(),
             mcp=(),
         )
         with self.assertRaises(render_module.RenderError):
-            self.adapter.own_artifacts(self.layout, "pegasus-orchestrator", IDENTITY, (target,))
+            self.adapter.own_artifacts(self.layout, "darq-orchestrator", IDENTITY, (target,))
 
     def test_a_withheld_mcp_tool_is_shown_in_claude_codes_own_qualified_form(self):
         """`mcp__<server>__<tool>`, the exact string this adapter's own
         `disallowedTools` frontmatter key would use to refuse it -- not a
         bare tool name, and not OpenCode's `f"{key}_{tool}"` shape."""
         target = DelegationTarget(
-            name="pegasus-explorer",
+            name="darq-explorer",
             requires_tools=("read",),
             optional_tools=(),
             mcp=("cbm",),

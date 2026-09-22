@@ -1,7 +1,7 @@
 """`sub-delegation-criterion.md` governs fan-out by any agent, not only an SDD phase.
 
 The file used to scope itself to "whether and how an SDD phase agent fans work
-out to `pegasus-general`". That is wrong on two counts: any agent at any level
+out to `darq-general`". That is wrong on two counts: any agent at any level
 may fan out, and there will be more than one fan-out target over time. This
 generalizes the Scope/Authority wording, keeps every gate and test exactly as
 they are, adds the "fan-out is help, never offloading" paragraph, and adds the
@@ -28,10 +28,10 @@ class ScopeIsGeneralTest(unittest.TestCase):
         self.assertIn("any level", self.text.lower())
 
     def test_scope_no_longer_hardcodes_a_single_target(self):
-        """The old scope named `pegasus-general` as THE fan-out target. The new
+        """The old scope named `darq-general` as THE fan-out target. The new
         scope must speak of whatever targets an agent's own descriptor permits,
         not a fixed name."""
-        self.assertNotIn("fans work out to `pegasus-general`", self.text)
+        self.assertNotIn("fans work out to `darq-general`", self.text)
 
 
 class GatesAndTestsUnchangedTest(unittest.TestCase):

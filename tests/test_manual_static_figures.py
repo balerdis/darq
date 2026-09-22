@@ -35,11 +35,11 @@ fifth does not, on purpose.
    faked.
 
 5. MANUAL.md's "Los comandos distribuidos son ..." enumeration of the
-   OpenCode slash commands Pegasus ships, checked against
+   OpenCode slash commands DARQ ships, checked against
    `content.load().commands` -- the real `src/darq/content/commands/`
    tree. This is a different command surface than
    `ManualDocumentsEveryTopLevelCommandTest`
-   (`tests/test_manual_command_surface.py`), which checks the `pegasus`
+   (`tests/test_manual_command_surface.py`), which checks the `darq`
    CLI's own argparse subcommands (`install`, `update`, ...); nothing
    existing already covered this enumeration, so it gets a new guard rather
    than a duplicate of one that does.
@@ -186,7 +186,7 @@ class DistributedCommandsEnumerationTest(unittest.TestCase):
     OpenCode slash commands under `src/darq/content/commands/`.
 
     A different surface than `ManualDocumentsEveryTopLevelCommandTest`
-    (`tests/test_manual_command_surface.py`), which checks the `pegasus`
+    (`tests/test_manual_command_surface.py`), which checks the `darq`
     CLI's own argparse subcommands. Nothing already covers this
     enumeration.
     """

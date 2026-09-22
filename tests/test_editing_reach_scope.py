@@ -256,7 +256,7 @@ class EditingReachSectionTest(unittest.TestCase):
         self.assertTrue(authorises_the_privileged_local_path(self.section))
 
     def test_the_section_scopes_itself_to_reach_and_widens_no_contract(self):
-        """`pegasus-verifier` holds `bash` to run tests and is told not to fix
+        """`darq-verifier` holds `bash` to run tests and is told not to fix
         anything. Nothing here may be read as permission to start fixing."""
         self.assertTrue(
             scopes_itself_to_reach(self.section),

@@ -34,7 +34,7 @@ class TooOldMessageTest(unittest.TestCase):
 
     def test_rejects_an_older_minor(self):
         message = _too_old_message((3, 9, 0, "final", 0))
-        self.assertEqual(message, "pegasus requires Python 3.12 or newer; this is Python 3.9")
+        self.assertEqual(message, "darq requires Python 3.12 or newer; this is Python 3.9")
 
     def test_rejects_an_older_major(self):
         message = _too_old_message((2, 7, 18, "final", 0))
@@ -61,7 +61,7 @@ class GuardWiringTest(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_a_fabricated_old_interpreter_is_rejected_before_pegasus_cli_imports(self):
+    def test_a_fabricated_old_interpreter_is_rejected_before_darq_cli_imports(self):
         script = (
             "import sys\n"
             "sys.version_info = (3, 9, 0, 'final', 0)\n"
@@ -70,7 +70,7 @@ class GuardWiringTest(unittest.TestCase):
         ) % str(SRC)
         result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(result.stderr, "pegasus requires Python 3.12 or newer; this is Python 3.9\n")
+        self.assertEqual(result.stderr, "darq requires Python 3.12 or newer; this is Python 3.9\n")
         self.assertNotIn("Traceback", result.stderr)
 
 

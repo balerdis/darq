@@ -1,17 +1,14 @@
 {
-  "product_id": "pegasus-harness",
-  "display_name": "Pegasus",
-  "program_name": "pegasus",
+  "product_id": "darq",
+  "display_name": "DARQ",
+  "program_name": "darq",
   "version": "6.0.0",
-  "wordmark_words": [
-    "PEGASUS",
-    "HARNESS"
-  ],
+  "wordmark_words": ["DARQ"],
   "release": {
-    "asset_url_template": "https://github.com/balerdis/pegasus-harness/releases/download/{tag}/{asset}",
-    "binary_asset": "pegasus",
-    "latest_release_api_url": "https://api.github.com/repos/balerdis/pegasus-harness/releases/latest",
-    "release_page_url": "https://github.com/balerdis/pegasus-harness/releases",
-    "install_base_url_default": "https://github.com/balerdis/pegasus-harness/releases/latest/download"
+    "asset_url_template": "https://github.com/balerdis/darq/releases/download/{tag}/{asset}",
+    "binary_asset": "darq",
+    "latest_release_api_url": "https://api.github.com/repos/balerdis/darq/releases/latest",
+    "release_page_url": "https://github.com/balerdis/darq/releases",
+    "install_base_url_default": "https://github.com/balerdis/darq/releases/latest/download"
   }
 }

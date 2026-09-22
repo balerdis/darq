@@ -1,6 +1,6 @@
 """Guard: a registered adapter cannot go undocumented, or misdocumented.
 
-Pegasus shipped a second CLI (Claude Code) alongside the original one
+DARQ shipped a second CLI (Claude Code) alongside the original one
 (OpenCode) without updating any of the four user-facing documents -- 89
 mentions of OpenCode and zero of Claude Code, `README.md` stating outright
 that OpenCode was the only client. Nothing caught that because nothing
@@ -14,7 +14,7 @@ Two things are checked, both explicitly requested by the brief that fixed
 this gap:
 
 1. Every adapter's display name appears in each document that is supposed to
-   introduce a reader to every CLI Pegasus supports.
+   introduce a reader to every CLI DARQ supports.
 2. A capability comparison table in `README.md` -- parsed, not eyeballed --
    agrees, cell for cell, with each adapter's own `CapabilityManifest` and
    `tier()`.
@@ -26,7 +26,7 @@ choice, not an oversight:
   reader (human or agent) lands on one of these first and must be told which
   CLIs exist before choosing one. All three must name every adapter.
 * `MANUAL.md` is deliberately excluded. Its own title scopes it --
-  "Manual de uso: Pegasus Harness + OpenCode" -- and its prose is pinned,
+  "Manual de uso: DARQ + OpenCode" -- and its prose is pinned,
   fact for fact, against a live OpenCode installation by five other guard
   suites (`test_manual_command_surface.py` and its four siblings). Turning it
   into a manual for every CLI would mean either fighting those pins or

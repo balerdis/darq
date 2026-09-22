@@ -232,7 +232,7 @@ class DoctorStartMcpServersTest(RealHomeTestCase):
         self.assertIn("did not finish", detail)
 
     def test_an_install_from_before_bindings_were_recorded_still_reports_the_hedge(self):
-        """A journal written by an earlier Pegasus has no `mcp_bindings` at
+        """A journal written by an earlier DARQ has no `mcp_bindings` at
         all. `doctor` must degrade to exactly today's wording -- never an
         invented key, never a crash."""
         self.present()
@@ -267,12 +267,12 @@ class DoctorStartMcpServersTest(RealHomeTestCase):
         self.assertEqual(entry["mcp_bound_unknown_keys"]["ids"], ["cbm"])
         self.assertEqual(
             entry["mcp_bound_unknown_keys"]["command"],
-            f"pegasus install --cli {CLI} --mcp cbm=<key>",
+            f"darq install --cli {CLI} --mcp cbm=<key>",
         )
 
         context = self.runtime()
         cli.main(["doctor"], runtime=context)
-        self.assertIn(f"pegasus install --cli {CLI} --mcp cbm=<key>", context.out.getvalue())
+        self.assertIn(f"darq install --cli {CLI} --mcp cbm=<key>", context.out.getvalue())
         self.assertIn("CLI's own configuration", context.out.getvalue())
         # Copied verbatim, `<key>` typed literally bounces off
         # `parse_mcp_choice`'s cryptic rejection -- the same explicit

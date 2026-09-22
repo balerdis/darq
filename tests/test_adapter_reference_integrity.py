@@ -3,8 +3,8 @@
 The incident: a real install put Claude Code's agents on disk, and six of them
 carry a lazy-load pointer at `{{skills_root}}/_shared/delegation-capabilities.md`
 (see `content.delegation_capabilities_path` and the six agent bodies that read
-it -- `king-pegasus`, `pegasus-general`, `pegasus-implementer`,
-`pegasus-orchestrator`, `sdd-explore`, `sdd-verify`). OpenCode's `own_artifacts`
+it -- `arquitecto-darq`, `darq-general`, `darq-implementer`,
+`darq-orchestrator`, `sdd-explore`, `sdd-verify`). OpenCode's `own_artifacts`
 writes that file (`opencode.render.delegation_capabilities`); Claude Code's did
 not. The instruction survives because it carries its own fallback ("if this
 reference is missing or unreadable, do not assume the capability"), but the
@@ -42,7 +42,7 @@ from darq.core import content as content_module
 from darq.core.types import Environment, FileArtifact
 
 HOME = Path("/home/probe")
-ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "pegasus-harness")
+ENVIRONMENT = Environment(home=HOME, data_dir=HOME / ".local" / "share" / "darq")
 IDENTITY = cli.default_identity()
 
 #: An artifact carrying an agent's own prose is identified by its id, not by a

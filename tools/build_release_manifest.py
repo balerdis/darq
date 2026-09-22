@@ -79,15 +79,15 @@ def build_archive(tag: str, archive: Path) -> dict[str, str]:
             "git",
             "archive",
             "--format=tar",
-            f"--prefix=pegasus-harness-{tag}/",
+            f"--prefix=darq-{tag}/",
             tag,
         ],
         cwd=ROOT,
         capture_output=True,
         check=True,
     )
-    installer_path = f"pegasus-harness-{tag}/install.sh"
-    cbm_path = f"pegasus-harness-{tag}/{curated['path']}"
+    installer_path = f"darq-{tag}/install.sh"
+    cbm_path = f"darq-{tag}/{curated['path']}"
     with tarfile.open(fileobj=io.BytesIO(source.stdout), mode="r:") as input_tar:
         with tarfile.open(archive, "w:gz") as output_tar:
             for member in input_tar:
@@ -103,7 +103,7 @@ def build_archive(tag: str, archive: Path) -> dict[str, str]:
 
 def release_installer(tag: str, archive: Path) -> dict[str, str | int]:
     manifest = json.loads(tagged_file(tag, "manifests/release-contract.json"))
-    if manifest.get("schema") != "pegasus-harness-release-contract/v3" or manifest.get("version") != RELEASE_VERSION:
+    if manifest.get("schema") != "darq-release-contract/v3" or manifest.get("version") != RELEASE_VERSION:
         raise ValueError(f"tagged release contract must be v{RELEASE_VERSION}")
     installer = {"path": "install.sh", "sha256": hashlib.sha256(tagged_file(tag, "install.sh")).hexdigest()}
 
@@ -111,7 +111,7 @@ def release_installer(tag: str, archive: Path) -> dict[str, str | int]:
         raise ValueError("tagged install.sh must be tracked with Git mode 100755")
     expected_digest = installer["sha256"]
     expected_content = tagged_file(tag, "install.sh")
-    prefix = f"pegasus-harness-{tag}/install.sh"
+    prefix = f"darq-{tag}/install.sh"
     with tarfile.open(archive, "r:gz") as contents:
         member = contents.getmember(prefix)
         if not member.isfile() or member.mode & 0o777 != 0o755:
@@ -126,7 +126,7 @@ def release_installer(tag: str, archive: Path) -> dict[str, str | int]:
 
 
 def archive_evidence(tag: str, archive: Path, curated: dict[str, str]) -> list[dict[str, str]]:
-    prefix = f"pegasus-harness-{tag}/"
+    prefix = f"darq-{tag}/"
     evidence = []
     with tarfile.open(archive, "r:gz") as contents:
         for path in ("manifests/release-contract.json", "manifests/artifact-catalog.json", curated["provenance"], curated["path"]):
@@ -140,7 +140,7 @@ def archive_evidence(tag: str, archive: Path, curated: dict[str, str]) -> list[d
 
 def documentation_evidence(tag: str, archive: Path) -> list[dict[str, str]]:
     """Prove the final archive includes the selected authored installation guides."""
-    prefix = f"pegasus-harness-{tag}/"
+    prefix = f"darq-{tag}/"
     evidence = []
     with tarfile.open(archive, "r:gz") as contents:
         for path in FINAL_DOCUMENTS:
@@ -187,14 +187,14 @@ def main() -> int:
     checksum = args.archive.with_name(args.archive.name + ".sha256")
     checksum.write_text(checksum_line(args.archive), encoding="utf-8")
     payload = {
-        "schema": "pegasus-harness-release/v3",
+        "schema": "darq-release/v3",
         "tag": args.tag,
         "tag_object": tag_object,
         "commit": commit,
         "clients": ["opencode", "claude-code"],
         "assets": [{"name": args.archive.name, "sha256": digest(args.archive)}],
         "distribution_assets": [installer],
-        "archive_root": f"pegasus-harness-{args.tag}",
+        "archive_root": f"darq-{args.tag}",
         "archive_evidence": evidence,
         "curated_dependencies": [{"id": "cbm", **curated}],
     }

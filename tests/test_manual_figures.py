@@ -188,18 +188,18 @@ class GrantMcpReachesEveryAgentTest(unittest.TestCase):
 ENTRY_POINT_ANCHOR = "zipapp"
 
 #: A product major, as the manual spells one.
-PRODUCT_MAJOR = re.compile(r"\bPegasus (\d+)\b")
+PRODUCT_MAJOR = re.compile(r"\bDARQ (\d+)\b")
 
 #: The mechanisms the 4.x entry point was made of. Every one of them was
 #: retired whole when the package lost its last dependency (see the dissolved
 #: debt in `docs/arquitectura/arquitectura.md`), so a user manual that still
 #: names one is describing a product that is not there -- which is exactly the
 #: state this paragraph was found in, promising a venv at
-#: `$XDG_DATA_HOME/pegasus-harness/venv` and a launcher on the PATH. Retyped
+#: `$XDG_DATA_HOME/darq/venv` and a launcher on the PATH. Retyped
 #: here because a thing that no longer exists leaves nothing in the tree to
 #: derive its name from; that is the whole reason the claim could go stale
 #: unnoticed.
-RETIRED_ENTRY_POINT = re.compile(r"\bvenv\b|\bshim\b|\blanzador\b|pegasus setup", re.IGNORECASE)
+RETIRED_ENTRY_POINT = re.compile(r"\bvenv\b|\bshim\b|\blanzador\b|darq setup", re.IGNORECASE)
 
 
 def the_entry_point_paragraph() -> str:
@@ -235,11 +235,11 @@ def declared_dependencies() -> list[str]:
 class ManualNamesTheEntryPointThisReleaseShipsTest(unittest.TestCase):
     """`MANUAL.md` opened by describing an entry point that was removed.
 
-    It said Pegasus "es un paquete de Python que vive en un venv privado
-    (`$XDG_DATA_HOME/pegasus-harness/venv` ...), con un lanzador `pegasus` en
+    It said DARQ "es un paquete de Python que vive en un venv privado
+    (`$XDG_DATA_HOME/darq/venv` ...), con un lanzador `darq` en
     tu PATH", and three paragraphs later told the reader to work "con el venv
     ya armado". None of that exists: the package lost its last third-party
-    dependency, a venv stopped isolating anything, and `pegasus setup`, the
+    dependency, a venv stopped isolating anything, and `darq setup`, the
     venv, the shim and `setup-sources/` were retired whole -- the entry point
     has been one executable `zipapp` since. Three other user documents were
     brought to that truth and this one was not, which is the same silent way
@@ -351,7 +351,7 @@ class EveryShippedAgentAcceptsAModelAssignmentTest(RealHomeTestCase):
     """"Un agente configurable de la línea SDD" was a narrowing of a rule.
 
     Every agent this release ships is `model_configurable` -- the
-    orchestrator, `king-pegasus` and the phase-less specialists included --
+    orchestrator, `arquitecto-darq` and the phase-less specialists included --
     so the sentence named a subset where there is none, the exact defect
     `GrantMcpReachesEveryAgentTest` was written for, in a second paragraph of
     the same document. A reader with a model to assign to their orchestrator

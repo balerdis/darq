@@ -2,7 +2,7 @@
 
 Every test drives the real script with `subprocess`, inside a throwaway `HOME` and a
 tightly controlled `PATH`, so the tests never touch this machine's actual Python,
-Node, OpenCode or Pegasus, and never reach the network. Stubs are small shell
+Node, OpenCode or DARQ, and never reach the network. Stubs are small shell
 scripts placed on `PATH` ahead of anything real; `--verify` and `--no-run` are used
 wherever a scenario would otherwise have to download or launch something for real.
 
@@ -82,23 +82,23 @@ def _snapshot(directory: Path) -> set[str]:
     return {str(p) for p in directory.rglob("*")}
 
 
-def _make_release_fixture(directory: Path, *, content: bytes = b"#!/bin/sh\necho fake-pegasus\n",
+def _make_release_fixture(directory: Path, *, content: bytes = b"#!/bin/sh\necho fake-darq\n",
                            corrupt_checksum: bool = False) -> str:
-    """Lay out `pegasus` and `pegasus.sha256` in `directory`, and return the
-    `file://` URL that stands in for `PEGASUS_INSTALL_BASE_URL` in a test.
+    """Lay out `darq` and `darq.sha256` in `directory`, and return the
+    `file://` URL that stands in for `DARQ_INSTALL_BASE_URL` in a test.
 
-    `install.sh` downloads with `curl -fL -o ... "$BASE_URL/pegasus"`; curl
+    `install.sh` downloads with `curl -fL -o ... "$BASE_URL/darq"`; curl
     handles `file://` exactly like an http(s) URL for a GET, so this exercises
     the script's real download-then-verify-then-install code path without any
     of it ever reaching the network. `corrupt_checksum=True` writes a digest
     that does not match `content`, for testing the checksum-mismatch path.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "pegasus").write_bytes(content)
+    (directory / "darq").write_bytes(content)
     digest = hashlib.sha256(content).hexdigest()
     if corrupt_checksum:
         digest = ("0" if digest[0] != "0" else "1") + digest[1:]
-    (directory / "pegasus.sha256").write_text(f"{digest}  pegasus\n", encoding="utf-8")
+    (directory / "darq.sha256").write_text(f"{digest}  darq\n", encoding="utf-8")
     return f"file://{directory}"
 
 
@@ -227,7 +227,7 @@ class HelpTest(InstallScriptTestCase):
         text must name the product by its own display name."""
         result = self.run_install("--help")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Pegasus", result.stdout)
+        self.assertIn("DARQ", result.stdout)
 
     def test_help_omits_build_mechanism_details(self):
         """The other half of the same regression: the genericised usage
@@ -298,14 +298,14 @@ class MultilineVersionOutputDoesNotAbortTest(InstallScriptTestCase):
         self.assertNotIn("banner line", result.stdout)
 
     def test_multiline_pegasus_version_via_path_does_not_abort_verify(self):
-        """`command -v pegasus` branch of `detectar_producto` (the binary is on
+        """`command -v darq` branch of `detectar_producto` (the binary is on
         PATH, not merely present at `$BIN_DIR`)."""
         self._stub_python_and_curl_present()
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub("opencode", 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
         self.stub(
-            "pegasus",
-            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then printf "pegasus 5.12.1\\n"\n'
+            "darq",
+            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then printf "darq 5.12.1\\n"\n'
             + self._MULTILINE_VERSION
             + "fi\n",
         )
@@ -313,11 +313,11 @@ class MultilineVersionOutputDoesNotAbortTest(InstallScriptTestCase):
         result = self.run_install("--verify")
 
         self.assertEqual(result.returncode, 0, f"stdout={result.stdout!r} stderr={result.stderr!r}")
-        self.assertIn("pegasus 5.12.1", result.stdout)
+        self.assertIn("darq 5.12.1", result.stdout)
         self.assertNotIn("banner line", result.stdout)
 
     def test_multiline_pegasus_version_via_bin_dir_does_not_abort_verify(self):
-        """`$BIN_DIR/pegasus` branch of `detectar_producto`: present only at
+        """`$BIN_DIR/darq` branch of `detectar_producto`: present only at
         `$BIN_DIR`, never on the incoming PATH -- a distinct pipeline from the
         `command -v` case above (install.sh:241 vs install.sh:237)."""
         self._stub_python_and_curl_present()
@@ -325,20 +325,20 @@ class MultilineVersionOutputDoesNotAbortTest(InstallScriptTestCase):
         self.stub("opencode", 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
         bin_dir = self.home / ".local" / "bin"
         bin_dir.mkdir(parents=True)
-        pegasus_bin = bin_dir / "pegasus"
-        pegasus_bin.write_text(
+        darq_bin = bin_dir / "darq"
+        darq_bin.write_text(
             '#!/bin/sh\n'
-            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then printf "pegasus 5.12.1\\n"\n'
+            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then printf "darq 5.12.1\\n"\n'
             + self._MULTILINE_VERSION
             + "fi\n",
             encoding="utf-8",
         )
-        pegasus_bin.chmod(pegasus_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        darq_bin.chmod(darq_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         result = self.run_install("--verify")
 
         self.assertEqual(result.returncode, 0, f"stdout={result.stdout!r} stderr={result.stderr!r}")
-        self.assertIn("pegasus 5.12.1", result.stdout)
+        self.assertIn("darq 5.12.1", result.stdout)
         self.assertNotIn("banner line", result.stdout)
 
 
@@ -346,7 +346,7 @@ class VerifyWithOnlyOptionalToolsMissingTest(InstallScriptTestCase):
     def test_reports_optional_tools_absent_and_touches_nothing(self):
         """python3 and curl -- the two things install.sh refuses to guess at
         (see VerifyExitCodeMeansViableTest below) -- are stubbed present and
-        valid here, so the environment IS viable; only node/opencode/pegasus
+        valid here, so the environment IS viable; only node/opencode/darq
         are missing. --verify must exit 0, list all three as things that would
         be installed, and must leave the throwaway HOME byte-for-byte as it
         found it: no directories, no files, not even a `.local/bin` -- verify
@@ -361,7 +361,7 @@ class VerifyWithOnlyOptionalToolsMissingTest(InstallScriptTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Node", result.stdout)
         self.assertIn("OpenCode", result.stdout)
-        self.assertIn("pegasus", result.stdout.lower())
+        self.assertIn("darq", result.stdout.lower())
         self.assertEqual(before, after)
 
 
@@ -431,9 +431,9 @@ class VerifyIgnoresNoRunTest(InstallScriptTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Node", result.stdout)
         self.assertIn("OpenCode", result.stdout)
-        self.assertIn("pegasus", result.stdout.lower())
+        self.assertIn("darq", result.stdout.lower())
         self.assertFalse(self.marker("opencode-launched").exists())
-        self.assertFalse(self.marker("pegasus-launched").exists())
+        self.assertFalse(self.marker("darq-launched").exists())
 
 
 class NoRunActuallyInstallsTest(InstallScriptTestCase):
@@ -442,17 +442,17 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
     which meant the exact command `INSTALL_BY_AGENT.md` tells an agent to run
     (`--yes --no-run`) silently did nothing, while claiming success and
     claiming something had been installed. These tests drive the real
-    download-verify-install code path for the `pegasus` binary through the
-    `PEGASUS_INSTALL_BASE_URL` seam, pointed at a local `file://` fixture, so
+    download-verify-install code path for the `darq` binary through the
+    `DARQ_INSTALL_BASE_URL` seam, pointed at a local `file://` fixture, so
     the fix is proven against the actual code path and not just its wording.
     Node and OpenCode are always stubbed present in this class specifically so
     that a still-missing seam for *them* can never make a test reach the real
-    network -- only the seamed `pegasus` download is exercised for real.
+    network -- only the seamed `darq` download is exercised for real.
     """
 
     def _stub_python_node_opencode_present(self):
         """`curl` is deliberately left real (from SYSTEM_PATH), never stubbed,
-        in this class: instalar_pegasus's real `curl` calls are exactly what
+        in this class: instalar_darq's real `curl` calls are exactly what
         these tests drive through the `file://` fixture seam. node/opencode
         are stubbed present so their own `instalar_*` functions never run and
         never get a chance to call the *real* curl against the real network."""
@@ -467,16 +467,16 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
     def _stub_everything_present(self):
         self._stub_python_node_opencode_present()
         self.stub(
-            "pegasus",
-            f'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "pegasus 5.12.1"; exit 0; fi\n'
-            f'touch "{self.marker("pegasus-launched")}"\n',
+            "darq",
+            f'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "darq 5.12.1"; exit 0; fi\n'
+            f'touch "{self.marker("darq-launched")}"\n',
         )
 
-    def test_yes_no_run_with_everything_present_still_reports_it_would_launch_pegasus(self):
-        """python3, curl, node, opencode and pegasus are all stubbed present, so
+    def test_yes_no_run_with_everything_present_still_reports_it_would_launch_darq(self):
+        """python3, curl, node, opencode and darq are all stubbed present, so
         there is nothing to install; the script must say so, but it must STILL
-        report it would launch `pegasus`, not `opencode`. Checking for a newer
-        release and offering Upgrade is the pegasus TUI's own job (see
+        report it would launch `darq`, not `opencode`. Checking for a newer
+        release and offering Upgrade is the darq TUI's own job (see
         cli.check_for_update / navigator.update_notice_lines) -- the only way
         anyone ever sees that notice is if the installer always opens the TUI,
         even when nothing needed installing."""
@@ -486,47 +486,47 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("ya está todo instalado", result.stdout)
-        self.assertIn("Se habría lanzado: pegasus", result.stdout)
+        self.assertIn("Se habría lanzado: darq", result.stdout)
         self.assertIn("ya tenía todo instalado", result.stdout)
         self.assertFalse(self.marker("opencode-launched").exists())
-        self.assertFalse(self.marker("pegasus-launched").exists())
+        self.assertFalse(self.marker("darq-launched").exists())
 
-    def test_no_run_with_pegasus_missing_actually_installs_it_and_would_launch_pegasus(self):
-        """The critical-bug regression test. pegasus is the only thing missing;
+    def test_no_run_with_darq_missing_actually_installs_it_and_would_launch_darq(self):
+        """The critical-bug regression test. darq is the only thing missing;
         `--yes --no-run` must actually download it (through the seam, from a
         local fixture -- never the network), verify its checksum, and place it
-        at `$BIN_DIR/pegasus` with mode 755 and byte-identical content -- and
-        only then must it report it would have launched `pegasus` (not
+        at `$BIN_DIR/darq` with mode 755 and byte-identical content -- and
+        only then must it report it would have launched `darq` (not
         `opencode`) instead of actually launching it. Before the fix, none of
         the install steps ran at all under --no-run."""
         self._stub_python_node_opencode_present()
         fixture_dir = Path(self.tmp.name) / "release-fixture"
-        content = b"#!/bin/sh\necho fixture-pegasus\n"
+        content = b"#!/bin/sh\necho fixture-darq\n"
         base_url = _make_release_fixture(fixture_dir, content=content)
 
         result = self.run_install(
-            "--yes", "--no-run", extra_env={"PEGASUS_INSTALL_BASE_URL": base_url}
+            "--yes", "--no-run", extra_env={"DARQ_INSTALL_BASE_URL": base_url}
         )
 
-        installed = self.home / ".local" / "bin" / "pegasus"
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(installed.is_file(), result.stdout + result.stderr)
         self.assertEqual(installed.read_bytes(), content)
         self.assertEqual(stat.S_IMODE(installed.stat().st_mode), 0o755)
-        self.assertIn("Se habría lanzado: pegasus", result.stdout)
+        self.assertIn("Se habría lanzado: darq", result.stdout)
         self.assertIn("se instaló algo nuevo", result.stdout)
         self.assertFalse(self.marker("opencode-launched").exists())
-        self.assertFalse(self.marker("pegasus-launched").exists())
+        self.assertFalse(self.marker("darq-launched").exists())
 
-    def test_a_real_run_that_execs_pegasus_leaves_no_download_tmpdir_behind(self):
+    def test_a_real_run_that_execs_darq_leaves_no_download_tmpdir_behind(self):
         """`exec` replaces the process image without running pending traps, so
-        the `trap ... EXIT` guarding `PEGASUS_TMPDIR` never fires on the code
+        the `trap ... EXIT` guarding `DARQ_TMPDIR` never fires on the code
         path every real install actually takes: one that ends by `exec`ing
-        pegasus or opencode, not by returning normally. Before the fix, every
+        darq or opencode, not by returning normally. Before the fix, every
         such run leaked its download directory (the binary and checksum) into
         `$TMPDIR` forever. This drives a REAL run (no `--no-run`, no `--verify`)
         so it actually reaches the `exec`, and checks `$TMPDIR` itself, not
-        `PEGASUS_TMPDIR`'s own path (which the trap always cleans up on any
+        `DARQ_TMPDIR`'s own path (which the trap always cleans up on any
         path that returns instead of exec'ing, so asserting on it would not
         have caught this)."""
         self._stub_python_node_opencode_present()
@@ -538,7 +538,7 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "TMPDIR": str(tmpdir_root)},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "TMPDIR": str(tmpdir_root)},
         )
 
         after = _snapshot(tmpdir_root)
@@ -564,7 +564,7 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
         self.assertIn(str(colliding_file), result.stderr)
 
     def test_corrupted_checksum_aborts_and_leaves_no_binary(self):
-        """A `pegasus.sha256` that does not match the downloaded bytes must
+        """A `darq.sha256` that does not match the downloaded bytes must
         abort with a non-zero exit and must NOT leave anything at the
         destination -- a half-verified binary is worse than none, since a
         person or agent might otherwise trust it. Runs a real (non-`--no-run`)
@@ -575,10 +575,10 @@ class NoRunActuallyInstallsTest(InstallScriptTestCase):
         base_url = _make_release_fixture(fixture_dir, corrupt_checksum=True)
 
         result = self.run_install(
-            "--yes", extra_env={"PEGASUS_INSTALL_BASE_URL": base_url}
+            "--yes", extra_env={"DARQ_INSTALL_BASE_URL": base_url}
         )
 
-        installed = self.home / ".local" / "bin" / "pegasus"
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(installed.exists())
 
@@ -676,7 +676,7 @@ class ConfirmationPromptTest(InstallScriptTestCase):
         fall back to either). Before the fix this exited 1 with no message
         whatsoever; a test asserting only the exit code would still pass
         against that broken version, so this asserts on the message."""
-        self._stub_python_node_opencode_present()  # pegasus left absent: something to confirm
+        self._stub_python_node_opencode_present()  # darq left absent: something to confirm
 
         result = self.run_install(start_new_session=True)
 
@@ -684,13 +684,13 @@ class ConfirmationPromptTest(InstallScriptTestCase):
         self.assertIn("--yes", result.stderr)
         self.assertIn("terminal", result.stderr)
         self.assertNotIn("cancelado", result.stderr)  # never reached the case/fallar this bug used to skip
-        self.assertFalse((self.home / ".local" / "bin" / "pegasus").exists())
+        self.assertFalse((self.home / ".local" / "bin" / "darq").exists())
 
     def test_answering_the_prompt_over_a_real_pty_proceeds_with_the_install(self):
         """Drives `install.sh --no-run` under a real pty (see `_InstallPtySession`),
         types "y" at the confirmation prompt exactly as a person would, and
         asserts the install actually proceeded -- through the same
-        `PEGASUS_INSTALL_BASE_URL` fixture seam the non-interactive tests use,
+        `DARQ_INSTALL_BASE_URL` fixture seam the non-interactive tests use,
         so this never reaches the network either."""
         self._stub_python_node_opencode_present()
         fixture_dir = Path(self.tmp.name) / "pty-release-fixture"
@@ -699,7 +699,7 @@ class ConfirmationPromptTest(InstallScriptTestCase):
         env = {
             "HOME": str(self.home),
             "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",
-            "PEGASUS_INSTALL_BASE_URL": base_url,
+            "DARQ_INSTALL_BASE_URL": base_url,
             "TERM": "xterm",
         }
         session = _InstallPtySession(env=env, args=["--cli", "opencode", "--no-run"])
@@ -709,8 +709,8 @@ class ConfirmationPromptTest(InstallScriptTestCase):
         session.press("y\n")
         output = session.drain(timeout=15.0)
 
-        self.assertIn("Se habría lanzado: pegasus", output)
-        installed = self.home / ".local" / "bin" / "pegasus"
+        self.assertIn("Se habría lanzado: darq", output)
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertTrue(installed.is_file(), output)
         self.assertEqual(stat.S_IMODE(installed.stat().st_mode), 0o755)
 
@@ -719,7 +719,7 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
     """The core bug this fix closes: `lanzar` used to end with a bare
     `exec "$LANZAR"`, which inherits install.sh's own stdin. Under the
     documented `curl ... | bash`, that stdin is the pipe bash already
-    drained, not a terminal -- so the launched program (pegasus or opencode,
+    drained, not a terminal -- so the launched program (darq or opencode,
     both TUIs) printed its usage line and exited immediately instead of
     opening. The fix execs with `< /dev/tty` explicitly, reusing the same
     controlling-terminal check `confirmar` already had.
@@ -730,32 +730,32 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
     (such as "some output appeared").
     """
 
-    def test_real_pty_run_execs_freshly_installed_pegasus_with_a_real_terminal(self):
+    def test_real_pty_run_execs_freshly_installed_darq_with_a_real_terminal(self):
         """Drives a real (non `--no-run`) install over a pty end to end:
-        types "y" at the confirmation prompt, installs pegasus for real
-        through the `PEGASUS_INSTALL_BASE_URL` fixture seam, and lets the
-        script reach its actual `exec pegasus` -- the downloaded "binary"
+        types "y" at the confirmation prompt, installs darq for real
+        through the `DARQ_INSTALL_BASE_URL` fixture seam, and lets the
+        script reach its actual `exec darq` -- the downloaded "binary"
         then checks its own stdin. Also checks the PATH guidance (see
         ClosingPathGuidanceTest) appears in the transcript BEFORE the exec:
         once exec happens, this script has nothing left to print."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
-        marker = self.marker("pegasus-stdin")
+        marker = self.marker("darq-stdin")
         fixture_dir = Path(self.tmp.name) / "launch-pty-fixture"
         content = (
             b'#!/bin/sh\n'
-            b'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "pegasus fake"; exit 0; fi\n'
+            b'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "darq fake"; exit 0; fi\n'
             b'if [ -t 0 ]; then echo tty > "' + str(marker).encode() + b'"; '
             b'else echo notty > "' + str(marker).encode() + b'"; fi\n'
-            b'echo PEGASUS-LAUNCHED-WITH-TERMINAL\n'
+            b'echo DARQ-LAUNCHED-WITH-TERMINAL\n'
         )
         base_url = _make_release_fixture(fixture_dir, content=content)
 
         env = {
             "HOME": str(self.home),
             "PATH": f"{self.stub_bin}:{SYSTEM_PATH}",
-            "PEGASUS_INSTALL_BASE_URL": base_url,
+            "DARQ_INSTALL_BASE_URL": base_url,
             "TERM": "xterm",
         }
         session = _InstallPtySession(env=env, args=["--cli", "opencode"])
@@ -763,20 +763,20 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
 
         session.wait_for("[y/N]")
         session.press("y\n")
-        output = session.wait_for("PEGASUS-LAUNCHED-WITH-TERMINAL", timeout=15.0)
+        output = session.wait_for("DARQ-LAUNCHED-WITH-TERMINAL", timeout=15.0)
 
         self.assertTrue(marker.exists(), output)
         self.assertEqual(marker.read_text(encoding="utf-8").strip(), "tty")
         path_idx = output.index("export PATH=")
-        launch_idx = output.index("PEGASUS-LAUNCHED-WITH-TERMINAL")
+        launch_idx = output.index("DARQ-LAUNCHED-WITH-TERMINAL")
         self.assertLess(path_idx, launch_idx, output)
 
-    def test_real_pty_run_with_nothing_missing_execs_pegasus_with_a_real_terminal(self):
-        """pegasus is the one this now execs even with nothing missing -- see
-        decidir_lanzamiento: the installer always hands over to the pegasus
+    def test_real_pty_run_with_nothing_missing_execs_darq_with_a_real_terminal(self):
+        """darq is the one this now execs even with nothing missing -- see
+        decidir_lanzamiento: the installer always hands over to the darq
         TUI, never straight to opencode, so it is the TUI (not this script)
         that gets to report a newer release. With everything already
-        present, `lanzar` execs straight into pegasus with no confirmation
+        present, `lanzar` execs straight into darq with no confirmation
         prompt in between."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
         self.stub("node", 'echo "v20.11.0"\n')
@@ -784,12 +784,12 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
             "opencode",
             'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n',
         )
-        marker = self.marker("pegasus-stdin")
+        marker = self.marker("darq-stdin")
         self.stub(
-            "pegasus",
-            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "pegasus 5.12.1"; exit 0; fi\n'
+            "darq",
+            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "darq 5.12.1"; exit 0; fi\n'
             f'if [ -t 0 ]; then echo tty > "{marker}"; else echo notty > "{marker}"; fi\n'
-            'echo PEGASUS-LAUNCHED-WITH-TERMINAL\n',
+            'echo DARQ-LAUNCHED-WITH-TERMINAL\n',
         )
 
         env = {
@@ -800,34 +800,34 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
         session = _InstallPtySession(env=env, args=["--cli", "opencode"])
         self.addCleanup(session.close)
 
-        output = session.wait_for("PEGASUS-LAUNCHED-WITH-TERMINAL", timeout=15.0)
+        output = session.wait_for("DARQ-LAUNCHED-WITH-TERMINAL", timeout=15.0)
 
         self.assertTrue(marker.exists(), output)
         self.assertEqual(marker.read_text(encoding="utf-8").strip(), "tty")
 
-    def test_real_run_with_pegasus_present_only_via_bin_dir_still_execs_it(self):
+    def test_real_run_with_darq_present_only_via_bin_dir_still_execs_it(self):
         """Regression coverage for the exec-side half of the gap this change
         makes reachable: before `asegurar_path` ran unconditionally (see
         main()), a real run with nothing missing skipped it entirely -- so
-        when pegasus was reachable only via `$BIN_DIR/pegasus`, never through
-        the PATH this process actually started with, `exec pegasus` failed
-        outright (`bash: exec: pegasus: not found`, exit 127) even though
-        the closing guidance said pegasus was about to launch."""
+        when darq was reachable only via `$BIN_DIR/darq`, never through
+        the PATH this process actually started with, `exec darq` failed
+        outright (`bash: exec: darq: not found`, exit 127) even though
+        the closing guidance said darq was about to launch."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub("opencode", 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
         bin_dir = self.home / ".local" / "bin"
         bin_dir.mkdir(parents=True)
-        pegasus_bin = bin_dir / "pegasus"
-        marker = self.marker("pegasus-stdin")
-        pegasus_bin.write_text(
+        darq_bin = bin_dir / "darq"
+        marker = self.marker("darq-stdin")
+        darq_bin.write_text(
             '#!/bin/sh\n'
-            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "pegasus 5.12.1"; exit 0; fi\n'
+            'if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "darq 5.12.1"; exit 0; fi\n'
             f'if [ -t 0 ]; then echo tty > "{marker}"; else echo notty > "{marker}"; fi\n'
-            'echo PEGASUS-LAUNCHED-WITH-TERMINAL\n',
+            'echo DARQ-LAUNCHED-WITH-TERMINAL\n',
             encoding="utf-8",
         )
-        pegasus_bin.chmod(pegasus_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        darq_bin.chmod(darq_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         env = {
             "HOME": str(self.home),
@@ -837,7 +837,7 @@ class LaunchGetsControllingTerminalTest(InstallScriptTestCase):
         session = _InstallPtySession(env=env, args=["--cli", "opencode"])
         self.addCleanup(session.close)
 
-        output = session.wait_for("PEGASUS-LAUNCHED-WITH-TERMINAL", timeout=15.0)
+        output = session.wait_for("DARQ-LAUNCHED-WITH-TERMINAL", timeout=15.0)
 
         self.assertTrue(marker.exists(), output)
         self.assertEqual(marker.read_text(encoding="utf-8").strip(), "tty")
@@ -853,7 +853,7 @@ class LaunchWithoutTerminalTest(InstallScriptTestCase):
     -- the install itself still succeeded."""
 
     def test_no_controlling_terminal_does_not_exec_and_prints_the_command(self):
-        """Mirrors the exact reported bug: a fresh install (pegasus missing)
+        """Mirrors the exact reported bug: a fresh install (darq missing)
         run with no controlling terminal at all. Needs --yes since there is
         no terminal to confirm on either."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
@@ -864,21 +864,21 @@ class LaunchWithoutTerminalTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url},
             start_new_session=True,
         )
 
-        installed = self.home / ".local" / "bin" / "pegasus"
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(installed.is_file())  # the install itself must still succeed
-        self.assertIn("no se lanza pegasus", result.stdout.lower())
-        self.assertIn("pegasus", result.stdout)
+        self.assertIn("no se lanza darq", result.stdout.lower())
+        self.assertIn("darq", result.stdout)
 
 
 class ClosingPathGuidanceTest(InstallScriptTestCase):
     """Rewrite of the old mid-run PATH nudge: the guidance now appears at the
     very end (after the launch decision, before any exec), names only the
-    directories that actually apply to this run -- the pegasus bin dir
+    directories that actually apply to this run -- the darq bin dir
     and/or OpenCode's, only the ones just installed and not already on the
     PATH this run started with -- and hands over one copy-pasteable
     `export PATH=...` line plus why a new session picks both up on its own.
@@ -892,7 +892,7 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
         stdout because the script no longer pipes a downloaded installer into
         bash; it saves it and runs it from disk, so bash can never start
         executing a half-downloaded script. Any other curl invocation (the
-        pegasus download, which passes a `file://` URL) is delegated to the
+        darq download, which passes a `file://` URL) is delegated to the
         real `curl` from SYSTEM_PATH so that seam still exercises the genuine
         download-then-verify code path."""
         self.stub(
@@ -922,7 +922,7 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
 
     def test_both_dirs_named_leading_with_source_profile_and_export_as_fallback(self):
         """`source ~/.profile` (not `~/.bashrc` alone -- that only carries the
-        line OpenCode's installer wrote there, not the pegasus bin dir) must
+        line OpenCode's installer wrote there, not the darq bin dir) must
         lead, with the explicit `export PATH=...` offered only as the
         fallback for a shell that doesn't read `~/.profile`. Logging out is
         mentioned only as a background fact, never as the instruction to
@@ -935,7 +935,7 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
         base_url = _make_release_fixture(fixture_dir)
 
         result = self.run_install(
-            "--yes", "--no-run", extra_env={"PEGASUS_INSTALL_BASE_URL": base_url}
+            "--yes", "--no-run", extra_env={"DARQ_INSTALL_BASE_URL": base_url}
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -954,17 +954,17 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
         end_idx = result.stdout.index("=== Para terminar ===")
         self.assertLess(path_idx, end_idx)
 
-    def test_only_pegasus_dir_named_when_opencode_was_already_present(self):
-        """OpenCode already on PATH (stubbed present) -- only the pegasus bin
+    def test_only_darq_dir_named_when_opencode_was_already_present(self):
+        """OpenCode already on PATH (stubbed present) -- only the darq bin
         dir, the one this run actually just installed into, is named."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
-        fixture_dir = Path(self.tmp.name) / "pegasus-only-fixture"
+        fixture_dir = Path(self.tmp.name) / "darq-only-fixture"
         base_url = _make_release_fixture(fixture_dir)
 
         result = self.run_install(
-            "--yes", "--no-run", extra_env={"PEGASUS_INSTALL_BASE_URL": base_url}
+            "--yes", "--no-run", extra_env={"DARQ_INSTALL_BASE_URL": base_url}
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -989,42 +989,42 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run", "--bin-dir", str(custom_bin_dir),
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(f'export PATH="{custom_bin_dir}:$PATH"', result.stdout)
         self.assertNotIn("source ~/.profile", result.stdout)
 
-    def test_pegasus_present_only_via_bin_dir_not_on_incoming_path_still_gets_closing_guidance(self):
-        """The gap this change makes reachable: `detectar_pegasus` can set
-        `PEGASUS_PRESENTE=1` purely from `-x $BIN_DIR/pegasus`, with
+    def test_darq_present_only_via_bin_dir_not_on_incoming_path_still_gets_closing_guidance(self):
+        """The gap this change makes reachable: `detectar_darq` can set
+        `DARQ_PRESENTE=1` purely from `-x $BIN_DIR/darq`, with
         `$BIN_DIR` nowhere on the PATH that reached this script
         (`ORIGINAL_PATH`). Before this fix that combination made
-        `calcular_avisos_path` report nothing (`FALTA_PEGASUS` is 0 there),
+        `calcular_avisos_path` report nothing (`FALTA_DARQ` is 0 there),
         so neither the closing PATH section nor the action-required block
-        ever printed -- and since the installer now always launches pegasus
+        ever printed -- and since the installer now always launches darq
         (see decidir_lanzamiento), the person would exit the TUI into a
-        shell that still can't find `pegasus`, with nothing having told
+        shell that still can't find `darq`, with nothing having told
         them so."""
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
         bin_dir = self.home / ".local" / "bin"
         bin_dir.mkdir(parents=True)
-        pegasus_bin = bin_dir / "pegasus"
-        pegasus_bin.write_text(
-            '#!/bin/sh\nif [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "pegasus 5.12.1"; exit 0; fi\n',
+        darq_bin = bin_dir / "darq"
+        darq_bin.write_text(
+            '#!/bin/sh\nif [ "$1" = "--version" ] || [ "$1" = "-V" ]; then echo "darq 5.12.1"; exit 0; fi\n',
             encoding="utf-8",
         )
-        pegasus_bin.chmod(pegasus_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        darq_bin.chmod(darq_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         result = self.run_install("--yes", "--no-run")
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(str(bin_dir), result.stdout)
         self.assertIn("=== PATH ===", result.stdout)
-        self.assertIn("ANTES DE CORRER pegasus U opencode", result.stdout)
+        self.assertIn("ANTES DE CORRER darq U opencode", result.stdout)
 
     def test_verify_mode_shows_no_closing_path_guidance(self):
         """--verify never installs anything for real, so there is nothing
@@ -1041,7 +1041,7 @@ class ClosingPathGuidanceTest(InstallScriptTestCase):
 class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
     """Covers `detectar_shell` and the new PATH-persistence step: unlike
     bash/sh on Debian/Ubuntu (where `~/.profile` already wires up
-    `~/.local/bin` for new sessions), zsh and fish never pick up pegasus's
+    `~/.local/bin` for new sessions), zsh and fish never pick up darq's
     bin dir on their own -- these tests drive the real script end to end to
     prove a PATH line actually lands in the shell's own rc file, exactly
     once, only when nothing else would have handled it.
@@ -1052,11 +1052,11 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
 
-    def _install_only_pegasus(self, *args: str, extra_env: dict[str, str] | None = None):
+    def _install_only_darq(self, *args: str, extra_env: dict[str, str] | None = None):
         self._stub_python_node_opencode_present()
         fixture_dir = Path(self.tmp.name) / "fixture"
         base_url = _make_release_fixture(fixture_dir)
-        env = {"PEGASUS_INSTALL_BASE_URL": base_url}
+        env = {"DARQ_INSTALL_BASE_URL": base_url}
         if extra_env:
             env.update(extra_env)
         return self.run_install("--yes", "--no-run", *args, extra_env=env)
@@ -1065,7 +1065,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         zshrc = self.home / ".zshrc"
         zshrc.write_text("# pre-existing zsh config\n", encoding="utf-8")
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         bin_dir = str(self.home / ".local" / "bin")
@@ -1079,7 +1079,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         fish_config.parent.mkdir(parents=True)
         fish_config.write_text("# pre-existing fish config\n", encoding="utf-8")
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/fish"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/fish"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         bin_dir = str(self.home / ".local" / "bin")
@@ -1094,47 +1094,47 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
     def test_zsh_with_no_existing_rc_file_creates_the_canonical_zshrc(self):
         self.assertFalse((self.home / ".zshrc").exists())
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         zshrc = self.home / ".zshrc"
         self.assertTrue(zshrc.exists())
         self.assertIn(str(self.home / ".local" / "bin"), zshrc.read_text(encoding="utf-8"))
 
-    def test_guard_skips_the_write_when_the_rc_already_has_the_exact_line_and_pegasus_is_still_missing(self):
+    def test_guard_skips_the_write_when_the_rc_already_has_the_exact_line_and_darq_is_still_missing(self):
         """Genuinely exercises the idempotency guard in `escribir_path_rc`:
-        pegasus is missing on THIS run (so `PERSISTIR_PATH_RC` is 1 and the
+        darq is missing on THIS run (so `PERSISTIR_PATH_RC` is 1 and the
         function runs past its early return), and the rc file is pre-seeded
         with the EXACT line this run would write. The guard must recognize
         that exact match and not append a second copy. (Deleting the guard
         in a scratch copy of install.sh turns this test red -- see the
         task report for that evidence; the old version of this test, named
         the same as the property below, did not actually exercise this
-        because on a second run pegasus was already installed and
+        because on a second run darq was already installed and
         `escribir_path_rc` returned before ever reaching the check.)"""
         bin_dir = str(self.home / ".local" / "bin")
         zshrc = self.home / ".zshrc"
         linea = f"export PATH='{bin_dir}':\"$PATH\""
-        zshrc.write_text(f"# pre-existing\n\n# pegasus-harness\n{linea}\n", encoding="utf-8")
+        zshrc.write_text(f"# pre-existing\n\n# darq\n{linea}\n", encoding="utf-8")
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         content = zshrc.read_text(encoding="utf-8")
         self.assertEqual(content.count(linea), 1)
 
-    def test_second_run_after_pegasus_already_installed_does_not_touch_the_rc_file_again(self):
-        """A different, weaker property than the guard above: once pegasus
+    def test_second_run_after_darq_already_installed_does_not_touch_the_rc_file_again(self):
+        """A different, weaker property than the guard above: once darq
         is installed by the first run, a second run installs nothing new
         and never even calls into the write path again, because
         `PERSISTIR_PATH_RC` itself goes back to 0 (nothing left to
         persist) -- not because of the exact-line guard, which this test
         does not exercise."""
-        self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
         zshrc = self.home / ".zshrc"
         first_content = zshrc.read_text(encoding="utf-8")
 
-        self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
         second_content = zshrc.read_text(encoding="utf-8")
 
         self.assertEqual(first_content, second_content)
@@ -1151,7 +1151,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         colliding_line = f'export PATH="{bin_dir}2:$PATH"'
         zshrc.write_text(f"# pre-existing\n{colliding_line}\n", encoding="utf-8")
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         content = zshrc.read_text(encoding="utf-8")
@@ -1167,7 +1167,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         commented_line = f'# export PATH="{bin_dir}:$PATH"'
         zshrc.write_text(f"{commented_line}\n", encoding="utf-8")
 
-        result = self._install_only_pegasus(extra_env={"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq(extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         content = zshrc.read_text(encoding="utf-8")
@@ -1177,7 +1177,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
     def test_custom_bin_dir_under_bash_now_gets_the_path_line_written(self):
         custom_bin_dir = Path(self.tmp.name) / "custom-bin"
 
-        result = self._install_only_pegasus(
+        result = self._install_only_darq(
             "--bin-dir", str(custom_bin_dir), extra_env={"SHELL": "/bin/bash"}
         )
 
@@ -1187,7 +1187,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         self.assertIn(str(custom_bin_dir), bashrc.read_text(encoding="utf-8"))
 
     def test_bash_with_default_bin_dir_writes_nothing_anywhere(self):
-        result = self._install_only_pegasus(extra_env={"SHELL": "/bin/bash"})
+        result = self._install_only_darq(extra_env={"SHELL": "/bin/bash"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse((self.home / ".bashrc").exists())
@@ -1210,7 +1210,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--no-run",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
             start_new_session=True,
         )
 
@@ -1221,7 +1221,7 @@ class ShellDetectionAndPathPersistenceTest(InstallScriptTestCase):
         self.assertLess(instalara_idx, rc_idx)
 
     def test_shell_unset_falls_back_to_getent_and_still_exits_zero(self):
-        result = self._install_only_pegasus(extra_env={})
+        result = self._install_only_darq(extra_env={})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -1261,7 +1261,7 @@ class PathRcShellInjectionTest(InstallScriptTestCase):
         base_url = _make_release_fixture(fixture_dir)
         return self.run_install(
             "--yes", "--no-run", "--bin-dir", bin_dir,
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": shell},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": shell},
         )
 
     @staticmethod
@@ -1279,7 +1279,7 @@ class PathRcShellInjectionTest(InstallScriptTestCase):
 
     def _assert_posix_family_neutralized(self, shell_name: str, rc_path: Path, shell_for_run: str | None = None):
         marker = self.marker(f"pwned-{shell_name}")
-        bin_dir = f"/tmp/pegasus-{shell_name}'\"$(id)`;touch {marker}#"
+        bin_dir = f"/tmp/darq-{shell_name}'\"$(id)`;touch {marker}#"
         result = self._run_with_malicious_bin_dir(bin_dir, shell_for_run or f"/usr/bin/{shell_name}")
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1322,7 +1322,7 @@ class PathRcShellInjectionTest(InstallScriptTestCase):
         quote needed at all) was enough to inject a second statement. This
         also verifies fish's own escaping rule, which differs from POSIX's."""
         marker = self.marker("pwned-fish")
-        bin_dir = f"/tmp/pegasus-fish'\\;touch {marker};#"
+        bin_dir = f"/tmp/darq-fish'\\;touch {marker};#"
         result = self._run_with_malicious_bin_dir(bin_dir, "/usr/bin/fish")
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1363,13 +1363,13 @@ class PathRcWriteFailureTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        installed = self.home / ".local" / "bin" / "pegasus"
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertTrue(installed.is_file(), "the install itself must still succeed")
-        self.assertIn("ANTES DE CORRER pegasus U opencode", result.stdout)
+        self.assertIn("ANTES DE CORRER darq U opencode", result.stdout)
         self.assertNotIn("ya quedó agregada", result.stdout.lower())
         bin_dir = str(self.home / ".local" / "bin")
         self.assertIn(f'export PATH="{bin_dir}:$PATH"', result.stdout)
@@ -1386,11 +1386,11 @@ class PathRcSymlinkSafetyTest(InstallScriptTestCase):
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
 
-    def _install_only_pegasus(self, extra_env: dict[str, str]):
+    def _install_only_darq(self, extra_env: dict[str, str]):
         self._stub_python_node_opencode_present()
         fixture_dir = Path(self.tmp.name) / "fixture"
         base_url = _make_release_fixture(fixture_dir)
-        env = {"PEGASUS_INSTALL_BASE_URL": base_url}
+        env = {"DARQ_INSTALL_BASE_URL": base_url}
         env.update(extra_env)
         return self.run_install("--yes", "--no-run", extra_env=env)
 
@@ -1401,7 +1401,7 @@ class PathRcSymlinkSafetyTest(InstallScriptTestCase):
         zshrc = self.home / ".zshrc"
         zshrc.symlink_to(real_target)
 
-        result = self._install_only_pegasus({"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq({"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(str(self.home / ".local" / "bin"), real_target.read_text(encoding="utf-8"))
@@ -1414,7 +1414,7 @@ class PathRcSymlinkSafetyTest(InstallScriptTestCase):
         zshrc = self.home / ".zshrc"
         zshrc.symlink_to(real_target)
 
-        result = self._install_only_pegasus({"SHELL": "/usr/bin/zsh"})
+        result = self._install_only_darq({"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn(str(self.home / ".local" / "bin"), real_target.read_text(encoding="utf-8"))
@@ -1442,23 +1442,23 @@ class RequiredActionBlockTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("ANTES DE CORRER pegasus U opencode", result.stdout)
+        self.assertIn("ANTES DE CORRER darq U opencode", result.stdout)
         end_idx = result.stdout.index("=== Para terminar ===")
-        block_idx = result.stdout.index("ANTES DE CORRER pegasus U opencode")
+        block_idx = result.stdout.index("ANTES DE CORRER darq U opencode")
         self.assertLess(end_idx, block_idx)
 
     def test_block_absent_when_everything_already_on_path(self):
         self._stub_python_node_opencode_present()
-        self.stub('pegasus', 'if [ "$1" = "--version" ]; then echo "pegasus 1.0.0"; exit 0; fi\n')
+        self.stub('darq', 'if [ "$1" = "--version" ]; then echo "darq 1.0.0"; exit 0; fi\n')
 
         result = self.run_install("--yes", "--no-run", extra_env={"SHELL": "/usr/bin/zsh"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn("ANTES DE CORRER pegasus U opencode", result.stdout)
+        self.assertNotIn("ANTES DE CORRER darq U opencode", result.stdout)
 
     def test_block_absent_under_verify(self):
         self.stub("python3", 'case "$2" in\n  *sys.exit*) exit 0 ;;\n  *) echo "3.12.4" ;;\nesac\n')
@@ -1466,7 +1466,7 @@ class RequiredActionBlockTest(InstallScriptTestCase):
 
         result = self.run_install("--verify", extra_env={"SHELL": "/usr/bin/zsh"})
 
-        self.assertNotIn("ANTES DE CORRER pegasus U opencode", result.stdout)
+        self.assertNotIn("ANTES DE CORRER darq U opencode", result.stdout)
 
     def test_block_names_the_detected_shells_own_source_command(self):
         self._stub_python_node_opencode_present()
@@ -1477,11 +1477,11 @@ class RequiredActionBlockTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        block_start = result.stdout.index("ANTES DE CORRER pegasus U opencode")
+        block_start = result.stdout.index("ANTES DE CORRER darq U opencode")
         block_tail = result.stdout[block_start:]
         self.assertIn(f"source {zshrc}", block_tail)
         self.assertNotIn("source ~/.profile", block_tail)
@@ -1493,11 +1493,11 @@ class RequiredActionBlockTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url, "SHELL": "/usr/bin/zsh"},
         )
 
         lines = result.stdout.splitlines()
-        block_idx = next(i for i, l in enumerate(lines) if "ANTES DE CORRER pegasus U opencode" in l)
+        block_idx = next(i for i, l in enumerate(lines) if "ANTES DE CORRER darq U opencode" in l)
         rule_above = lines[block_idx - 1]
         rule_below = next(l for l in lines[block_idx + 1:] if l.strip() and set(l.strip()) <= {"─", "-"})
         self.assertTrue(rule_above.strip(), "expected a rule line right above the heading")
@@ -1605,7 +1605,7 @@ class CliSelectionTest(InstallScriptTestCase):
         confirmation. Claude Code's installer must never run (nothing here
         stubs `claude.ai/install.sh`, so if it were invoked for real this
         would hang or fail against the network), and the final message must
-        launch pegasus with OpenCode named as the reason -- exactly what the
+        launch darq with OpenCode named as the reason -- exactly what the
         preflight showed and the confirmation just agreed to."""
         self._stub_python_node_present()
         self.stub('opencode', 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
@@ -1614,13 +1614,13 @@ class CliSelectionTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run", cli=None,
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        installed = self.home / ".local" / "bin" / "pegasus"
+        installed = self.home / ".local" / "bin" / "darq"
         self.assertTrue(installed.is_file(), result.stdout + result.stderr)
-        self.assertIn("Se habría lanzado: pegasus", result.stdout)
+        self.assertIn("Se habría lanzado: darq", result.stdout)
         self.assertIn("confirmar la instalación en OpenCode", result.stdout)
 
     def test_none_installed_and_no_controlling_terminal_refuses_instead_of_choosing(self):
@@ -1698,7 +1698,7 @@ class CliSelectionTest(InstallScriptTestCase):
         destination the script asks for, a script that creates a fake
         `claude` binary at ~/.local/bin -- exactly where the real official
         installer lands it (see `instalar_claude`). Any other curl
-        invocation (the pegasus download, which passes a `file://` URL) is
+        invocation (the darq download, which passes a `file://` URL) is
         delegated to the real `curl` from SYSTEM_PATH."""
         self.stub(
             "curl",
@@ -1738,7 +1738,7 @@ class CliSelectionTest(InstallScriptTestCase):
 
         result = self.run_install(
             "--yes", "--no-run", cli="claudecode",
-            extra_env={"PEGASUS_INSTALL_BASE_URL": base_url},
+            extra_env={"DARQ_INSTALL_BASE_URL": base_url},
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1898,7 +1898,7 @@ class NoStaleReleaseTagTest(unittest.TestCase):
         self.assertTrue(self.TAG_ASSIGNMENT.search('RELEASE_TAG="v5.9.0"'))
         self.assertTrue(
             self.TAG_IN_URL.search(
-                "https://github.com/balerdis/pegasus-harness/releases/download/v5.9.0/pegasus"
+                "https://github.com/balerdis/darq/releases/download/v5.9.0/darq"
             )
         )
         # And the illustrations this guard must leave alone:
@@ -2109,23 +2109,23 @@ class FailingVersionProbeDoesNotAbortTest(InstallScriptTestCase):
         self._stub_python_and_curl_present()
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub("opencode", 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
-        self.stub("pegasus", self._REFUSES)
+        self.stub("darq", self._REFUSES)
 
         result = self.run_install("--verify")
 
         self.assertIn("no puedo responder eso", result.stdout)
 
     def test_a_product_binary_in_bin_dir_that_fails_its_version_probe_does_not_abort(self):
-        """The `$BIN_DIR/pegasus` branch of `detectar_producto`, a distinct
+        """The `$BIN_DIR/darq` branch of `detectar_producto`, a distinct
         probe from the `command -v` one above."""
         self._stub_python_and_curl_present()
         self.stub("node", 'echo "v20.11.0"\n')
         self.stub("opencode", 'if [ "$1" = "--version" ]; then echo "opencode 1.18.25"; exit 0; fi\n')
         bin_dir = self.home / ".local" / "bin"
         bin_dir.mkdir(parents=True)
-        pegasus_bin = bin_dir / "pegasus"
-        pegasus_bin.write_text("#!/bin/sh\n" + self._REFUSES, encoding="utf-8")
-        pegasus_bin.chmod(0o755)
+        darq_bin = bin_dir / "darq"
+        darq_bin.write_text("#!/bin/sh\n" + self._REFUSES, encoding="utf-8")
+        darq_bin.chmod(0o755)
 
         result = self.run_install("--verify")
 

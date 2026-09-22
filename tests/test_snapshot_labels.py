@@ -33,7 +33,7 @@ AT = "2026-08-14T00:00:00+00:00"
 # to "claudecode" instead, which cannot support what this file tests.
 CLI = "opencode"
 NO_BINARY = {"PATH": ""}
-AGENT = "king-pegasus"
+AGENT = "arquitecto-darq"
 OWN_MCP_KEY = "figma"
 
 

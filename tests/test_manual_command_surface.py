@@ -11,7 +11,7 @@ legitimately reword proves nothing and breaks for the wrong reasons.
 
 The three claims, and how each was wrong:
 
-* "Los tres reaplican la configuración renderizada al terminar" said `pegasus
+* "Los tres reaplican la configuración renderizada al terminar" said `darq
   mcp list` rewrites `opencode.json`. It does not -- it loads the journal and
   reads the settings, and writes nothing at all. Two of the three write; the
   sentence counted all three.
@@ -51,7 +51,7 @@ selection screen's section and again in the grant section, both far below,
 so a reader who stopped after installing had been shown only half of what
 the flag accepts.
 
-And one gap, the same surface read the other way round: `pegasus upgrade`
+And one gap, the same surface read the other way round: `darq upgrade`
 shipped and the manual never learned it existed. The last class here derives
 the whole top-level surface from the parser, so the next command cannot go
 missing the way that one did -- see its own docstring for what a coverage
@@ -102,7 +102,7 @@ NO_BINARY = {"PATH": ""}
 #: for a network it refuses to have.
 REMOTE_SERVER = "context7"
 
-#: A key Pegasus never heard of, standing in for a server the person
+#: A key DARQ never heard of, standing in for a server the person
 #: administers themselves -- the same stand-in `tests/test_cli_mcp.py` uses,
 #: and pinned below for the same reason: the day it becomes a shipped server,
 #: `mcp grant` starts refusing it and every measurement here silently stops
@@ -234,7 +234,7 @@ class RealHomeTestCase(_RealHomeTestCase):
 
     def declare_own_mcp_server(self, key: str) -> None:
         """What a person administering their own MCP server leaves in the
-        CLI's own configuration: a key under `/mcp` Pegasus never wrote."""
+        CLI's own configuration: a key under `/mcp` DARQ never wrote."""
         settings = self.layout().settings_file
         document = json.loads(settings.read_text(encoding="utf-8"))
         document.setdefault("mcp", {})[key] = {"type": "local", "command": [f"{key}-server"]}
@@ -242,7 +242,7 @@ class RealHomeTestCase(_RealHomeTestCase):
 
 
 class ManualSaysWhichMcpSubcommandsRewriteTheConfigurationTest(RealHomeTestCase):
-    """Which of `pegasus mcp`'s subcommands write, measured by running them.
+    """Which of `darq mcp`'s subcommands write, measured by running them.
 
     The partition is produced here rather than read out of the source: each
     subcommand is run against a real installation and the rendered
@@ -325,7 +325,7 @@ class ManualSaysWhichMcpSubcommandsRewriteTheConfigurationTest(RealHomeTestCase)
 
 
 class ManualSaysHowAGrantedDirectoryIsRenderedTest(RealHomeTestCase):
-    """What `pegasus directory grant` actually writes into `opencode.json`.
+    """What `darq directory grant` actually writes into `opencode.json`.
 
     The example path is not chosen here: it is read out of the manual's own
     fenced `directory grant` command, whose first two words come from this
@@ -556,7 +556,7 @@ class ManualSaysEveryStatusDoctorCanReportTest(RealHomeTestCase):
         self.assertNotIn("mcp_servers", health)
         self.assertEqual(self.launcher.calls, [])
 
-    def test_a_server_pegasus_administers_is_reported_in_the_launched_list(self):
+    def test_a_server_darq_administers_is_reported_in_the_launched_list(self):
         """The other side of the same partition, so the paragraph's two
         halves are each measured against a real installation rather than one
         being inferred from the other."""
@@ -611,10 +611,10 @@ class ManualSaysWhatTheTwoMcpSpellingsAskForTest(RealHomeTestCase):
     for instead.
 
     The section where a person first types the flag did not say there were
-    two. The difference is not a detail of spelling: one asks Pegasus to
+    two. The difference is not a detail of spelling: one asks DARQ to
     obtain and administer the server, the other asks only for the contract --
     the convention and the permissions -- against a server the installation
-    already runs under that key, and Pegasus configures nothing for that id
+    already runs under that key, and DARQ configures nothing for that id
     at all. A reader who never got that far down the document had no way to
     know the second form existed, and a reinstall spelled the first way takes
     over a server somebody else's key was administering.
@@ -663,7 +663,7 @@ class ManualSaysWhatTheTwoMcpSpellingsAskForTest(RealHomeTestCase):
         """Or both runs below would be comparing two empty sets."""
         self.assertTrue(self.reached, f"{REMOTE_SERVER} reaches no agent, so nothing here proves anything")
 
-    def test_the_bare_spelling_has_pegasus_obtain_and_administer_the_server(self):
+    def test_the_bare_spelling_has_darq_obtain_and_administer_the_server(self):
         code, _ = self.run_cli("install", "--cli", CLI, "--mcp", REMOTE_SERVER)
         self.assertEqual(code, 0)
         self.assertIn(REMOTE_SERVER, self.configured_servers())
@@ -725,7 +725,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
     the configuration itself, the way `mcp grant` and `directory grant` always
     have, so there is no second command for a person to remember and no notice
     telling them to run one. What is left afterwards is the CLI's own
-    activation step, which is a fact about the CLI and not about Pegasus.
+    activation step, which is a fact about the CLI and not about DARQ.
 
     Everything here is RUN against a real installation and the rendered file
     read back off disk, because "reaches the configuration" is a claim about a
@@ -787,7 +787,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
         return json.loads(self.rendered())["agent"][self.agent].get("model")
 
     def store_without_rendering(self, model: str) -> None:
-        """A preference sitting in Pegasus's own state that the rendered
+        """A preference sitting in DARQ's own state that the rendered
         configuration does not carry.
 
         `models set` renders what it records, so this state can no longer be
@@ -886,7 +886,7 @@ class ManualSaysWhenAModelAssignmentReachesTheConfigurationTest(RealHomeTestCase
 class ManualDocumentsEveryTopLevelCommandTest(RealHomeTestCase):
     """Every subcommand the flags offer is reachable from this manual.
 
-    `pegasus upgrade` shipped and the manual never learned it existed: the
+    `darq upgrade` shipped and the manual never learned it existed: the
     document covered `install`, `update`, `uninstall`, `repair`, `doctor`,
     `restore`, `models`, `mcp` and `directory`, and simply stopped there. A
     reader looking for how to replace the binary found nothing, and nothing

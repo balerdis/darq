@@ -1,6 +1,6 @@
-# Arquitectura operativa de Pegasus Harness
+# Arquitectura operativa de DARQ
 
-Pegasus no es un framework que reemplace el criterio del equipo. Es una capa de trabajo para OpenCode: ordena cómo se entiende un cambio, dónde queda su evidencia y quién tiene la responsabilidad de cada paso.
+DARQ no es un framework que reemplace el criterio del equipo. Es una capa de trabajo para OpenCode: ordena cómo se entiende un cambio, dónde queda su evidencia y quién tiene la responsabilidad de cada paso.
 
 ## El recorrido normal
 
@@ -83,7 +83,7 @@ No se cambia de estrategia a mitad de la cadena. Si el diff trae cambios que no 
 | Rol | Responsabilidad | Límite importante |
 | --- | --- | --- |
 | Persona responsable | Elige alcance, proveedor/modelo, dependencias opcionales y estrategia de entrega. | No delega su decisión de producto ni el manejo de credenciales. |
-| `pegasus-orchestrator` | Ordena fases, valida gates y delega el trabajo correcto. | No ejecuta inline las fases que pertenecen a un subagente. |
+| `darq-orchestrator` | Ordena fases, valida gates y delega el trabajo correcto. | No ejecuta inline las fases que pertenecen a un subagente. |
 | Agente SDD de planificación | Produce explore, proposal, spec, design o tasks según la fase. | No implementa ni declara listo un cambio por su cuenta. |
 | `sdd-apply` | Implementa las tareas asignadas y deja evidencia de unidad de trabajo. | No ejecuta verify final ni toma tareas fuera de su asignación. |
 | `sdd-verify` | Es la única autoridad de readiness para cambios ejecutables o de configuración. | No arregla lo que encuentra; informa el problema para remediación. |
@@ -92,8 +92,8 @@ No se cambia de estrategia a mitad de la cadena. Si el diff trae cambios que no 
 ## Dónde mirar en el repo
 
 - [README.md](../README.md): adopción, límites y pre-chequeos.
-- [MANUAL.md](../MANUAL.md): instalación y uso de OpenCode con Pegasus.
-- [src/darq/content/agents/pegasus-orchestrator.md](../src/darq/content/agents/pegasus-orchestrator.md): responsabilidad del orquestador.
+- [MANUAL.md](../MANUAL.md): instalación y uso de OpenCode con DARQ.
+- [src/darq/content/agents/darq-orchestrator.md](../src/darq/content/agents/darq-orchestrator.md): responsabilidad del orquestador.
 - [contrato-inclusion-artifacts.md](contrato-inclusion-artifacts.md): qué puede entrar al payload y qué queda afuera.
 
 El resultado buscado es simple: cada cambio puede explicar qué se hizo, por qué, cómo se probó y qué se puede revertir sin tocar trabajo ajeno.

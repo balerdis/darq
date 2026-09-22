@@ -368,9 +368,9 @@ class CollisionTest(unittest.TestCase):
             self.build(artifacts)
         self.assertIn(".bashrc", str(raised.exception))
 
-    def test_an_artifact_inside_pegasus_own_directory_is_accepted(self):
+    def test_an_artifact_inside_darq_own_directory_is_accepted(self):
         """A materialized dependency lands outside the configuration root, in
-        Pegasus's own directory -- a second legitimate territory, not a leak."""
+        DARQ's own directory -- a second legitimate territory, not a leak."""
         artifact = FileArtifact(
             id="dep:server",
             path=catalog_module.CANONICAL_DATA_DIR / "deps" / "server" / "1.0.0" / "bin",
@@ -381,7 +381,7 @@ class CollisionTest(unittest.TestCase):
         self.assertEqual([entry.id for entry in catalog.entries], ["dep:server"])
 
     def test_an_artifact_outside_every_legitimate_root_is_still_refused(self):
-        """Pegasus's own directory widens what is legitimate; it does not remove
+        """DARQ's own directory widens what is legitimate; it does not remove
         the boundary. A path aiming at neither territory is still a leak."""
         artifacts = (FileArtifact(id="rogue", path=Path("/home/probe/.bashrc"), content=b"", executable=False),)
         with self.assertRaises(CatalogError) as raised:
@@ -528,13 +528,13 @@ class ShippedCatalogTest(unittest.TestCase):
         # descriptor body -- folded into the same `_shared/mcp/engram-convention.md`
         # this count already carried, rather than adding a file of its own. One
         # hand-authored file disappears with nothing replacing it, net -1.
-        # 87, not 86: `pegasus-general.md` is the thirteenth shipped agent, and its
-        # own rendered prompt (`prompt:pegasus-general`) is a file like every other
+        # 87, not 86: `darq-general.md` is the thirteenth shipped agent, and its
+        # own rendered prompt (`prompt:darq-general`) is a file like every other
         # agent's.
         # 88, not 87: `_shared/sub-delegation-criterion.md` is the focused reference
         # the delegation criterion now lives in, lazy-loaded from the phase boundary
-        # and from `pegasus-general`'s own body, rather than inlined into either.
-        # 22, not 21: `agent:pegasus-general` is the thirteenth agent's own
+        # and from `darq-general`'s own body, rather than inlined into either.
+        # 22, not 21: `agent:darq-general` is the thirteenth agent's own
         # config-key entry, alongside its file.
         # 89, not 88: `_shared/mcp/jira-convention.md` is the fifth shipped
         # MCP server's convention file.
@@ -543,7 +543,7 @@ class ShippedCatalogTest(unittest.TestCase):
         # installed under this distribution's own derived name. It carries no
         # settings key of its own -- the plugin directory is appended once, for
         # every plugin at a time -- so the key count does not move with it.
-        # 24, not 23: `/subagent_depth` is the top-level key Pegasus now owns
+        # 24, not 23: `/subagent_depth` is the top-level key DARQ now owns
         # so a sub-agent's own `task` call is not refused by OpenCode's
         # default depth of 1. No file of its own -- it is a bare value, not
         # an asset -- so the file count does not move with it.
@@ -552,12 +552,12 @@ class ShippedCatalogTest(unittest.TestCase):
         # references `sdd-explore`, `sdd-verify` and `sdd-apply` now point at
         # instead of restating. No settings key of their own -- a lazy-loaded
         # reference is a file, never a config entry.
-        # 96, not 93: `pegasus-explorer`, `pegasus-verifier` and
-        # `pegasus-implementer` are the fourteenth, fifteenth and sixteenth
+        # 96, not 93: `darq-explorer`, `darq-verifier` and
+        # `darq-implementer` are the fourteenth, fifteenth and sixteenth
         # shipped agents -- the phase-less specialists -- and each one's own
         # rendered prompt is a file like every other agent's.
-        # 27, not 24: `agent:pegasus-explorer`, `agent:pegasus-verifier` and
-        # `agent:pegasus-implementer` are their config-key entries, alongside
+        # 27, not 24: `agent:darq-explorer`, `agent:darq-verifier` and
+        # `agent:darq-implementer` are their config-key entries, alongside
         # their files.
         # 97, not 96: `_shared/sdd-applicability.md` owns the question nothing
         # in the product owned -- whether a request is SDD work at all -- which

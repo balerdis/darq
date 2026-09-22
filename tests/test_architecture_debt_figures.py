@@ -3,7 +3,7 @@
 `docs/arquitectura/arquitectura.md` carries a debt row about `apply_patch`
 arriving with every agent that can edit. It counted those agents in Spanish
 prose -- "todo agente con `edit` o `write` --los trece--" -- and the day
-`pegasus-implementer` shipped there were fourteen. Nothing said so. The same
+`darq-implementer` shipped there were fourteen. Nothing said so. The same
 registry had already been bitten once the same way: the row about published
 releases claimed 33 tags when there were 51, and it only came out when somebody
 counted by hand.
@@ -140,8 +140,8 @@ class ApplyPatchReachesEveryEditingAgentTest(unittest.TestCase):
         figure it holds honest would be a constant dressed up as a measurement."""
         self.assertLess(len(self.granted), len(self.all_agents))
         self.assertGreater(len(self.granted), 1)
-        self.assertNotIn("pegasus-verifier", self.granted)
-        self.assertIn("pegasus-implementer", self.granted)
+        self.assertNotIn("darq-verifier", self.granted)
+        self.assertIn("darq-implementer", self.granted)
 
     def test_the_row_states_the_figure_exactly_once(self):
         self.assertEqual(
@@ -151,7 +151,7 @@ class ApplyPatchReachesEveryEditingAgentTest(unittest.TestCase):
         )
 
     def test_the_figure_in_the_row_is_the_count_the_tree_yields(self):
-        """The whole point. `pegasus-implementer` shipped and the row said
+        """The whole point. `darq-implementer` shipped and the row said
         thirteen; if that happens again this fails on the same day."""
         stated = FIGURE.search(self.row)
         self.assertIsNotNone(stated, "the row states no agent count at all")
