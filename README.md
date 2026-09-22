@@ -6,7 +6,7 @@ DARQ es aditivo. Revisa lo que ya existe, muestra un plan y crea solamente los a
 
 ## De dónde viene
 
-DARQ nace como un **fork de [Pegasus Harness](https://github.com/balerdis/pegasus-harness)**, orientado a incorporar y evolucionar las necesidades institucionales de la DGISIS (Dirección General de Infraestructura y Sistemas). Pegasus sigue existiendo como producto independiente y genérico, sin ninguna atadura a esta distribución.
+DARQ nace como un **fork de [Pegasus Harness](https://github.com/balerdis/pegasus-harness)**, orientado a incorporar y evolucionar las necesidades institucionales de la DGISIS. Pegasus sigue existiendo como producto independiente y genérico, sin ninguna atadura a este fork.
 
 Al día de hoy DARQ sigue de cerca la evolución genérica de Pegasus y puede incorporar sus mejoras — el traslado es manual, caso por caso, mediante merge, cherry-pick o port, sin ninguna automatización. Con el tiempo ambas bases pueden divergir progresivamente a medida que cada una evolucione según sus propias necesidades.
 
