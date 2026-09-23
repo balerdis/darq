@@ -31,10 +31,42 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: A dotted path into the upstream package: `pegasus.` followed by one of the
-#: top-level modules this engine actually has. Anchored on the package name so
-#: `pegasus_version` and `pegasus/cli-report/v1` cannot match.
-UPSTREAM_MODULE_PATH = re.compile(r"\bpegasus\.(core|adapters|infra|ports|tui|cli|content)\b")
+#: A dotted path into the upstream package: `pegasus.` followed by anything
+#: that can start a Python identifier.
+#:
+#: This deliberately does not enumerate the modules. It did at first --
+#: `(core|adapters|infra|ports|tui|cli|content)` -- and an adversarial review
+#: found the hole immediately: the list left out `__main__`, a real module
+#: upstream that upstream's own `test_version_guard.py` imports by name, so a
+#: transported reference to it would have ridden in unflagged. An enumeration
+#: of what exists is a list somebody has to remember to widen, and the whole
+#: reason this gate exists is that nobody remembers.
+#:
+#: Matching on the dot is what keeps it safe. Every identifier that must keep
+#: saying `pegasus` forever separates the word with an underscore, a slash or
+#: a hyphen -- `pegasus_version`, `pegasus/cli-report/v1`,
+#: `pegasus-harness/journal/v4`, `PEGASUS_SKILL_ROOTS`, `.pegasus-`,
+#: `pegasus-doctor` -- and never with a dot followed by a letter, so none of
+#: them can match here no matter how the engine grows.
+#: Spellings where `pegasus.` IS followed by a letter and must survive anyway,
+#: with the reason each one is here. Today there is one: `pegasus.md`, the
+#: identity-blind default filename `Layout` carries for the Claude Code system
+#: prompt -- a wire spelling this engine keeps deliberately, documented in
+#: `adapters/claudecode/layout.py` and in `test_architecture.py`'s own
+#: allowlist. It is a filename, not a module path, and the dot in front of a
+#: file extension is indistinguishable from the dot in front of a package.
+#:
+#: Enumerating the exceptions is the opposite bet from enumerating the
+#: modules, and it is the right one for a gate. A missing module fails OPEN --
+#: the defect ships unseen, which is exactly how `__main__` slipped past the
+#: first version of this pattern. A missing exception fails CLOSED -- a benign
+#: spelling gets flagged, somebody reads it, and it lands here with its reason
+#: written down. A guardian should be wrong in the direction that gets looked at.
+PROTECTED_DOTTED_SPELLINGS = ("md",)
+
+UPSTREAM_MODULE_PATH = re.compile(
+    r"\bpegasus\.(?!(?:" + "|".join(PROTECTED_DOTTED_SPELLINGS) + r")\b)[A-Za-z_]"
+)
 
 SCANNED_DIRS = ("src/darq", "tests", "tools")
 
@@ -86,8 +118,32 @@ class NoUpstreamModulePathTest(unittest.TestCase):
         )
 
     def test_a_transported_pointer_would_be_flagged(self):
-        """The gate catches the exact shape the first transport introduced."""
-        self.assertTrue(UPSTREAM_MODULE_PATH.search("`SAFE_VERSION` (`pegasus.core.identity`) is wider"))
+        """The gate catches the exact shape the first transport introduced,
+        and the dunder modules an enumerated pattern left out."""
+        for prose in (
+            "`SAFE_VERSION` (`pegasus.core.identity`) is wider",
+            "from pegasus.__main__ import guard",
+            "see `pegasus.__init__`",
+            "a module added upstream tomorrow: pegasus.whatever",
+        ):
+            with self.subTest(prose=prose):
+                self.assertTrue(UPSTREAM_MODULE_PATH.search(prose))
+
+    def test_the_protected_filename_is_not_flagged(self):
+        """`pegasus.md` is a filename this engine keeps on purpose, not a
+        pointer at a module, and it has to survive the widened pattern."""
+        self.assertIsNone(UPSTREAM_MODULE_PATH.search('SYSTEM_PROMPT = "pegasus.md"'))
+
+    def test_every_protected_spelling_still_appears_in_the_tree(self):
+        """An exception may not outlive its reason: each protected spelling
+        must still be somewhere in the engine source, or it is dead weight
+        widening the hole for whatever lands on that spelling next."""
+        sources = "\n".join(
+            path.read_text(encoding="utf-8") for path in (ROOT / "src/darq").rglob("*.py")
+        )
+        for suffix in PROTECTED_DOTTED_SPELLINGS:
+            with self.subTest(suffix=suffix):
+                self.assertIn(f"pegasus.{suffix}", sources, f"pegasus.{suffix} is no longer in the tree")
 
     def test_the_exemption_still_names_a_file_that_needs_it(self):
         """The exemption may not outlive its reason. Each exempt path must
