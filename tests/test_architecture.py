@@ -412,7 +412,7 @@ def _this_engine_identity():
     running product would read it -- never copied as a literal, for the same
     reason `_engine_brand_fragments()` above reads it instead of hardcoding
     "pegasus"/"harness"."""
-    from pegasus.core import identity as identity_module
+    from darq.core import identity as identity_module
 
     return identity_module.parse((SOURCE / "identity.json").read_bytes())
 
@@ -603,14 +603,21 @@ class NoProductIdentityOutsideCompositionRootTest(unittest.TestCase):
         probe = _write_probe(self, 'SCHEMA = "pegasus/artifact-catalog/v4"\n')
         self.assertEqual(_product_identity_offenders(probe), [])
 
-    def test_bare_pegasus_as_a_package_files_argument_is_not_flagged(self):
-        """The one legitimate use of the bare literal `"pegasus"`: a packaging
-        resource lookup, e.g. `_package_files("pegasus")` in `core/content.py`."""
-        probe = _write_probe(self, 'root = _package_files("pegasus")\n')
+    def test_bare_package_name_as_a_package_files_argument_is_not_flagged(self):
+        """The one legitimate use of the bare literal naming this engine's own
+        importable package: a packaging resource lookup, e.g.
+        `_package_files("darq")` in `core/content.py`. The probe spells the
+        literal from `SOURCE.name` rather than typing `"pegasus"` by hand --
+        the same reasoning `_product_identity_offenders` itself gives for
+        deriving `package_name` from `SOURCE.name`: a hand-typed literal here
+        is correct for this repository only by coincidence, and goes stale
+        the moment a fork's package is renamed, exactly like this test did
+        the first time this engine forked."""
+        probe = _write_probe(self, f'root = _package_files("{SOURCE.name}")\n')
         self.assertEqual(_product_identity_offenders(probe), [])
 
-    def test_bare_pegasus_as_an_importlib_resources_files_argument_is_not_flagged(self):
-        probe = _write_probe(self, 'root = importlib.resources.files("pegasus")\n')
+    def test_bare_package_name_as_an_importlib_resources_files_argument_is_not_flagged(self):
+        probe = _write_probe(self, f'root = importlib.resources.files("{SOURCE.name}")\n')
         self.assertEqual(_product_identity_offenders(probe), [])
 
     def test_string_concatenation_of_a_product_identity_is_flagged(self):

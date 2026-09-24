@@ -89,7 +89,7 @@ class FetchWithoutACallbackTest(unittest.TestCase):
         """
         long_url = "https://example.test/releases/download/v1.0.0/" + "segment/" * 10 + "asset"
         with patch(
-            "pegasus.infra.downloader_http.urllib.request.urlopen",
+            "darq.infra.downloader_http.urllib.request.urlopen",
             side_effect=OSError("Connection refused"),
         ):
             downloader = HttpDownloader()

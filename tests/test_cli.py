@@ -2513,17 +2513,17 @@ class MissingCursesTest(unittest.TestCase):
 
         `sys.modules` alone is not enough: on a real machine (this one has a
         working `_curses`), some earlier test already imported
-        `pegasus.tui.app` for real, and a successful `import a.b.c` also sets
-        `b.c` as an attribute on module `a.b` -- so `from pegasus.tui import
+        `darq.tui.app` for real, and a successful `import a.b.c` also sets
+        `b.c` as an attribute on module `a.b` -- so `from darq.tui import
         app` would read that stale, fully-real attribute straight off the
-        `pegasus.tui` package and never touch `sys.modules` or a single
+        `darq.tui` package and never touch `sys.modules` or a single
         meta-path finder at all. The first version of this test missed
         exactly that: it let a real `tui_app.main()` run in-process, with no
         real terminal underneath it, wrecking the test process's own stdout
-        with raw curses escape codes. `pegasus.tui.app`'s own attribute is
+        with raw curses escape codes. `darq.tui.app`'s own attribute is
         cleared here too, so the import machinery is forced to run for
         real."""
-        tui_package = sys.modules.get("pegasus.tui")
+        tui_package = sys.modules.get("darq.tui")
         had_app_attribute = tui_package is not None and hasattr(tui_package, "app")
         previous_app_attribute = getattr(tui_package, "app", None) if had_app_attribute else None
         if had_app_attribute:
