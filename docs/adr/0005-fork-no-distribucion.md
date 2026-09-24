@@ -45,7 +45,7 @@ evoluciona con su propio calendario. Esto revierte, punto por punto, lo que
 
 Inicialmente, ambas bases —Pegasus Harness y DARQ— se mantienen muy parecidas. Los cambios genéricos
 que se desarrollan en Pegasus se transportan a mano a DARQ, caso por caso (merge, cherry-pick o
-port, según convenga), sin ninguna automatización. No hay una obligación de mantener paridad
+port, según convenga), sin ninguna automatización. El procedimiento, con lo que ya costó cada vez que salió mal, está en [docs/transporte-desde-pegasus.md](../transporte-desde-pegasus.md). No hay una obligación de mantener paridad
 perfecta: las dos bases pueden divergir progresivamente a medida que DARQ incorpora necesidades
 institucionales que no tienen sentido en un producto genérico.
 
