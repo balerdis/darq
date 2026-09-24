@@ -145,7 +145,7 @@ _NUMBER_WORDS_ES: dict[int, str] = {
 #: word as its one capture group.
 _MCP_COUNT_PATTERN = re.compile(r"[Ll]os (\w+) servidores MCP que el contenido embarca")
 _PLUGIN_COUNT_PATTERN = re.compile(r"[Ll]os (\w+) plugins locales aprobados")
-_SKILL_COUNT_PATTERN = re.compile(r"`src/pegasus/content/skills/`, (\w+) en total")
+_SKILL_COUNT_PATTERN = re.compile(r"`src/darq/content/skills/`, (\w+) en total")
 
 
 def _spanish_word_for_count(n: int) -> str:
@@ -201,7 +201,7 @@ def _doc_named_mcp_ids(section: str, known_ids: frozenset[str]) -> frozenset[str
 
 def _skill_names() -> frozenset[str]:
     """Skill names the tree defines: every subdirectory of
-    `src/pegasus/content/skills/` except `_shared`, which is not a skill --
+    `src/darq/content/skills/` except `_shared`, which is not a skill --
     see `_NOT_A_SKILL`."""
     return frozenset(
         path.name for path in _SKILLS_DIR.iterdir() if path.is_dir() and path.name not in _NOT_A_SKILL
