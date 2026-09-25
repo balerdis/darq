@@ -1,4 +1,4 @@
-"""Tests that pegasus's non-interactive surface works when `_curses` is unavailable.
+"""Tests that darq's non-interactive surface works when `_curses` is unavailable.
 
 This reproduces a real user report: a hand-built Python 3.12, compiled in `/usr/local`
 without the ncurses headers, has no `_curses` extension module at all. Before the fix,
@@ -10,9 +10,9 @@ opened. `--version`, `doctor --json` and `install` all failed with the same
 terminal screen.
 
 `_curses` is blocked with a `sys.meta_path` hook installed in a subprocess before
-`pegasus` is ever imported -- the same shape `tests/test_version_guard.py` uses to
+`darq` is ever imported -- the same shape `tests/test_version_guard.py` uses to
 fabricate an old interpreter before `darq.__main__` runs, so the hook is in place
-for the *first* import of anything under `pegasus`, not retrofitted after the fact.
+for the *first* import of anything under `darq`, not retrofitted after the fact.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-#: Installed before anything under `pegasus` is imported, so the very first `import
+#: Installed before anything under `darq` is imported, so the very first `import
 #: curses` (transitively or directly) anywhere in the process sees `_curses` as absent
 #: -- exactly what the reported interpreter actually has.
 _BLOCK_CURSES_PRELUDE = (
@@ -43,7 +43,7 @@ _BLOCK_CURSES_PRELUDE = (
 def _run_blocked(argv: list[str], home: Path, *, path: str = "/usr/bin:/bin") -> subprocess.CompletedProcess:
     script = _BLOCK_CURSES_PRELUDE + (
         "import runpy\n"
-        "sys.argv = ['pegasus'] + %r\n"
+        "sys.argv = ['darq'] + %r\n"
         "runpy.run_module('darq.__main__', run_name='__main__')\n"
     ) % list(argv)
     env = {

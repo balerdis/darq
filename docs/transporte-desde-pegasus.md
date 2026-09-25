@@ -58,7 +58,7 @@ ellos:
 - `name == "pegasus.tui.app"` dentro de un hook — no habría fallado: **habría dejado de probar en
   silencio**, que es el modo de falla caro.
 
-## 5. Las cuatro formas del literal, y cuál se ve
+## 5. Las cinco formas del literal, y cuál se ve
 
 `tests/test_upstream_module_paths.py` es el guardián de esto. **Corrélo siempre después de cada
 cherry-pick**, antes de cerrar el commit.
@@ -66,16 +66,57 @@ cherry-pick**, antes de cerrar el commit.
 | Forma | ¿La ve el guardián? |
 |---|---|
 | Ruta de módulo con punto: `pegasus.core.identity` | **sí** |
-| Segmentos separados: `_ROOT / "src" / "pegasus" / "content"` | no |
-| Ruta literal en una cadena o regex: `"src/pegasus/content/skills/"` | no |
+| Segmentos separados: `_ROOT / "src" / "pegasus" / "content"`, `os.path.join(..., "pegasus", ...)`, `.joinpath("pegasus")`, o la misma tupla partida en varias líneas | **sí** |
+| Ruta literal en una cadena o regex, con o sin el prefijo `src/`: `"src/pegasus/content/skills/"`, `"pegasus/content/skills/"` | **sí** |
+| Nombre de agente de upstream: `pegasus-orchestrator`, `king-pegasus` — en la prosa de un archivo, o como el nombre del archivo mismo | **sí** |
 | Prosa que nombra el producto: "Pegasus hace X" | no, y a veces corresponde |
 
-Las dos del medio hay que buscarlas a mano:
+La ruta con punto la agarra `UPSTREAM_MODULE_PATH`, desde el fork original. Las otras dos rutas se
+agregaron después, en el mismo archivo: `SPLIT_UPSTREAM_PATH_SEGMENT` para los segmentos separados
+y `UPSTREAM_PATH_STRING` para la cadena o regex de una sola pieza. El nombre de agente lo agarra
+`UPSTREAM_AGENT_NAME` —el nombre de un agente que Pegasus renombró en este fork
+(`pegasus-orchestrator` → `darq-orchestrator` y sus tres hermanos, más `king-pegasus` →
+`arquitecto-darq`, que no sigue ninguna regla)— más un chequeo aparte sobre el nombre de archivo
+mismo, para el caso en que un agente se llama `pegasus-explorer.md` pero su cuerpo nunca repite ese
+nombre. Cinco de los seis nombres de upstream se derivan solos de `identity.json` y de qué agentes
+`<program_name>-<rol>` ya tiene el árbol; `king-pegasus` está a mano porque no hay ninguna regla
+mecánica que lo saque de `arquitecto-darq`.
 
-```sh
-grep -rn '"pegasus"' --include="*.py" src/ tests/ tools/
-grep -rn 'src/pegasus/' --include="*.py" --include="*.md" src/ tests/ tools/ docs/
-```
+**Alcance de directorios: `src/darq`, `tests`, `tools` y `docs`, para las cuatro formas por
+igual.** Una revisión adversarial encontró que `docs/` no estaba en el escaneo, y lo probó con un
+Markdown de prueba que nombraba `pegasus-orchestrator` y `src/pegasus/content/skills/foo.md` sin
+que nada lo viera: la suposición de que una ruta partida o una cadena de una pieza son sintaxis de
+Python y no pueden aparecer en prosa era falsa, porque este mismo documento las cita como ejemplo
+en la tabla de arriba. El escaneo ahora lee `.py` y `.md` en los cuatro directorios por igual, y
+sólo dos archivos quedan exentos, cada uno con su razón escrita en el propio código
+(`EXEMPT` en `tests/test_upstream_module_paths.py`): `tests/test_architecture.py` (construye
+paquetes de prueba llamados `pegasus` a propósito) y este mismo documento (cita los cuatro ejemplos
+de la tabla de arriba tal cual). Ningún otro archivo de `docs/` necesitó exención —
+`test_scanning_docs_needs_only_the_runbooks_own_exemption` lo mide, no lo asume, y se pone en rojo
+el día en que un segundo archivo la necesite.
+
+Un release grande y con mucha prosa de Pegasus, el tipo que agrega archivos nuevos de agentes o
+skills en vez de tocar código, es exactamente el caso que más le pega a la forma del nombre de
+agente: un archivo nuevo de upstream que nombra `pegasus-orchestrator` en su propia prosa, o que se
+llama directamente `pegasus-orchestrator.md`, aplica limpio —git no tiene nada que resolver, es un
+archivo que no existía— y antes de este guardián no había nada que lo mirara.
+
+**Lo que el guardián todavía no ve, declarado y no asumido:**
+
+- Un `"pegasus"` como argumento de `join`/`joinpath` detrás de una llamada anidada —
+  `os.path.join(str(ROOT), "pegasus")`— porque el escaneo no balancea paréntesis; nada en el estilo
+  actual de este fork anida una llamada adentro de un join, así que el hueco se acepta en vez de
+  perseguirlo con una herramienta más pesada que una regex. Medido en
+  `NoSplitUpstreamPathSegmentTest.test_a_nested_call_is_not_caught`.
+- Un rol de agente que Pegasus estrena y este fork todavía no espejó como `darq-<rol>`: la
+  derivación sólo produce `pegasus-<rol>` para un rol que el árbol *ya* tiene como `darq-<rol>`, así
+  que un sexto agente genérico de upstream (`pegasus-scribe`, digamos) entra sin que nada lo vea
+  hasta el día en que este fork cree `darq-scribe` — a partir de ahí la derivación lo agarra solo.
+  Medido en `NoUpstreamAgentNameTest.test_a_wholly_new_upstream_agent_role_is_not_caught`.
+
+Lo único que sigue sin verse por decisión, no por hueco, es la prosa que nombra el producto
+("Pegasus hace X"): es una decisión editorial, no un defecto de transporte, así que este guardián
+no la juzga.
 
 ## 6. Los tokens que NUNCA se localizan
 
