@@ -575,7 +575,14 @@ class ShippedCatalogTest(unittest.TestCase):
         # engine content -- three files for the first (`SKILL.md` plus its two
         # references) and two for the second (`SKILL.md` plus its one
         # reference). Skills, not agents, so they add no config-key entry.
-        self.assertEqual((len(files), len(keys)), (103, 27))
+        # 104, not 103: `_shared/ftd-procedure.md` says how an FTD runs -- the
+        # record, its evidence rules and how it closes -- once
+        # `_shared/flow-applicability.md` has routed work there. It is read only
+        # on that route, through the ladder's single pointer, so it is one more
+        # lazy-loaded file and, like the rest of that home, no config entry.
+        # Upstream counts it as "99, not 98", without this fork's five
+        # institutional files; this fork's figure is its own tree's.
+        self.assertEqual((len(files), len(keys)), (104, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:
