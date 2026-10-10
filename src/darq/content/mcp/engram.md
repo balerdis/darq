@@ -198,7 +198,8 @@ Set `capture_prompt: false` when the Engram tool schema supports it; if an older
 | `spec` | sdd-spec | Delta specifications (all domains concatenated) |
 | `design` | sdd-design | Technical design |
 | `tasks` | sdd-tasks | Task breakdown |
-| `apply-progress` | sdd-apply | Implementation progress (one per batch) |
+| `apply-progress` | sdd-apply | Implementation progress (one artifact, upserted each batch; under Strict TDD it holds the TDD Evidence Ledger) |
+| `apply-evidence/{n}` | sdd-apply | Strict TDD only: batch `{n}`'s TDD Cycle Evidence (topic key `sdd/{change-name}/apply-evidence/{n}`), written once, never updated |
 | `verify-report` | sdd-verify | Verification report |
 | `archive-report` | sdd-archive | Archive closure with lineage |
 | `state` | orchestrator | DAG state for recovery after compaction |
@@ -321,7 +322,7 @@ engram warns about potential name drift. Use `mem_merge_projects` (MCP tool) or
 
 ### Upsert Behavior
 
-Same `topic_key` + `project` + `scope` → UPDATE (overwrite), not INSERT. Previous content is lost — `revision_count` increments but old content is NOT saved. This is by design — engram is working memory, not an audit trail. For iteration history or team collaboration, use `openspec` or `hybrid` mode.
+Same `topic_key` + `project` + `scope` → UPDATE (overwrite), not INSERT. Previous content is lost — `revision_count` increments but old content is NOT saved. This is by design — engram is working memory, not an audit trail. For iteration history or team collaboration, use `openspec` or `hybrid` mode. The Strict TDD evidence records are the exception by construction: each batch saves under a new key (`sdd/{change-name}/apply-evidence/{n}`), so nothing is overwritten and no earlier record is ever saved again.
 
 ### Why This Convention
 

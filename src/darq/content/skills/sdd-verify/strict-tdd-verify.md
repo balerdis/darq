@@ -13,7 +13,21 @@ Read the `apply-progress` artifact and verify that TDD was actually followed:
 
 ```
 Read apply-progress artifact:
-├── Find the "TDD Cycle Evidence" table
+├── If it has a "## TDD Evidence Ledger": retrieve EVERY listed record
+│   (mem_get_observation by the recorded id under engram, the listed file
+│   under openspec) and judge each task from ALL of its rows across the
+│   records, in ledger order. A ledger entry whose record cannot be retrieved
+│   is CRITICAL: "evidence record unavailable: {key}" — a different finding
+│   from "RED has no command", never reworded as it. No override, no waiver.
+├── If it has "TDD Cycle Evidence" tables inside apply-progress (a change
+│   started before the ledger existed): judge them too. With BOTH legacy
+│   tables and a ledger, judge the legacy tables AND every ledger record.
+├── Supersession: a correction or re-opened row supersedes the earlier rows
+│   for that task ONLY if it carries its own RED command and observed
+│   failure; otherwise the earlier rows still stand and the task is judged
+│   on all of them. Each row is judged by the rules below; the task's
+│   effective latest row (the superseding one, if any) is the one
+│   cross-checked against the current test run.
 ├── FOR EACH task row:
 │   ├── RED column:
 │   │   ├── Must record the command that was run and the failure it produced
@@ -55,7 +69,7 @@ Read apply-progress artifact:
 │       ├── Not strictly verifiable (subjective quality)
 │       └── Skip verification, trust the report
 │
-├── If NO "TDD Cycle Evidence" table found:
+├── If NO ledger and NO "TDD Cycle Evidence" table found anywhere:
 │   └── Flag: CRITICAL — apply phase did not report TDD evidence
 │       (Strict TDD was enabled but apply did not follow the protocol)
 │
@@ -273,10 +287,10 @@ If zero issues found, report: "**Assertion quality**: ✅ All assertions verify 
 
 ## Rules (Strict TDD Verify specific)
 
-- ALWAYS check the TDD Cycle Evidence table from apply-progress — it's the primary artifact
+- ALWAYS check the TDD Cycle Evidence rows — in every record the apply-progress TDD Evidence Ledger lists (an unretrievable record is CRITICAL, worded as unavailable), and in any legacy table inside apply-progress — they are the primary artifact
 - ALWAYS cross-reference reported test files against actual execution — don't trust the report blindly
 - ALWAYS run the Assertion Quality Audit (Step 5f) — trivial tests are WORSE than missing tests
-- If apply-progress has no TDD evidence table, flag as CRITICAL — the protocol was not followed
+- If apply-progress has neither a ledger nor a TDD evidence table, flag as CRITICAL — the protocol was not followed
 - If tautology assertions are found (expect(true).toBe(true)), flag as CRITICAL — these MUST be rewritten
 - Coverage and quality metrics are informational, NOT blocking — only flag as WARNING, never CRITICAL
 - Test layer distribution is informational — SUGGESTION level only

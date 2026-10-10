@@ -44,10 +44,11 @@ its gate result, never FAILED.
 
 ### Strict TDD Hard Gate (when Strict TDD Mode is active)
 
-- You MUST produce a **TDD Cycle Evidence** table in your progress report
+- You MUST produce a **TDD Cycle Evidence** table in your return summary and in the batch's evidence record
 - Each task row MUST have: RED (test written first) → GREEN (implementation passes) → REFACTOR columns
 - If you complete a task WITHOUT writing tests first, mark it as FAILED in the evidence table
 - Verification WILL reject the work if the TDD Evidence table is missing or incomplete
+- The table is saved once per batch as its own evidence record (`apply-evidence/{n}`), never rewritten; `sdd-apply/SKILL.md` Step 6 owns where it goes
 
 **There is no silent fallback.** If Strict TDD is active, follow it or report failure. Do not
 quietly switch to standard mode.

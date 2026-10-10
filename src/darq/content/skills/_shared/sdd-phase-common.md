@@ -50,7 +50,7 @@ mem_save(
 )
 ```
 
-`topic_key` enables upserts — saving again updates, not duplicates.
+`topic_key` enables upserts — saving again updates, not duplicates. The exception is the Strict TDD evidence record `sdd/{change-name}/apply-evidence/{n}`: one new key per apply batch, written once and never saved again.
 `capture_prompt: false` is mandatory for SDD artifacts because they are automated pipeline outputs, not human/proactive memory saves. Set it when the Engram tool schema supports it; if an older schema rejects or does not expose the field, omit it rather than failing.
 
 ### OpenSpec mode

@@ -31,7 +31,7 @@ If all gates pass, launch the hidden `sdd-apply` sub-agent with:
 
 - The resolved artifact store from session preflight; do not hardcode Engram.
 - The structured status: schemaName, planningHome/changeRoot, artifactPaths/contextFiles, task progress, applyState, dependency states, and actionContext.
-- References to the spec, design, tasks, and any apply-progress artifacts.
+- References to the spec, design, tasks, and any apply-progress artifacts, including its TDD Evidence Ledger when one exists (the evidence records it lists are append-only; apply never rewrites them).
 - The resolved delivery/chained PR strategy and review budget.
 - Strict TDD instructions if `sdd-init` detected strict TDD.
 

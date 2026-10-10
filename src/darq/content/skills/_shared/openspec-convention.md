@@ -19,6 +19,7 @@ openspec/
         │       └── spec.md  <- Delta spec
         ├── design.md        <- from sdd-design
         ├── tasks.md         <- from sdd-tasks (updated by sdd-apply)
+        ├── apply-evidence/  <- Strict TDD only, from sdd-apply: {n}.md per batch, created once, never edited
         └── verify-report.md <- from sdd-verify
 ```
 
@@ -34,6 +35,7 @@ openspec/
 | sdd-design | Creates | `openspec/changes/{change-name}/design.md` |
 | sdd-tasks | Creates | `openspec/changes/{change-name}/tasks.md` |
 | sdd-apply | Updates | `openspec/changes/{change-name}/tasks.md` (marks `[x]`) |
+| sdd-apply | Creates (Strict TDD) | `openspec/changes/{change-name}/apply-evidence/{n}.md` (one new file per batch; never edited afterwards) |
 | sdd-verify | Creates | `openspec/changes/{change-name}/verify-report.md` |
 | sdd-archive | Moves | `openspec/changes/{change-name}/` → `openspec/changes/archive/YYYY-MM-DD-{change-name}/` |
 | sdd-archive | Updates | `openspec/specs/{domain}/spec.md` (merges deltas into main specs) |

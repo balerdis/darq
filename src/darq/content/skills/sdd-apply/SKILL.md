@@ -102,8 +102,9 @@ Before starting work, check for existing apply-progress:
 1. `mem_search(query: "sdd/{change-name}/apply-progress")`
 2. If found: `mem_get_observation(id)` → read the full content
 3. Parse which tasks are already marked complete
-4. Skip those tasks — start from the first incomplete task
+4. Skip those tasks — start from the first incomplete task, except a task the orchestrator re-opened: that one is work again
 5. When saving your apply-progress in Step 6, MERGE: include all previously completed tasks PLUS your newly completed tasks in a single combined artifact
+6. Under Strict TDD, read its `## TDD Evidence Ledger` too: it names the earlier batches' evidence records, which you never open to edit and never rewrite (Step 6)
 
 **CRITICAL**: If the orchestrator told you previous progress exists, you MUST read it. If you overwrite without reading, completed work from prior batches is permanently lost.
 
@@ -158,12 +159,23 @@ Follow **Section C** from `_shared/sdd-phase-common.md`.
 - type: `architecture`
 - Also update the tasks artifact with `[x]` marks via `mem_update` (engram) or file edit (openspec/hybrid).
 
+#### Strict TDD evidence record (write once, before apply-progress)
+
+Under Strict TDD, write this batch's TDD Cycle Evidence table (with the batch's safety-net baseline, if the table has one) as its OWN artifact BEFORE writing apply-progress. One record per batch, written once:
+- **engram**: `topic_key: sdd/{change-name}/apply-evidence/{n}` (same title, `type: architecture`, `scope: project`, `capture_prompt: false`, as every SDD artifact). `{n}` is 1 for the first batch, otherwise one more than the highest batch number in the apply-progress `## TDD Evidence Ledger`. Apply batches are strictly sequential (the task and progress artifacts are shared state), so `{n}` is never assigned while another apply batch runs.
+- **Never reuse a key.** Before writing a record, confirm its key is free: engram, `mem_search` for the key and compare titles exactly (the title equals the key); openspec, the file does not exist. If a record already exists at that number and is not in the ledger, it belongs to a batch that stopped after writing its record but before writing apply-progress: add its ledger line too, and take the next free number. If the ledger cannot be read, stop and report; never guess a number.
+- **openspec**: a new file `openspec/changes/{change-name}/apply-evidence/{n}.md`, created once. **hybrid**: both. **none**: nothing persisted; the table still goes in the return summary.
+- A record is never updated: never `mem_update` it, never save again under its key, never edit its file. A correction to an earlier record goes into THIS batch's own record, stated as a correction; earlier records stay untouched.
+- A task re-opened after it was complete gets new rows in the re-opening batch's own record, marked as re-opened. Its earlier rows stay in their earlier records.
+
 #### Merge Protocol
 
 When saving apply-progress:
-1. If you read previous progress in Step 2b, your artifact MUST include ALL previously completed tasks (copy their status and evidence) PLUS your new completions
+1. If you read previous progress in Step 2b, your artifact MUST include ALL previously completed tasks (copy their status) PLUS your new completions
 2. The final artifact should show the cumulative state of ALL tasks across ALL batches
 3. Format: keep the same structure but ensure no completed task is lost from prior batches
+4. Under Strict TDD, apply-progress carries a `## TDD Evidence Ledger` with one line per batch in a fixed format: `{n} | {key} | {observation id or file path} | {task ids} | {date}`. Copy every existing ledger line exactly, never dropping, merging, reordering or rewording one, and append this batch's line. New batches' RED/GREEN rows live in their records, not in apply-progress.
+5. If the previous apply-progress has evidence tables from before the ledger existed, keep those tables exactly as they are in apply-progress (never compress, reword or drop them) and start the ledger at n=1 with this batch.
 
 ### Step 7: Return Summary
 
@@ -187,7 +199,7 @@ Return to the orchestrator:
 | `path/to/file.ext` | Created | {brief description} |
 | `path/to/other.ext` | Modified | {brief description} |
 
-{IF Strict TDD Mode → include TDD Cycle Evidence table from sdd-apply/strict-tdd.md}
+{IF Strict TDD Mode → include TDD Cycle Evidence table from sdd-apply/strict-tdd.md — return-summary content; the batch's evidence record holds it durably}
 
 ### Deviations from Design
 {List any places where the implementation deviated from design.md and why.

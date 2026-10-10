@@ -191,7 +191,7 @@ BEFORE touching production code:
 
 ## Return Summary Extension
 
-When Strict TDD Mode is active, your return summary MUST include this section:
+When Strict TDD Mode is active, your return summary MUST include this section. The same table is also saved once as this batch's evidence record (`sdd/{change-name}/apply-evidence/{n}`, see Step 6 in `sdd-apply/SKILL.md`); apply-progress keeps only the ledger line that points to it:
 
 ```markdown
 ### TDD Cycle Evidence
