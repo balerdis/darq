@@ -15,6 +15,7 @@ never a live fetch.
 from __future__ import annotations
 
 import http.client
+import urllib.error
 import urllib.request
 from typing import Callable
 
@@ -60,6 +61,16 @@ class HttpDownloader:
                     if on_progress is not None:
                         on_progress(downloaded, total)
                 return b"".join(chunks)
+        except urllib.error.HTTPError as error:
+            # An HTTP answer, not a transport failure: keep the status so a
+            # caller can say "not found / no access" instead of "network
+            # down". GitHub answers an anonymous caller that went over its
+            # per-address budget with 403 (or 429) and
+            # `X-RateLimit-Remaining: 0` / `Retry-After`; that is a wait, not
+            # a refusal, so it is flagged separately.
+            raise DownloaderError(
+                str(error), status=error.code, rate_limited=_is_rate_limited(error)
+            ) from error
         except (OSError, ValueError, http.client.HTTPException) as error:
             # `http.client.HTTPException` is the base for every protocol-level
             # failure `http.client` raises -- `InvalidURL` (a malformed URL,
@@ -91,3 +102,15 @@ def _content_length(response) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _is_rate_limited(error: urllib.error.HTTPError) -> bool:
+    """Whether this HTTP error is a rate limit rather than a refusal."""
+    if error.code == 429:
+        return True
+    if error.code != 403:
+        return False
+    headers = error.headers
+    if headers is None:
+        return False
+    return headers.get("X-RateLimit-Remaining") == "0" or headers.get("Retry-After") is not None

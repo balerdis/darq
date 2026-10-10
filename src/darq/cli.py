@@ -55,7 +55,7 @@ from darq.infra.mcp_process_subprocess import SubprocessMCPProcess
 from darq.infra.model_assignment_store_file import FileModelAssignmentStore
 from darq.infra.npm_installer_subprocess import SubprocessNpmInstaller
 from darq.infra.snapshot_store_file import FileSnapshotStore, capture_paths
-from darq.ports.downloader import Downloader
+from darq.ports.downloader import Downloader, DownloaderError
 from darq.ports.filesystem import FileSystem, FileSystemError
 from darq.ports.journal_store import JournalStoreError
 from darq.ports.mcp_process import MCPProcess
@@ -1618,23 +1618,33 @@ def _fetch_latest_version(runtime: Runtime) -> str:
     `check_for_update` exists to answer a question nobody asked yet, quietly,
     for a background notice; every one of its failure modes collapses to
     `None` on purpose (see its own docstring). `upgrade` is the opposite: a
-    person asked directly, so a network failure here has to say so plainly
-    rather than let a stale or absent cache read as "you are already
-    current" -- reporting that would be worse than reporting nothing.
+    person asked directly, so a failure here has to say so plainly and say
+    why -- no access or not found (the release repository may be private),
+    a rate limit, a network error, an unreadable answer -- rather than let a
+    stale or absent cache read as "you are already current". Only the
+    network, HTTP and JSON-shape failure classes are caught; anything else
+    is a programming error and is allowed to surface.
     """
     try:
         payload = runtime.downloader.fetch(
             runtime.identity.release.latest_release_api_url, timeout_seconds=UPDATE_CHECK_TIMEOUT_SECONDS
         )
+    except DownloaderError as error:
+        raise CommandError(
+            f"could not get the newest published release information: "
+            f"{upgrade_module.describe_download_failure(error)}. Upgrade refuses to guess, so it will "
+            f"not report there is nothing new when it simply could not check"
+        ) from error
+    try:
         document = json.loads(payload.decode("utf-8"))
         tag = document["tag_name"]
         if not isinstance(tag, str) or not tag:
             raise ValueError("empty or non-string tag_name")
-    except Exception as error:  # noqa: BLE001 -- every shape of failure gets the same honest refusal.
+    except (ValueError, KeyError, TypeError) as error:  # UnicodeDecodeError and JSONDecodeError are ValueErrors.
         raise CommandError(
-            "could not reach GitHub to check the newest published release -- upgrade refuses to guess, "
-            "so it will not report there is nothing new when it simply could not check; try again once "
-            "you have network access"
+            "could not get the newest published release information: the release server answered with "
+            "something that is not a release description; try again later. Upgrade refuses to guess, so "
+            "it will not report there is nothing new when it simply could not check"
         ) from error
     return tag[1:] if tag[0] in "vV" else tag
 

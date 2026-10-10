@@ -66,4 +66,4 @@ esperado, no un fallo del modelo.
 
 - `docs/contrato-inclusion.md` — qué contenido institucional entra en DARQ ahora que no depende de
   una decisión de alcance tomada en otro proyecto.
-- `https://github.com/balerdis/pegasus-harness` — el repositorio de origen del que DARQ es fork.
+- El repositorio de Pegasus Harness, origen del fork (privado desde 2026-10-10).

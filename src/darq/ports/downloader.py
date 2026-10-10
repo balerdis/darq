@@ -20,7 +20,21 @@ class DownloaderError(Exception):
     the URL in its own error already has it (it is what it passed to
     `fetch`) and must add it itself, rather than reading it back out of this
     exception's message.
+
+    ``status`` is the HTTP status code when the failure was an HTTP answer
+    (``None`` for anything that never got one: no route, a timeout, a reset
+    connection) and ``rate_limited`` is true when that answer was the
+    server telling an anonymous caller to slow down rather than refusing
+    it. Both exist so a caller can tell "the release repository answered
+    404/401/403" (private or gone) apart from "the network is down"
+    without parsing a message meant for people. Implementations that know
+    neither simply leave the defaults.
     """
+
+    def __init__(self, message: str = "", *, status: int | None = None, rate_limited: bool = False):
+        super().__init__(message)
+        self.status = status
+        self.rate_limited = rate_limited
 
 
 @runtime_checkable

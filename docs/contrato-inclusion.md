@@ -15,8 +15,8 @@ Ese argumento ya no aplica tal como estaba escrito. DARQ es hoy un fork completo
 copia del motor bajo `src/darq/`. No hay un release ajeno cuyo alcance haya que respetar ni
 esquivar: el contenido de este repositorio vive acá porque quien lo mantiene decide que vive acá,
 sin necesidad de invocar una decisión de alcance tomada en otro proyecto. Pegasus Harness
-(`https://github.com/balerdis/pegasus-harness`) sigue existiendo como producto independiente y
-genérico, y su propio contrato de inclusión sigue resolviendo qué entra en *su* release público —
+sigue existiendo como producto independiente y
+genérico, y su propio contrato de inclusión sigue resolviendo qué entra en *su* release —
 pero ya no es el otro lado de una ecuación que DARQ tenga que completar. Son, simplemente, dos
 proyectos separados, cada uno con su propio criterio.
 

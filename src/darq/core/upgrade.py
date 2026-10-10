@@ -45,6 +45,34 @@ class UpgradeError(Exception):
     """A newly published binary could not be safely fetched, verified, or placed."""
 
 
+def describe_download_failure(error: DownloaderError) -> str:
+    """Why a release fetch failed, in plain words and with what to do next.
+
+    The release endpoints are unauthenticated GitHub URLs. When the
+    repository stops being public they answer 404 (or 401/403) to every
+    anonymous caller, which from here is indistinguishable from a typo or a
+    deleted release -- so the wording says "private or unreachable" rather
+    than claiming to know. A rate limit is a different animal (a wait, not a
+    refusal) and a transport failure has no status at all.
+    """
+    status = getattr(error, "status", None)
+    if getattr(error, "rate_limited", False):
+        return (
+            f"the release server is rate-limiting requests from this address (HTTP {status}); "
+            f"wait a while and try again"
+        )
+    if status in (401, 403, 404):
+        return (
+            f"the release repository answered HTTP {status} ({'not found' if status == 404 else 'no access'}); "
+            f"it may be private or unreachable. Try again later, or install a locally built binary instead"
+        )
+    if status is not None:
+        return f"the release server answered HTTP {status}; try again later"
+    detail = str(error).strip()
+    suffix = f" ({detail})" if detail else ""
+    return f"network error{suffix}; check your connection and try again once you have network access"
+
+
 def _tag(version: str) -> str:
     """`version` arrives here from one of two places: the remote release
     API's own `tag_name` field (see `cli._fetch_latest_version`), with no
@@ -110,14 +138,14 @@ def fetch_and_verify(downloader: Downloader, version: str, release: ReleaseSourc
         checksum_document = downloader.fetch(checksum)
     except DownloaderError as error:
         raise UpgradeError(
-            f"could not fetch the checksum: {error} (for {release.binary_asset} {version} at {checksum})"
+            f"could not fetch the checksum: {describe_download_failure(error)} (for {release.binary_asset} {version} at {checksum})"
         ) from error
     expected = _expected_digest(checksum_document)
     try:
         fetched = downloader.fetch(binary)
     except DownloaderError as error:
         raise UpgradeError(
-            f"could not fetch the binary: {error} (for {release.binary_asset} {version} at {binary})"
+            f"could not fetch the binary: {describe_download_failure(error)} (for {release.binary_asset} {version} at {binary})"
         ) from error
     digest = ownership.digest_of_bytes(fetched)
     if digest != expected:
