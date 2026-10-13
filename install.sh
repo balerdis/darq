@@ -20,6 +20,7 @@
 #   ./install.sh --bin-dir DIR       instala el binario de darq en DIR en vez de ~/.local/bin
 #   ./install.sh --opencode-version X   si el CLI elegido es OpenCode, fija la versión a instalar
 #   ./install.sh --opencode-ultima      si el CLI elegido es OpenCode, instala la última versión publicada
+#                                       (la que GitHub marque como "Latest"; si es OpenCode 2, todavía no está soportada)
 #
 set -euo pipefail
 
@@ -145,7 +146,9 @@ ORIGINAL_PATH="$PATH"
 # resuelve "la última versión" permite 60 pedidos por hora por IP, y una
 # tarde de pruebas la agota — el instalador falla entonces con "Failed to
 # fetch version information". Con una versión pedida, ni la consulta.
-VERSION_OPENCODE='1.18.25'
+# 1.19.0 es la última de la línea 1.x: OpenCode 2 cambia los plugins y la
+# configuración, así que hasta que esté soportado se queda en 1.x.
+VERSION_OPENCODE='1.19.0'
 
 # Version del instalador de nvm (no de Node: eso lo elige "--lts" más abajo).
 # Se fija por la misma razón que arriba: sin versión, el script de nvm

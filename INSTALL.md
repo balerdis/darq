@@ -91,8 +91,8 @@ lo pisa: te dice qué versión encontró y que `darq upgrade` es el comando que 
 | `--yes`, `-y` | salta la confirmación |
 | `--no-run` | instala lo que falte igual que una corrida normal, pero no lanza nada al final: imprime qué habría lanzado |
 | `--bin-dir DIR` | instala el binario de `darq` en `DIR` en vez de `~/.local/bin` |
-| `--opencode-version X` | si el CLI elegido es OpenCode, fija la versión a instalar |
-| `--opencode-ultima` | si el CLI elegido es OpenCode, instala la última versión publicada (consulta la API de GitHub) |
+| `--opencode-version X` | si el CLI elegido es OpenCode, fija la versión a instalar (sin este flag instala la 1.19.0, la última de la línea 1.x) |
+| `--opencode-ultima` | si el CLI elegido es OpenCode, instala la última versión publicada (consulta la API de GitHub); si GitHub marca OpenCode 2 como la última, instala esa, que DARQ todavía no soporta |
 | `--help`, `-h` | imprime el uso |
 
 **Detecta tu shell y, si hace falta, deja el PATH resuelto para las próximas terminales.** Bajo
