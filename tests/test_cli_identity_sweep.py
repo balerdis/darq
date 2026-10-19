@@ -11,7 +11,8 @@ This module builds an obviously-fictional `Identity` (`ACME`, never a real
 organization) and drives every top-level command path through it, then
 greps the rendered output -- prose and machine-readable report alike -- for
 the engine's own brand. A distribution binary is exactly this scenario: its
-own packaged `identity.json` is never `darq`/`DARQ`/`Harness`, so if
+own packaged `identity.json` is never `pegasus`/`Pegasus`/`Harness` (nor
+`darq`/`DARQ`, DARQ's own brand), so if
 any of these code paths still says so, a real distribution's user reads a
 sentence naming a product they never installed.
 
@@ -20,7 +21,8 @@ distribution (`cli.SCHEMA`, `journal-v4.json`, the `pegasus_version`/
 `pegasus_installed` JSON *keys*, `PEGASUS_SKILL_REGISTRY_BIN`,
 `PEGASUS_SKILL_ROOTS`, `PEGASUS_NO_UPDATE_CHECK`, and
 `mcp_handshake.CLIENT_NAME`) are explicitly excluded before the brand check,
-since those are supposed to say "darq" everywhere, forever.
+since those frozen wire identifiers keep saying "pegasus" in every build,
+forever (see `docs/transporte-desde-pegasus.md`, section 6).
 """
 from __future__ import annotations
 

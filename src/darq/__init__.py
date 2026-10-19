@@ -1,7 +1,7 @@
-"""Pegasus Harness: one content core, one adapter per CLI."""
+"""DARQ (a fork of Pegasus Harness): one content core, one adapter per CLI."""
 from __future__ import annotations
 
 __version__ = "7.7.7"
 """The release this package is. A test keeps it equal to pyproject.toml and to
-Pegasus's own shipped identity.json (`identity.version`) -- three sources of
+DARQ's own shipped identity.json (`identity.version`) -- three sources of
 truth this exact number, not two."""

@@ -1169,9 +1169,9 @@ class UpdateNotice:
     a clock, a socket, or the filesystem anywhere near it.
 
     `running` is `runtime.identity.version` -- this distribution's own
-    version, threaded in by `session`, never `darq.__version__`: the
-    pinned engine's own build version, which stays fixed across every
-    release a distribution publishes under its own numbering. `local_behind`
+    version, threaded in by `session` rather than read off `darq.__version__`,
+    so the value always comes from the identity the runtime was built with.
+    `local_behind`
     is every installed CLI's own recorded version, one
     :class:`BehindInstall` each, in the order `session` found them -- empty
     when nothing is installed. Naming each one, rather than collapsing them

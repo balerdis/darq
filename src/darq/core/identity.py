@@ -108,15 +108,13 @@ class ReleaseSource:
 class Identity:
     """Everything a binary needs to know about its own name.
 
-    `version` is this distribution's own release version -- required, never
-    defaulted to the pinned engine's own `darq.__version__`. The two are
-    independent facts: a distribution pins one engine build and then
-    publishes its own releases on its own numbering, so `darq.__version__`
-    staying fixed across every one of those releases is correct, not a bug --
-    it is `version` that must change with each one, and only `identity.json`
-    can say what it currently is. `--version`, the upgrade comparison, and
-    `doctor`'s `pegasus_version` value all read this field, never the engine
-    constant, so each reports the product a person is actually running.
+    `version` is the product's release version -- required, never defaulted
+    to a module constant. DARQ no longer rebrands at build time (ADR 0005),
+    so `darq.__version__` is the product's own version and a test keeps it
+    equal to `identity.json`'s `version`; the field is still the single
+    source `--version`, the upgrade comparison, and `doctor`'s
+    `pegasus_version` value read, so a build whose `identity.json` differs
+    (as the tests' fictional identity does) reports what it declares.
 
     `wordmark_words` is one or two entries; the renderer draws whatever list
     it is given with no policy branch on count (see `tui/wordmark.py`).

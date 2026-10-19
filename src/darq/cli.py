@@ -1830,8 +1830,8 @@ def _merged(
 
     ``version`` is `runtime.identity.version` -- this distribution's own
     release version, threaded in by the caller rather than read here off
-    `darq.__version__`, which names the pinned engine, never the product a
-    person actually installed.
+    `darq.__version__`, so the value always comes from the identity the
+    runtime was built with.
 
     ``granted_mcp`` is threaded in from the caller rather than read off
     ``content`` for the same reason ``retired_ids`` is threaded in rather
