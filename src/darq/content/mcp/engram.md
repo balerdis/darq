@@ -2,9 +2,9 @@
 name: engram
 description: Persistent memory that survives across sessions and compactions
 distribution: download
-endpoint: https://github.com/balerdis/engram/releases/download/v1.21.0/engram_1.21.0_linux_amd64.tar.gz
-version: 1.21.0
-checksum: sha256:7e0fe124c69e2cd8643ccae2983dda743f724eb3902f7cee067e0e8ba0e3eed6
+endpoint: https://github.com/balerdis/engram/releases/download/v1.23.0/engram_1.23.0_linux_amd64.tar.gz
+version: 1.23.0
+checksum: sha256:6314f1240034a1cb4dd365a0e5c17867c97fa72b6e7ede1422d490225d107be6
 archive_members: [CHANGELOG.md, LICENSE, README.md, engram]
 archive_executable: engram
 argv: [mcp, --tools=agent]
