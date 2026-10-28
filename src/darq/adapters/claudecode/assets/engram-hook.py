@@ -42,7 +42,10 @@ CONFIG = json.loads(__CONFIG_JSON__)
 
 HTTP_TIMEOUT = 2.0
 GIT_TIMEOUT = 1.0
-HEALTH_WAIT = 2.0
+try:
+    HEALTH_WAIT = float(os.environ.get("ENGRAM_HOOK_HEALTH_WAIT") or 2.0)  # the override is a test seam
+except ValueError:
+    HEALTH_WAIT = 2.0
 PROMPT_MIN = 10
 PROMPT_MAX = 2000
 PASSIVE_MIN = 50
@@ -391,11 +394,93 @@ def extract_project_name(directory):
 # --- engram HTTP -------------------------------------------------------------
 
 
+DEFAULT_PORT = 7437
+FALLBACK_BASE = 17437
+FALLBACK_SPAN = 10000
+LISTEN = "0A"
+LOOPBACK_V4 = ("0100007F", "00000000")
+LOOPBACK_V6 = (
+    "00000000000000000000000001000000",
+    "0000000000000000FFFF00000100007F",
+    "00000000000000000000000000000000",
+    "0000000000000000FFFF000000000000",
+)
+
+
+def _listener_uids(path, port, loopbacks):
+    """The uids LISTENing on `port` in a /proc/net/tcp{,6} table (a copy of core/listeners.py)."""
+    try:
+        with open(path, encoding="ascii", errors="replace") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return set()
+    uids = set()
+    for line in lines[1:]:
+        fields = line.split()
+        if len(fields) < 8 or fields[3] != LISTEN:
+            continue
+        address, _, hexport = fields[1].partition(":")
+        if address.upper() not in loopbacks:
+            continue
+        if not re.fullmatch(r"[0-9a-fA-F]{1,8}", hexport) or not re.fullmatch(r"[0-9]{1,10}", fields[7]):
+            continue
+        if int(hexport, 16) == port:
+            uids.add(int(fields[7]))
+    return uids
+
+
+def resolve_port(environ, uid):
+    """The port this OS user talks to, or None when only another uid listens on every candidate.
+
+    A copy of core/engram_port.py, kept equal by a parity test. engram's server
+    defaults to 7437, shared by every OS user: this never sends a request to, or
+    starts a server on, a port only another uid holds. ENGRAM_PORT is explicit
+    (no fallback); otherwise 7437, else 17437 + uid % 10000. Without /proc it
+    cannot tell and behaves as it always did.
+    """
+    raw = environ.get("ENGRAM_PORT", "").strip()
+    explicit = int(raw) if re.fullmatch(r"[0-9]{1,5}", raw) and 1 <= int(raw) <= 65535 else None
+    tcp4 = environ.get("ENGRAM_PORT_PROC_TCP4") or "/proc/net/tcp"
+    tcp6 = environ.get("ENGRAM_PORT_PROC_TCP6") or "/proc/net/tcp6"
+    if not os.path.isfile(tcp4):
+        return explicit if explicit is not None else DEFAULT_PORT
+
+    def usable(port):
+        held = _listener_uids(tcp4, port, LOOPBACK_V4) | _listener_uids(tcp6, port, LOOPBACK_V6)
+        return not held or uid in held
+
+    if explicit is not None:
+        return explicit if usable(explicit) else None
+    if usable(DEFAULT_PORT):
+        return DEFAULT_PORT
+    base = FALLBACK_BASE
+    base_text = environ.get("ENGRAM_PORT_FALLBACK_BASE", "").strip()  # test seam
+    if re.fullmatch(r"[0-9]{1,5}", base_text) and 1 <= int(base_text) and int(base_text) + uid % FALLBACK_SPAN <= 65535:
+        base = int(base_text)
+    fallback = base + uid % FALLBACK_SPAN
+    return fallback if usable(fallback) else None
+
+
+_WARNED = []
+
+
+def _port():
+    """The port to use right now, resolved again on every call.
+
+    A cached decision goes stale in the dangerous direction (our server dies,
+    another user takes its port), so the owner is looked at before every
+    request: one cheap read of /proc.
+    """
+    port = resolve_port(os.environ, os.getuid())
+    if port is None and not _WARNED:
+        _WARNED.append(True)
+        sys.stderr.write("engram hook: the engram port is held by another OS user; nothing sent\n")
+    return port
+
+
 def _base_url():
-    port = os.environ.get("ENGRAM_PORT", "").strip()
-    if not port.isdigit():
-        port = "7437"
-    return "http://127.0.0.1:" + port
+    port = _port()
+    return None if port is None else "http://127.0.0.1:%d" % port
 
 
 # One opener for every call: an empty ProxyHandler means no proxy, whatever
@@ -405,6 +490,9 @@ _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def _request(path, body=None, method=None):
+    base = _base_url()
+    if base is None:
+        return False
     headers = {}
     data = None
     if body is not None:
@@ -414,7 +502,7 @@ def _request(path, body=None, method=None):
     if token:
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(
-        _base_url() + path, data=data, headers=headers, method=method or ("POST" if data is not None else "GET")
+        base + path, data=data, headers=headers, method=method or ("POST" if data is not None else "GET")
     )
     try:
         with _OPENER.open(request, timeout=HTTP_TIMEOUT) as response:
@@ -436,6 +524,9 @@ def engram_binary():
 
 
 def ensure_server():
+    port = _port()
+    if port is None:
+        return False
     if is_running():
         return True
     binary = engram_binary()
@@ -444,6 +535,7 @@ def ensure_server():
     try:
         subprocess.Popen(
             [binary, "serve"],
+            env=dict(os.environ, ENGRAM_PORT=str(port)),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -456,7 +548,9 @@ def ensure_server():
     while time.monotonic() < deadline:
         time.sleep(0.2)
         if is_running():
-            return True
+            # Two users starting at once can race for the same port: the loser
+            # must not talk to the winner's server.
+            return _port() == port
     return False
 
 

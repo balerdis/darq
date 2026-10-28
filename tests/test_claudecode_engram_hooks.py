@@ -19,6 +19,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -479,7 +480,10 @@ class ScriptTest(unittest.TestCase):
         log = self.tmp / "fake-engram.log"
         script = self.render_with_binary(self.install_fake_binary(log))
         port = self.free_port()
-        self.run_script("session-start", self.event(), port, {"FAKE_ENGRAM_LOG": str(log)}, script)
+        # A generous wait: the fake server is a fresh interpreter, slow under load.
+        self.run_script(
+            "session-start", self.event(), port, {"FAKE_ENGRAM_LOG": str(log), "ENGRAM_HOOK_HEALTH_WAIT": "30"}, script
+        )
         lines = [json.loads(line) for line in log.read_text().splitlines()]
         self.assertEqual(lines[0], {"argv": ["serve"]})
         sessions = [l for l in lines if l.get("path") == "/sessions"]
@@ -521,6 +525,125 @@ class ScriptTest(unittest.TestCase):
         empty = self.tmp / "empty"
         empty.mkdir()
         self.run_script("session-start", self.event(), port, {"PATH": str(empty)}, script)
+
+    # --- another OS user holds the port ---
+
+    def proc_env(self, *held):
+        """Synthetic /proc tables saying `held` ((port, owner uid) pairs) are LISTENing on loopback."""
+        header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        rows = "".join(
+            f"   {i}: 0100007F:{port:04X} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 {uid:>5} 0 {i + 1} 1 0 100 0 0 10 0\n"
+            for i, (port, uid) in enumerate(held)
+        )
+        tcp4 = self.tmp / "proc-tcp"
+        tcp4.write_text(header + rows)
+        return {"ENGRAM_PORT_PROC_TCP4": str(tcp4), "ENGRAM_PORT_PROC_TCP6": str(self.tmp / "proc-tcp6")}
+
+    FOREIGN_UID = os.getuid() + 1
+
+    def test_an_explicit_port_held_by_another_user_sends_nothing_and_starts_nothing(self):
+        log = self.tmp / "fake-engram.log"
+        script = self.render_with_binary(self.install_fake_binary(log))
+        server = self.fake()
+        env = {"FAKE_ENGRAM_LOG": str(log), **self.proc_env((server.port, self.FOREIGN_UID))}
+        for command, extra in (
+            ("session-start", {}),
+            ("prompt", {"prompt": "please explain the retry policy"}),
+            ("subagent-stop", {"last_assistant_message": "x" * 80}),
+        ):
+            result = self.run_script(command, self.event(**extra), server.port, env, script)
+        self.assertEqual(server.requests, [])  # not even a health check or a read
+        self.assertFalse(log.exists())
+        self.assertEqual(result.stderr.count("held by another OS user"), 1)
+
+    def test_an_explicit_port_held_by_this_user_is_used(self):
+        server = self.fake()
+        self.run_script("session-start", self.event(), server.port, self.proc_env((server.port, os.getuid())))
+        self.assertEqual(len(server.posts("/sessions")), 1)
+
+    def test_a_missing_proc_table_behaves_as_before(self):
+        server = self.fake()
+        env = {"ENGRAM_PORT_PROC_TCP4": str(self.tmp / "nowhere")}
+        self.run_script("session-start", self.event(), server.port, env)
+        self.assertEqual(len(server.posts("/sessions")), 1)
+
+    def test_a_default_port_held_by_another_user_starts_our_own_server_on_the_fallback(self):
+        log = self.tmp / "fake-engram.log"
+        script = self.render_with_binary(self.install_fake_binary(log))
+        # The fallback is moved onto a port that is free right now (the seam),
+        # so the test never binds one another run or another user may hold.
+        free = self.free_port()
+        base = free - os.getuid() % 10000
+        env = {
+            "FAKE_ENGRAM_LOG": str(log),
+            "ENGRAM_PORT_FALLBACK_BASE": str(base),
+            "ENGRAM_HOOK_HEALTH_WAIT": "30",
+            **self.proc_env((7437, self.FOREIGN_UID)),
+        }
+        # No ENGRAM_PORT in the environment: the fake binary only binds the
+        # fallback if the hook passes it to the child explicitly.
+        result = subprocess.run(
+            [sys.executable, str(script), "session-start"],
+            input=json.dumps(self.event()),
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": str(self.tmp),
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_SYSTEM": os.devnull,
+                **env,
+            },
+            timeout=60,
+        )
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        lines = [json.loads(line) for line in log.read_text().splitlines()]
+        self.assertEqual(lines[0], {"argv": ["serve"]})
+        self.assertEqual([l["body"]["id"] for l in lines if l.get("path") == "/sessions"], ["sess-1"])
+
+    def test_the_owner_is_looked_at_again_before_every_request(self):
+        # Our server dies and another user takes its port: the next request
+        # must not go there, even in the same process. A subprocess, because
+        # the test process refuses sockets.
+        server = self.fake()
+        env = {"ENGRAM_PORT": str(server.port), **self.proc_env((server.port, os.getuid()))}
+        driver = (
+            "import importlib.util, json, os, sys\n"
+            "spec = importlib.util.spec_from_file_location('hook', sys.argv[1])\n"
+            "hook = importlib.util.module_from_spec(spec); spec.loader.exec_module(hook)\n"
+            "first = hook._request('/health')\n"
+            "table = open(os.environ['ENGRAM_PORT_PROC_TCP4']).read().splitlines(True)\n"
+            "row = table[1].split(); row[7] = sys.argv[2]\n"
+            "open(os.environ['ENGRAM_PORT_PROC_TCP4'], 'w').write(table[0] + ' '.join(row) + '\\n')\n"
+            "print(json.dumps([first, hook._request('/health'), hook._request('/sessions', {'id': 'x'})]))\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", driver, str(self.script), str(self.FOREIGN_UID)],
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ.get("PATH", ""), "HOME": str(self.tmp), **env},
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [True, False, False])
+        self.assertEqual([r["path"] for r in server.requests], ["/health"])
+
+    def test_the_default_and_the_fallback_both_held_by_other_users_fail_closed(self):
+        log = self.tmp / "fake-engram.log"
+        script = self.render_with_binary(self.install_fake_binary(log))
+        fallback = 17437 + os.getuid() % 10000
+        env = {"FAKE_ENGRAM_LOG": str(log), **self.proc_env((7437, self.FOREIGN_UID), (fallback, self.FOREIGN_UID))}
+        result = subprocess.run(
+            [sys.executable, str(script), "session-start"],
+            input=json.dumps(self.event()),
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ.get("PATH", ""), "HOME": str(self.tmp), **env},
+            timeout=60,
+        )
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        self.assertFalse(log.exists())
+        self.assertIn("held by another OS user", result.stderr)
 
     # --- prompt ---
 

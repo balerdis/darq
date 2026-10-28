@@ -9,6 +9,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 
+// Hermetic port resolution: no /proc table means "cannot tell", so the plugin keeps
+// the default port whatever other OS users of this machine are listening on.
+process.env.ENGRAM_PORT_PROC_TCP4 ??= "/nonexistent/proc-net-tcp"
+
 globalThis.Bun = {
   which: () => null,
   spawnSync: () => ({ exitCode: 1, stdout: Buffer.from("") }),

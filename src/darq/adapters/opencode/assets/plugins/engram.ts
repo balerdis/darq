@@ -20,12 +20,86 @@
  * are saved automatically — this plugin's passive capture of `task` output.
  */
 
+import { existsSync, readFileSync } from "node:fs"
 import type { Plugin } from "@opencode-ai/plugin"
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const ENGRAM_PORT = parseInt(process.env.ENGRAM_PORT ?? "7437")
-const ENGRAM_URL = `http://127.0.0.1:${ENGRAM_PORT}`
+// engram's HTTP server defaults to 127.0.0.1:7437, a port every OS user of the
+// machine shares. The port is resolved again before every request (a cached
+// decision goes stale the dangerous way: our server dies, another user takes its
+// port), never sending to nor starting a server on a port only another uid
+// listens on; a plugin lives as long as the OpenCode service, so a failure to
+// resolve is never remembered. The same rule lives in `core/engram_port.py` and
+// in the Claude Code hook, kept equal by a parity test over shared /proc vectors:
+//   ENGRAM_PORT valid  -> that port, or nothing if only another uid holds it;
+//   else 7437 if free or ours; else 17437 + uid % 10000 under the same rule;
+//   no /proc/net/tcp   -> cannot tell, behaves as it always did.
+const DEFAULT_ENGRAM_PORT = 7437
+const LISTEN_STATE = "0A"
+const LOOPBACK_V4 = ["0100007F", "00000000"]
+const LOOPBACK_V6 = [
+  "00000000000000000000000001000000",
+  "0000000000000000FFFF00000100007F",
+  "00000000000000000000000000000000",
+  "0000000000000000FFFF000000000000",
+]
+
+function listenerUids(path: string, port: number, loopbacks: string[]): Set<number> {
+  const uids = new Set<number>()
+  let lines: string[]
+  try {
+    lines = readFileSync(path, "latin1").split("\n")
+  } catch {
+    return uids
+  }
+  for (const line of lines.slice(1)) {
+    const fields = line.trim().split(/\s+/)
+    if (fields.length < 8 || fields[3] !== LISTEN_STATE) continue
+    const [address, hexport] = fields[1].split(":")
+    if (!loopbacks.includes(address.toUpperCase())) continue
+    if (!/^[0-9a-fA-F]{1,8}$/.test(hexport ?? "") || !/^[0-9]{1,10}$/.test(fields[7])) continue
+    if (parseInt(hexport, 16) !== port) continue
+    uids.add(parseInt(fields[7], 10))
+  }
+  return uids
+}
+
+function listenersOf(port: number): Set<number> | null {
+  const tcp4 = process.env.ENGRAM_PORT_PROC_TCP4 || "/proc/net/tcp"
+  const tcp6 = process.env.ENGRAM_PORT_PROC_TCP6 || "/proc/net/tcp6"
+  if (!existsSync(tcp4)) return null
+  return new Set([...listenerUids(tcp4, port, LOOPBACK_V4), ...listenerUids(tcp6, port, LOOPBACK_V6)])
+}
+
+function resolveEngramPort(): number | null {
+  const raw = (process.env.ENGRAM_PORT ?? "").trim()
+  const explicit = /^[0-9]{1,5}$/.test(raw) && +raw >= 1 && +raw <= 65535 ? +raw : null
+  const uid = process.getuid?.()
+  if (uid === undefined || listenersOf(DEFAULT_ENGRAM_PORT) === null) return explicit ?? DEFAULT_ENGRAM_PORT
+  const usable = (port: number): boolean => {
+    const held = listenersOf(port)
+    return held === null || held.size === 0 || held.has(uid)
+  }
+  if (explicit !== null) return usable(explicit) ? explicit : null
+  if (usable(DEFAULT_ENGRAM_PORT)) return DEFAULT_ENGRAM_PORT
+  // Test seam: ENGRAM_PORT_FALLBACK_BASE replaces 17437 (never set in production).
+  const baseText = (process.env.ENGRAM_PORT_FALLBACK_BASE ?? "").trim()
+  let base = 17437
+  if (/^[0-9]{1,5}$/.test(baseText) && +baseText >= 1 && +baseText + (uid % 10000) <= 65535) base = +baseText
+  const fallback = base + (uid % 10000)
+  return usable(fallback) ? fallback : null
+}
+
+function activeEngramPort(): number | null {
+  return resolveEngramPort()
+}
+
+function engramUrl(): string | null {
+  const port = activeEngramPort()
+  return port === null ? null : `http://127.0.0.1:${port}`
+}
+
 const ENGRAM_BIN = process.env.ENGRAM_BIN ?? Bun.which("engram") ?? "engram"
 
 // Engram's own MCP tools — don't count these as "tool calls" for session stats.
@@ -60,8 +134,10 @@ async function engramFetch(
   path: string,
   opts: { method?: string; body?: any } = {}
 ): Promise<any> {
+  const base = engramUrl()
+  if (base === null) return null
   try {
-    const res = await fetch(`${ENGRAM_URL}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       method: opts.method ?? "GET",
       headers: opts.body ? { "Content-Type": "application/json" } : undefined,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -77,8 +153,10 @@ async function engramFetch(
 }
 
 async function isEngramRunning(): Promise<boolean> {
+  const base = engramUrl()
+  if (base === null) return false
   try {
-    const res = await fetch(`${ENGRAM_URL}/health`, {
+    const res = await fetch(`${base}/health`, {
       signal: AbortSignal.timeout(500),
       proxy: false,
     } as RequestInit)
@@ -228,16 +306,29 @@ export const Engram: Plugin = async (ctx) => {
     })
   }
 
-  // Try to start engram server if not running
+  // Try to start engram server if not running.
+  // Nothing is started or asked when only another OS user holds every candidate port.
   const running = await isEngramRunning()
-  if (!running) {
+  const port = activeEngramPort()
+  if (!running && port !== null) {
     try {
+      // The port goes into the child's environment explicitly, not by inheritance.
       Bun.spawn([ENGRAM_BIN, "serve"], {
+        env: { ...process.env, ENGRAM_PORT: String(port) },
         stdout: "ignore",
         stderr: "ignore",
         stdin: "ignore",
       })
-      await new Promise((r) => setTimeout(r, 500))
+      // Two users starting at once can race for one port. Poll until the server
+      // answers (or a deadline), and stop the moment the port turns out to be
+      // another user's: the loser must not talk to the winner's server. Nothing
+      // is remembered: the next request resolves the port again.
+      const deadline = Date.now() + 1500
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 100))
+        if (resolveEngramPort() !== port) break
+        if (await isEngramRunning()) break
+      }
     } catch {
       // Binary not found or can't start — plugin will silently no-op
     }

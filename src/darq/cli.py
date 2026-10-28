@@ -38,6 +38,7 @@ from darq.adapters import available
 from darq.core import catalog as catalog_module
 from darq.core import content as content_module
 from darq.core import dependencies as dependencies_module
+from darq.core import engram_port as engram_port_module
 from darq.core import foreign_loads as foreign_loads_module
 from darq.core import identity as identity_module
 from darq.core import journal as journal_module
@@ -3512,6 +3513,24 @@ def _foreign_loads_lines(report: dict[str, Any], *, cli_name: str, identity: Ide
     )
 
 
+#: The records that make a CLI talk to engram's HTTP port: the OpenCode plugin and
+#: the Claude Code hook script (the `mcp-server:`/`mcp-convention:` records exist
+#: without either of them, and the stdio server never uses the port).
+_ENGRAM_HTTP_RECORDS = ("own:plugins/engram.ts", "mcp-hook-script:engram")
+
+
+def _has_engram_integration(install) -> bool:
+    return any(record.id in _ENGRAM_HTTP_RECORDS for record in install.entries)
+
+
+def _engram_port_warning() -> str | None:
+    tcp4, tcp6 = engram_port_module.proc_paths(os.environ)
+    uid = os.getuid()
+    return engram_port_module.warning(
+        engram_port_module.resolve(os.environ, uid, tcp4=tcp4, tcp6=tcp6), uid, os.environ
+    )
+
+
 def _health(
     adapter, environment: Environment, journal, runtime: Runtime, *, start_mcp_servers: bool = False
 ) -> dict[str, Any]:
@@ -3560,6 +3579,13 @@ def _health(
     # the machine, not of the install.
     if health["detected"]:
         _with_foreign_loads(health, adapter, runtime)
+    # Every CLI whose engram integration this tool installed (the OpenCode plugin,
+    # the Claude Code hook) talks to the one port all OS users share. Reads
+    # /proc, never starts a server.
+    if install is not None and _has_engram_integration(install):
+        held = _engram_port_warning()
+        if held:
+            health["engram_port_warning"] = held
     if install is None:
         return health
 
@@ -4613,6 +4639,8 @@ prose_for = _prose
 def _cli_prose(entry: dict[str, Any], *, identity: Identity | None = None) -> str:
     identity = identity if identity is not None else default_identity()
     line = _cli_prose_body(entry, identity=identity)
+    if entry.get("engram_port_warning"):
+        line += f"\n  Warning: {entry['engram_port_warning']}"
     notice = _foreign_loads_lines(entry, cli_name=entry["display_name"], identity=identity)
     if notice:
         line += "".join(f"\n  {text}" for text in notice)

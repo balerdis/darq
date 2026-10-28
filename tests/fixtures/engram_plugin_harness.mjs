@@ -13,6 +13,10 @@
 // `EngramPluginPassiveCaptureNodeTest`) parses this and makes the assertions
 // — this file only drives the plugin and reports what happened.
 
+// Hermetic port resolution: no /proc table means "cannot tell", the plugin keeps the
+// default port whatever other OS users of this machine are listening on.
+process.env.ENGRAM_PORT_PROC_TCP4 ??= "/nonexistent/proc-net-tcp"
+
 globalThis.Bun = {
   which: () => null,
   spawnSync: () => ({ exitCode: 1, stdout: Buffer.from("") }),

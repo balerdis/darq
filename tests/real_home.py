@@ -21,6 +21,12 @@ from pathlib import Path
 import no_network  # noqa: F401  -- importing it is what installs the refusal
 from darq.infra.fs_posix import PosixFileSystem
 
+# `doctor` looks at who listens on engram's port in /proc; a test must never
+# depend on the real table of a shared machine. Pointed at a file that does not
+# exist, the check cannot tell and stays silent. Tests of that check set their own.
+os.environ.setdefault("ENGRAM_PORT_PROC_TCP4", "/nonexistent/proc-net-tcp")
+os.environ.setdefault("ENGRAM_PORT_PROC_TCP6", "/nonexistent/proc-net-tcp6")
+
 
 class RealHomeTestCase(unittest.TestCase):
     """A throwaway home with the real POSIX filesystem underneath it."""
