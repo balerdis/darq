@@ -637,6 +637,7 @@ def mcp(layout: Layout, item: Mcp) -> list[Artifact]:
         return [convention]
     value = MCP_VALUE[item.distribution](item, layout)
     return [
+        *_engram_bin_sidecar(layout, item),
         ConfigKeyArtifact(
             id=f"mcp:{item.name}",
             path=layout.settings_file,
@@ -644,6 +645,37 @@ def mcp(layout: Layout, item: Mcp) -> list[Artifact]:
             value=value,
         ),
         convention,
+    ]
+
+
+#: The shipped server whose managed binary the engram plugin must start.
+ENGRAM_SERVER = "engram"
+
+#: The file the engram plugin reads, next to itself, for the binary DARQ
+#: manages. A `.json` is never loaded as a plugin (OpenCode loads `.ts`/`.js`).
+ENGRAM_BIN_SIDECAR = "engram-bin.json"
+
+
+def _engram_bin_sidecar(layout: Layout, item: Mcp) -> list[Artifact]:
+    """The managed engram binary's path, for the plugin that starts `engram serve`.
+
+    The same `program_path` the MCP key points at, so the server the plugin
+    starts and the one the agents talk to are one version. Only for a
+    downloaded engram with a plugins directory; otherwise nothing is written
+    and the plugin falls back to `engram` on PATH.
+    """
+    if item.name != ENGRAM_SERVER or item.distribution is not Distribution.DOWNLOAD:
+        return []
+    if layout.plugins_dir is None or layout.dependencies_dir is None:
+        return []
+    content = json.dumps({"engram_bin": str(program_path(layout.dependencies_dir, item))}, sort_keys=True) + "\n"
+    return [
+        FileArtifact(
+            id=f"mcp-plugin-config:{item.name}",
+            path=layout.plugins_dir / ENGRAM_BIN_SIDECAR,
+            content=content.encode("utf-8"),
+            executable=False,
+        )
     ]
 
 

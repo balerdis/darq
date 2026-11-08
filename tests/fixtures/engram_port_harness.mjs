@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url"
 let fetched = []
 let spawned = []
 globalThis.Bun = {
-  which: () => null,
+  which: () => process.env.FAKE_WHICH_ENGRAM ?? null, // test seam: the `engram` found on PATH
   spawnSync: () => ({ exitCode: 1, stdout: Buffer.from("") }),
   spawn: (cmd, opts) => {
     spawned.push({ cmd, port: opts?.env?.ENGRAM_PORT ?? null })

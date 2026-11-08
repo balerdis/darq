@@ -20,7 +20,9 @@
  * are saved automatically — this plugin's passive capture of `task` output.
  */
 
-import { existsSync, readFileSync } from "node:fs"
+import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { Plugin } from "@opencode-ai/plugin"
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -100,7 +102,25 @@ function engramUrl(): string | null {
   return port === null ? null : `http://127.0.0.1:${port}`
 }
 
-const ENGRAM_BIN = process.env.ENGRAM_BIN ?? Bun.which("engram") ?? "engram"
+// Which engram starts `serve` and `sync --import`: the one the product manages
+// (the binary its MCP server entry runs, so the server and the agents' tools are
+// one version), not whatever `engram` happens to be on PATH. The installer writes
+// its path to `engram-bin.json` next to this file, only when it installs a
+// managed engram; the file is absent otherwise. Order: ENGRAM_BIN, the managed
+// path if it is an executable file, `engram` on PATH, the bare name.
+function managedEngramBin(): string | null {
+  try {
+    const sidecar = join(dirname(fileURLToPath(import.meta.url)), "engram-bin.json")
+    const path = JSON.parse(readFileSync(sidecar, "utf8"))?.engram_bin
+    if (typeof path !== "string" || !statSync(path).isFile()) return null
+    accessSync(path, constants.X_OK)
+    return path
+  } catch {
+    return null
+  }
+}
+
+const ENGRAM_BIN = process.env.ENGRAM_BIN ?? managedEngramBin() ?? Bun.which("engram") ?? "engram"
 
 // Engram's own MCP tools — don't count these as "tool calls" for session stats.
 // OpenCode 1.x reports an MCP tool as `<server key>_<tool>`, so the real ids

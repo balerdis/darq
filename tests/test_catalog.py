@@ -687,7 +687,9 @@ class ShippedCatalogTest(unittest.TestCase):
         # integration, its own suite run, review. Read only through the one
         # pointer in the criterion file's "Writers in parallel", so it is one
         # more lazy-loaded file and no config entry.
-        self.assertEqual((len(files), len(keys)), (107, 27))
+        # 108 files, not 107: `plugins/engram-bin.json`, the managed engram path
+        # the engram plugin reads, written when engram is a downloaded server.
+        self.assertEqual((len(files), len(keys)), (108, 27))
 
     def test_every_target_is_relative(self):
         for entry in self.catalog.entries:

@@ -2561,3 +2561,13 @@ Versión de mantenimiento: no agrega funcionalidad. Sube el engram fijado.
    - Se quitó el escaneo semántico (`conflicts scan --semantic`, `ENGRAM_AGENT_CLI`); DARQ no lo usaba.
    - La base suma la tabla `observation_versions`.
 3. **Aviso:** un `engram serve` que siga corriendo sigue contestando con el comportamiento viejo. Después de actualizar hay que detenerlo; la próxima sesión arranca el nuevo.
+
+## 7.7.10: el plugin de engram de OpenCode usa el engram que DARQ gestiona
+
+Versión de mantenimiento: no agrega funcionalidad. Corrige qué binario arranca el plugin.
+
+1. **El defecto.** El plugin de engram para OpenCode arrancaba `engram serve` y `engram sync --import` con el `engram` del PATH, mientras que el MCP y el hook de Claude Code usan el binario que DARQ descarga y fija. Podían correr dos versiones a la vez, y con un PATH sin engram el plugin no levantaba el servidor: la captura de prompts y la pasiva fallaban sin avisar.
+2. **El arreglo.** Al instalar un engram descargado para OpenCode, `render.mcp` escribe `plugins/engram-bin.json` con `{"engram_bin": <ruta>}`, la misma ruta (`program_path`) que lleva la clave del MCP. Es un artefacto más del journal: `update` lo actualiza y `uninstall` lo saca. OpenCode sólo carga `.ts` y `.js` de `plugins/`, así que el `.json` no se toma por plugin. El plugin no cambia por instalación.
+3. **Orden de resolución en el plugin:** `ENGRAM_BIN` del entorno, la ruta gestionada si existe y es ejecutable, `engram` del PATH y, por último, el nombre `engram`. Sin MCP de engram seleccionado, con un servidor enlazado (el del usuario) o con el archivo ausente, se hace lo de siempre.
+4. **Los tests** (`tests/test_engram_bin_resolution.py`) comprueban el archivo que se escribe y, ejecutando el plugin en Node, que `serve` arranca con la ruta gestionada aunque haya otro `engram` en el PATH y cae al PATH si no hay ruta o el binario no existe. La costura `FAKE_WHICH_ENGRAM` del arnés simula el `engram` del PATH.
+5. **Aviso:** un `engram serve` ya en marcha sigue siendo el viejo; hay que detenerlo para que la próxima sesión arranque el gestionado.
