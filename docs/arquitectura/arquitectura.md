@@ -2548,3 +2548,16 @@ Versión de mantenimiento: no agrega funcionalidad. Sube el engram fijado y arre
 **Los tests** comparten vectores sintéticos de tablas `/proc` (propio, ajeno, mezcla, tcp6, comodín, línea corrupta, archivo ausente, TIME_WAIT, tabla sin encabezado, puertos con signo, guion bajo o larguísimos) en `tests/fixtures/engram_port_vectors.json`, y `tests/test_engram_port_parity.py` los corre contra las tres implementaciones y la fórmula del puerto propio, para que no se desvíen. Las rutas de `/proc` se inyectan con `ENGRAM_PORT_PROC_TCP4` y `ENGRAM_PORT_PROC_TCP6`, así que los tests de paridad y de `doctor` no leen el `/proc` real; varios tests del hook todavía lo leen, sin escribir ni arrancar nada. Una tercera costura, `ENGRAM_PORT_FALLBACK_BASE`, mueve la base del puerto derivado para que un test no ate uno que otra corrida o usuario pueda tener, y `ENGRAM_HOOK_HEALTH_WAIT` alarga la espera de salud del hook bajo carga.
 
 **Límites.** Sólo Linux. `/proc` muestra el namespace de red actual, así que dentro de un contenedor no se ven los puertos de afuera. Las tres copias del lector son estrictas por igual (sólo dígitos y largo acotado en `ENGRAM_PORT` y en el uid; hexadecimal acotado en el puerto), porque `int()` de Python aceptaría `+5` o `1_0` y TypeScript no. Dice de quién es el socket, no qué programa es: un proceso ajeno que ocupe el puerto sin ser engram también cuenta como ajeno, y uno propio que no sea engram se trata como el servidor propio. Esas costuras quedan activas en producción (riesgo bajo: quien controla el entorno de un proceso ya controla `ENGRAM_PORT`). Entre mirar y escribir queda una ventana mínima; la segunda mirada tras arrancar la achica, no la elimina.
+
+## 7.7.9: engram 1.24.0
+
+Versión de mantenimiento: no agrega funcionalidad. Sube el engram fijado.
+
+1. **DARQ baja engram 1.24.0 desde el fork.** `content/mcp/engram.md` apunta a la release `v1.24.0` de `balerdis/engram`, con su checksum. Los miembros del archivo no cambian y todo lo que DARQ usa de engram sigue funcionando.
+2. **Lo que trae para quien usa DARQ:**
+   - `POST /prompts` responde `200 {"status":"skipped"}` para los prompts sintéticos; los hooks aceptan cualquier 2xx.
+   - Las instrucciones del servidor MCP dependen de `--tools`; DARQ sigue usando `--tools=agent`.
+   - `mem_get_observation` suma `include_history`.
+   - Se quitó el escaneo semántico (`conflicts scan --semantic`, `ENGRAM_AGENT_CLI`); DARQ no lo usaba.
+   - La base suma la tabla `observation_versions`.
+3. **Aviso:** un `engram serve` que siga corriendo sigue contestando con el comportamiento viejo. Después de actualizar hay que detenerlo; la próxima sesión arranca el nuevo.
