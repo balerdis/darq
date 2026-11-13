@@ -2571,3 +2571,12 @@ Versión de mantenimiento: no agrega funcionalidad. Corrige qué binario arranca
 3. **Orden de resolución en el plugin:** `ENGRAM_BIN` del entorno, la ruta gestionada si existe y es ejecutable, `engram` del PATH y, por último, el nombre `engram`. Sin MCP de engram seleccionado, con un servidor enlazado (el del usuario) o con el archivo ausente, se hace lo de siempre.
 4. **Los tests** (`tests/test_engram_bin_resolution.py`) comprueban el archivo que se escribe y, ejecutando el plugin en Node, que `serve` arranca con la ruta gestionada aunque haya otro `engram` en el PATH y cae al PATH si no hay ruta o el binario no existe. La costura `FAKE_WHICH_ENGRAM` del arnés simula el `engram` del PATH.
 5. **Aviso:** un `engram serve` ya en marcha sigue siendo el viejo; hay que detenerlo para que la próxima sesión arranque el gestionado.
+
+## 7.7.11: OpenCode 1.19.5
+
+Versión de mantenimiento: no agrega funcionalidad. Sube la versión de OpenCode que instala `install.sh`.
+
+1. **`install.sh` instala OpenCode 1.19.5** cuando no se pide otra con `--opencode-version`. Es la última de la línea 1.x; antes instalaba la 1.19.0.
+2. **Verificado en vivo** con el usuario de prueba: el instalador oficial con `VERSION=1.19.5` dejó la 1.19.5, DARQ cargó sus plugins y el orquestador leyó un archivo y corrió un comando.
+3. **Quien ya tiene OpenCode instalado no cambia de versión:** `install.sh` no reinstala un OpenCode presente y `darq update` no lo toca.
+

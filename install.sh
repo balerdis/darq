@@ -146,9 +146,9 @@ ORIGINAL_PATH="$PATH"
 # resuelve "la última versión" permite 60 pedidos por hora por IP, y una
 # tarde de pruebas la agota — el instalador falla entonces con "Failed to
 # fetch version information". Con una versión pedida, ni la consulta.
-# 1.19.0 es la última de la línea 1.x: OpenCode 2 cambia los plugins y la
+# 1.19.5 es la última de la línea 1.x: OpenCode 2 cambia los plugins y la
 # configuración, así que hasta que esté soportado se queda en 1.x.
-VERSION_OPENCODE='1.19.0'
+VERSION_OPENCODE='1.19.5'
 
 # Version del instalador de nvm (no de Node: eso lo elige "--lts" más abajo).
 # Se fija por la misma razón que arriba: sin versión, el script de nvm
