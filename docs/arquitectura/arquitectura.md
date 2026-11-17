@@ -2580,3 +2580,14 @@ Versión de mantenimiento: no agrega funcionalidad. Sube la versión de OpenCode
 2. **Verificado en vivo** con el usuario de prueba: el instalador oficial con `VERSION=1.19.5` dejó la 1.19.5, DARQ cargó sus plugins y el orquestador leyó un archivo y corrió un comando.
 3. **Quien ya tiene OpenCode instalado no cambia de versión:** `install.sh` no reinstala un OpenCode presente y `darq update` no lo toca.
 
+## 7.7.12: las skills con texto propio
+
+Versión de mantenimiento: no agrega funcionalidad. Reescribe el texto de las skills y trae la `branch-pr` que ya usa Pegasus.
+
+1. **Qué se reescribió.** Tienen estructura y redacción nuevas las skills de git y colaboración (`chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation` y `work-unit-commits`), las de autoría de skills (`skill-creator`, `skill-improver` y `skill-registry`, con la guía de estilo que comparten las dos primeras), los archivos de `_shared` (persistencia, OpenSpec, secciones comunes de las fases, contrato de estado, resolución de skills y las tres guías de oficio), el cuerpo de `content/mcp/engram.md` y las diez fases SDD.
+2. **`branch-pr` pasa a la versión 3.0, la misma de Pegasus.** Lee las convenciones del repositorio en vez de suponerlas, pide decir qué revisar primero, fija un presupuesto de revisión de 800 líneas de lógica nueva o modificada y prohíbe tildar pruebas que no se corrieron.
+3. **Qué se mantiene.** Fuera de `branch-pr`, las reglas, los umbrales, los comandos, los campos, los formatos de artefacto, los bloques de retorno, las líneas de guarda, las compuertas, las claves de tema, el esquema de estado y las secciones A a F de la convención de engram. Los encabezados, etiquetas, rutas y valores de las plantillas tampoco cambian; sí cambian el texto descriptivo de los marcadores, los ejemplos y la forma de escribir la ubicación de cada artefacto.
+4. **Los tests que acompañan el cambio.** `issue-creation` ya no nombra ninguna CLI, así que sale de la lista de archivos que pueden nombrarlas en `tests/test_content_core_is_cli_agnostic.py`. El párrafo que fija `tests/test_engram_memory_scope.py` cambia junto con su test, y `tests/test_persona_split.py` pierde el test que buscaba un vocabulario que ya no existe.
+5. **`/sdd-continue` y `/sdd-status`** piden no usar un despachador de estado que haya dejado una instalación anterior, con las mismas palabras que el contrato de estado.
+6. **Al actualizar.** Actualizá DARQ y corré `darq update`; las skills nuevas se leen desde la sesión siguiente.
+
