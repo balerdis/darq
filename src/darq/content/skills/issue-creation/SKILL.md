@@ -1,223 +1,133 @@
 ---
 name: issue-creation
-description: "Create Gentle AI issues with issue-first checks. Trigger: creating GitHub issues, bug reports, or feature requests."
+description: "Create GitHub issues with issue-first checks. Trigger: creating GitHub issues, bug reports, or feature requests."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
-## When to Use
+# Filing a GitHub issue
 
-Use this skill when:
-- Creating a GitHub issue (bug report or feature request)
-- Helping a contributor file an issue
-- Triaging or approving issues as a maintainer
+An issue is filed in the repository you are working in, never in another one, and under that repository's own setup: its templates, its labels, its approval gate and its Discussions, each of which you read before writing anything.
 
----
+## Situations this covers
 
-## Critical Rules
+- Opening an issue, whether it reports a bug or asks for a feature.
+- Helping a contributor put an issue together.
+- Triaging issues, or approving them, as a maintainer.
 
-1. **Blank issues are disabled** — MUST use a template (bug report or feature request)
-2. **Every issue gets `status:needs-review` automatically** on creation
-3. **A maintainer MUST add `status:approved`** before any PR can be opened
-4. **Questions go to [Discussions](https://github.com/Gentleman-Programming/agent-teams-lite/discussions)**, not issues
+## What always holds
 
----
+- **The setup is read first**, from the repository being worked in (see "Reading the setup").
+- **A repository with issue templates gets one of them.** When it has blank issues turned off, using a template is mandatory.
+- **An approval label gates PRs.** If the repository uses one (`status:approved`, for instance), no PR may be opened until a maintainer has added it.
+- **Questions belong in Discussions** when the repository has them turned on, not in an issue.
 
-## Workflow
+## Reading the setup
 
-```
-1. Search existing issues for duplicates
-2. Choose the correct template (Bug Report or Feature Request)
-3. Fill in ALL required fields
-4. Check pre-flight checkboxes
-5. Submit → issue gets status:needs-review automatically
-6. Wait for maintainer to add status:approved
-7. Only then open a PR linking this issue
-```
+Run these from the repository being worked in; when the working directory is some other repository, add `--repo OWNER/REPO`.
 
----
+- `gh repo view --json nameWithOwner,url,isBlankIssuesEnabled,hasDiscussionsEnabled,issueTemplates` reports the templates, whether blank issues are allowed, whether Discussions are on, and the repository URL.
+- `gh label list` reports the labels the repository defines.
 
-## Issue Templates
+How to read the answer:
 
-### Bug Report
+- Every entry of `issueTemplates` has a `name`, and that `name` is the value `gh issue create --template` expects.
+- With `hasDiscussionsEnabled` true, Discussions live at the repository's `url` plus `/discussions`.
+- Labels come only from what `gh label list` returned. A status label the repository does not define is never made up.
 
-Template: `.github/ISSUE_TEMPLATE/bug_report.yml`
-Auto-labels: `bug`, `status:needs-review`
+## From check to submission
 
-#### Required Fields
+1. Read the setup: templates, blank issues, Discussions, labels.
+2. Look through the existing issues for a duplicate.
+3. Pick the template that matches: bug report, feature request, or the repository's own equivalent.
+4. Answer every required field the template declares, all of them.
+5. Tick the pre-flight checkboxes, when the template has any.
+6. Submit. The labels the template declares, such as `status:needs-review`, are added automatically.
+7. If the repository uses an approval label, wait until a maintainer adds it.
+8. Only after that, open the PR that links this issue.
 
-| Field | Description |
-|-------|-------------|
-| **Pre-flight Checks** | Checkboxes: no duplicate + understands approval workflow |
-| **Bug Description** | Clear description of the bug |
-| **Steps to Reproduce** | Numbered steps to reproduce |
-| **Expected Behavior** | What should have happened |
-| **Actual Behavior** | What happened instead (include errors/logs) |
-| **Operating System** | Dropdown: macOS, Linux variants, Windows, WSL |
-| **Agent / Client** | Dropdown: Claude Code, OpenCode, Gemini CLI, Cursor, Windsurf, Codex, Other |
-| **Shell** | Dropdown: bash, zsh, fish, Other |
+## What templates usually look like
 
-#### Optional Fields
+The two shapes below are common, nothing more. The repository's own templates, read during setup, always win: fill in the fields they declare and pass the template names they carry.
 
-| Field | Description |
-|-------|-------------|
-| **Relevant Logs** | Log output (auto-formatted as code block) |
-| **Additional Context** | Screenshots, workarounds, extra info |
+### A bug report
 
-#### Example — Bug Report via CLI
+It usually lives at `.github/ISSUE_TEMPLATE/bug_report.yml`, and whatever labels it declares are applied on creation (often `bug` and `status:needs-review`).
+
+#### Fields
+
+Its required fields are typically **Pre-flight Checks** (checkboxes: no duplicate exists, the approval workflow is understood), **Bug Description**, **Steps to Reproduce** (numbered), **Expected Behavior**, **Actual Behavior** (errors and logs included), and dropdowns describing the environment: **Operating System** (for example macOS, Linux variants, Windows, WSL), the agent or client in use (as many options as the template lists, plus Other), and **Shell** (for example bash, zsh, fish, Other). A dropdown is answered with one of the options it lists. **Relevant Logs** (rendered as a code block) and **Additional Context** (screenshots, workarounds, anything else) are usually optional.
+
+Filed from the command line, the body repeats the template's field labels as headings:
 
 ```bash
-gh issue create --template "bug_report.yml" \
-  --title "fix(scripts): setup.sh fails on zsh with glob error" \
+gh issue create --template "<bug report template name>" \
+  --title "fix(export): CSV export drops rows with an empty date" \
   --body "
 ### Pre-flight Checks
-- [x] I have searched existing issues and this is not a duplicate
-- [x] I understand this issue needs status:approved before a PR can be opened
+- [x] No open or closed issue already reports this
+- [x] I know a PR can only follow once this issue has status:approved
 
 ### Bug Description
-Running setup.sh on zsh throws a glob error when no matching files exist.
+Exporting a report to CSV leaves out every row whose date field is empty.
 
 ### Steps to Reproduce
-1. Clone the repo
-2. Run \`./scripts/setup.sh\` in zsh
-3. See error: \`zsh: no matches found: skills/*\`
+1. Create a report with one row that has no date
+2. Export it to CSV
+3. Open the file: that row is missing
 
 ### Expected Behavior
-The script should handle missing glob matches gracefully.
+Every row is exported, with an empty date cell where there is no date.
 
 ### Actual Behavior
-Script crashes with glob error.
+Rows without a date are silently skipped.
 
 ### Operating System
-macOS
-
-### Agent / Client
-Claude Code
-
-### Shell
-zsh
-
-### Relevant Logs
-\`\`\`
-zsh: no matches found: skills/*
-\`\`\`
+Linux
 "
 ```
 
----
+### A feature request
 
-### Feature Request
+It usually lives at `.github/ISSUE_TEMPLATE/feature_request.yml`, with its declared labels (often `enhancement` and `status:needs-review`) applied on creation.
 
-Template: `.github/ISSUE_TEMPLATE/feature_request.yml`
-Auto-labels: `enhancement`, `status:needs-review`
+#### Fields
 
-#### Required Fields
+Besides the same **Pre-flight Checks**, its required fields are typically **Problem Description** (the pain the feature removes), **Proposed Solution** (how it should work from the user's side) and **Affected Area** (a dropdown of the parts of the project, as the repository names them). **Alternatives Considered** and **Additional Context** (mockups, examples, references) are usually optional. It is filed the same way as a bug report: `gh issue create --template "<feature request template name>" --title "feat(scope): description" --body "..."`, with one `### <field label>` heading per field in the body.
 
-| Field | Description |
-|-------|-------------|
-| **Pre-flight Checks** | Checkboxes: no duplicate + understands approval workflow |
-| **Problem Description** | The pain point this feature solves |
-| **Proposed Solution** | How it should work from the user's perspective |
-| **Affected Area** | Dropdown: Scripts, Skills, Examples, Documentation, CI/Workflows, Other |
+## Labels
 
-#### Optional Fields
+Labels exist only as the repository defines them (`gh label list`). In a frequent arrangement:
 
-| Field | Description |
-|-------|-------------|
-| **Alternatives Considered** | Other approaches or workarounds |
-| **Additional Context** | Mockups, examples, references |
+- The templates add a type label and a review label when the issue is created: `bug` or `enhancement`, together with `status:needs-review`.
+- Maintainers add `status:approved` once an issue is accepted for implementation, which is what allows PRs to be opened.
+- Maintainers also set a priority: `priority:high` for a critical bug or urgent feature, `priority:medium` for something important that blocks nothing, `priority:low` for a nice-to-have.
 
-#### Example — Feature Request via CLI
+## Approving issues as a maintainer
 
-```bash
-gh issue create --template "feature_request.yml" \
-  --title "feat(scripts): add Codex support to setup.sh" \
-  --body "
-### Pre-flight Checks
-- [x] I have searched existing issues and this is not a duplicate
-- [x] I understand this issue needs status:approved before a PR can be opened
+Where the repository uses an approval label:
 
-### Problem Description
-The setup script only configures Claude Code, Gemini CLI, and OpenCode. Codex users have to manually copy skills.
+1. A new issue arrives labelled `status:needs-review`.
+2. The maintainer judges it: is it valid, clearly described, and within scope?
+3. If so, they add `status:approved`.
+4. If not, they reply with the reason and close it when that is warranted.
+5. The contributor may then open a PR that links the issue.
 
-### Proposed Solution
-Add a Codex option to setup.sh that links skills to the .codex/ directory.
+## Choosing where something goes
 
-Example:
-\`\`\`bash
-./scripts/setup.sh --agent codex
-\`\`\`
+| It is | It goes to |
+|---|---|
+| a bug | the bug report template |
+| a new feature or an improvement | the feature request template |
+| a question | the repository's Discussions, when enabled, not an issue |
+| a duplicate | a link to the existing issue, then closed |
 
-### Affected Area
-Scripts (setup, installation)
+## Command reference
 
-### Alternatives Considered
-Manually symlinking, but that defeats the purpose of the setup script.
-"
-```
-
----
-
-## Label System
-
-### Applied Automatically on Issue Creation
-
-| Template | Labels added |
-|----------|-------------|
-| Bug Report | `bug`, `status:needs-review` |
-| Feature Request | `enhancement`, `status:needs-review` |
-
-### Applied by Maintainers
-
-| Label | When to apply |
-|-------|--------------|
-| `status:approved` | Issue accepted for implementation — PRs can now be opened |
-| `priority:high` | Critical bug or urgent feature |
-| `priority:medium` | Important but not blocking |
-| `priority:low` | Nice to have |
-
----
-
-## Maintainer Approval Workflow
-
-```
-1. New issue arrives with status:needs-review
-2. Review the issue — is it valid, clear, and in scope?
-3. If YES → add status:approved label
-4. If NO → comment with reason, close if needed
-5. Contributor can now open a PR linking this issue
-```
-
----
-
-## Decision Tree
-
-```
-Is it a bug?                    → Use Bug Report template
-Is it a new feature/improvement? → Use Feature Request template
-Is it a question?               → Use Discussions, NOT issues
-Is it a duplicate?              → Link to existing issue, close
-```
-
----
-
-## Commands
-
-```bash
-# Search existing issues before creating
-gh issue list --search "keyword"
-
-# Create bug report
-gh issue create --template "bug_report.yml" --title "fix(scope): description"
-
-# Create feature request
-gh issue create --template "feature_request.yml" --title "feat(scope): description"
-
-# Maintainer: approve an issue
-gh issue edit <number> --add-label "status:approved"
-
-# Maintainer: add priority
-gh issue edit <number> --add-label "priority:high"
-```
+- Read the setup: `gh repo view --json nameWithOwner,url,isBlankIssuesEnabled,hasDiscussionsEnabled,issueTemplates` and `gh label list`
+- Look for duplicates before filing: `gh issue list --search "keyword"`
+- File a bug report: `gh issue create --template "<bug report template name>" --title "fix(scope): description"`
+- File a feature request: `gh issue create --template "<feature request template name>" --title "feat(scope): description"`
+- As a maintainer, approve an issue: `gh issue edit <number> --add-label "status:approved"`
+- As a maintainer, set a priority: `gh issue edit <number> --add-label "priority:high"`

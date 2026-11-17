@@ -3,72 +3,76 @@ name: comment-writer
 description: "Write warm, direct collaboration comments. Trigger: PR feedback, issue replies, reviews, Slack messages, or GitHub comments."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
-## When to Use
+# Comment Writer
 
-Load this skill whenever you write a comment that another human will read.
+A comment is read by a person who has other work waiting. This skill makes each comment worth that person's time: it says what matters first, gives the reason when one is needed, and ends with what to do.
 
-Use it for:
+## When it applies
 
-- GitHub PR or issue comments.
-- Review feedback and requested changes.
-- Maintainer replies.
-- Slack, Discord, or async project updates.
+Whenever you write a comment another person will read, among them:
 
-## Voice Rules
+- comments on a GitHub pull request or issue;
+- review feedback, including a request for changes;
+- replies written as a maintainer;
+- project updates sent in Slack, Discord or another asynchronous channel.
 
-| Rule | Requirement |
-|------|-------------|
-| Be useful fast | Start with the actionable point. Do not recap the whole PR before feedback. |
-| Be warm and direct | Sound like a thoughtful teammate, not a corporate bot. |
-| Keep it short | Prefer 1 to 3 short paragraphs or a tight bullet list. |
-| Explain why | Give the technical reason when asking for a change. |
-| Avoid pile-ons | Comment on the highest-value issue, not every tiny preference. |
-| Match target context language | Write in the target context language by default: Spanish issue/thread -> Spanish comment, English issue/thread -> English comment, mixed context -> target message language. If the user explicitly requests a language or tone, follow that request. For Spanish comments, use neutral/professional Spanish by default unless the user or target context clearly calls for regional tone. |
-| No em dashes | Use commas, periods, or parentheses instead. |
+## Building a comment
 
-## Comment Formula
+Assemble it from three parts, in this order, and leave out the middle one when the reason is already obvious:
+
+1. What you observed, or what you are asking for, stated plainly.
+2. Why it matters.
+3. The concrete step that should happen next.
+
+## Tone and length
+
+- Put the point someone can act on in the opening sentence. Do not retell the pull request before reaching your feedback.
+- Write the way a considerate colleague talks: friendly and plain, never in the voice of a corporate announcement.
+- Stay brief: one to three short paragraphs, or a compact list.
+- Every request for a change carries its technical reason.
+- Raise the issue that matters most, and let minor preferences go instead of stacking them up.
+- Use no em dashes; a comma, a period or parentheses do the same job.
+
+## Which language to write in
+
+By default the comment takes the language of the place where it is posted:
+
+- In an issue or thread written in Spanish, write in Spanish; in one written in English, write in English.
+- When a thread mixes languages, use the language of the message your comment is aimed at.
+- If the person explicitly asks for a particular language or tone, that request takes precedence.
+- A Spanish comment is in neutral, professional Spanish, unless the person or the thread clearly calls for a regional tone.
+
+## Sample comments
+
+Asking for a change:
 
 ```text
-<Direct observation or request>
+The retry loop in `syncOrders` has no upper bound, so a server that keeps answering 503 holds the worker forever.
 
-<Why it matters, only if needed>
-
-<Concrete next action>
+Please cap it at five attempts with a growing delay, and log the last failure.
 ```
 
-## Examples
+Approving with a remark:
 
-### Request change
+```text
+Looks good to merge: it fixes the timeout and nothing beyond it.
 
-```markdown
-Good approach overall. I'd split this into a separate commit because it mixes validation logic with UI wiring.
-
-That keeps the reviewer's focus narrower and makes rollback cleaner if the integration fails.
+Not blocking: this is one link of a chain, so the next PR should link this one and the one after it, which keeps the chain easy to walk.
 ```
 
-### Approve with a note
+Asking for a split:
 
-```markdown
-Approved. The scope is clear and the change is well-contained.
+```text
+This one is over our 400-line review budget. Please break it up, or explain why it has to land whole so we can agree on a `size:exception`.
 
-For the next PR, add links to the previous and following PRs so the chain stays navigable.
+A cut that would review well: the data model and its tests first, then the API built on it, then the docs. Each review then has a clear beginning and end.
 ```
 
-### Ask for split
+## Before commenting on a PR
 
-```markdown
-This PR exceeds the 400-line budget, so we need to split it or justify `size:exception`.
+Read its title, description and size first:
 
-Suggested order: foundation + tests first, then integration, then docs. That gives each review a clear start and end.
-```
-
-## Commands
-
-```bash
-# Inspect a PR before writing review feedback
-gh pr view <PR_NUMBER> --json title,body,additions,deletions,changedFiles
-```
+`gh pr view <PR_NUMBER> --json title,body,additions,deletions,changedFiles`

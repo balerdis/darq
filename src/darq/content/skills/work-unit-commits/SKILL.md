@@ -3,94 +3,76 @@ name: work-unit-commits
 description: "Plan commits as reviewable work units. Trigger: implementation, commit splitting, chained PRs, or keeping tests and docs with code."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
-## When to Use
+# Work-unit commits
 
-Load this skill when deciding what belongs in each commit or PR.
+A work unit is the smallest part of a change that delivers something by itself: a behavior, a fix, a migration, or a piece of documentation. With this skill each commit holds exactly one such unit. Every commit can then be reviewed, tested and reverted on its own, and a branch that grows too large can be divided into pull requests along boundaries that already exist.
 
-Use it for:
+## Use it when
 
-- Splitting a feature into reviewable work.
-- Preparing commits before opening a PR.
-- Turning a large change into chained or stacked PRs.
-- Keeping reviewer cognitive load healthy.
-- Applying SDD tasks without accidentally producing a PR above 400 changed lines.
+You are deciding what goes into each commit or pull request, in particular when you:
 
-## Critical Rules
+- divide a feature into pieces a reviewer can follow;
+- prepare the commits of a branch before its pull request is opened;
+- need a big change to become a chain or a stack of pull requests;
+- want to keep down how much a reviewer has to hold in mind at once;
+- apply SDD tasks and must not end up with a pull request above 400 changed lines.
 
-| Rule | Requirement |
-|------|-------------|
-| Commit by work unit | A commit represents a deliverable behavior, fix, migration, or docs unit. |
-| Do not commit by file type | Avoid `models`, then `services`, then `tests` if none works alone. |
-| Keep tests with code | Tests belong in the same commit as the behavior they verify. |
-| Keep docs with the user-visible change | Docs belong with the feature or workflow they explain. |
-| Tell a story | A reviewer should understand why each commit exists from its diff and message. |
-| Future PR-ready | Each commit should be a candidate chained PR when the change grows. |
-| SDD workload guard | If SDD tasks forecast a >400-line change, group commits into chained PR slices before implementation. |
+## Where to cut
 
-## Work Unit Checklist
+- Do not cut by file type or layer when none of the resulting pieces works alone. Data models in one commit, services in the next and tests in a third give the reviewer three pieces, none of which works alone; put the model, the service code and the tests that together deliver one behavior in a single commit instead.
+- A test travels in the same commit as the behavior it checks.
+- Documentation travels with the user-visible change or workflow it describes.
+- Read in order, the commits tell the story of the change: from each diff and its message, a reviewer can see why that commit exists.
+- Treat every commit as a pull request in waiting. If the change outgrows the budget, one commit, or a small group of them, becomes one link of a chain without being reworked.
+- When SDD tasks forecast a change above 400 lines, group the planned commits into chained pull request slices before implementation starts, not after the work is done.
 
-Before committing, confirm:
+## An example
 
-- [ ] The commit has one clear purpose.
-- [ ] The repo still makes sense after applying only this commit.
-- [ ] Tests or docs for this unit are included when relevant.
-- [ ] Rollback is reasonable without reverting unrelated work.
-- [ ] Focused test command and exact result are recorded.
-- [ ] Runtime harness command/scenario and exact result are recorded, or explicit `N/A` explains why no runtime boundary exists.
-- [ ] Rollback boundary names the exact files/behavior removable without unrelated work.
-- [ ] The commit message explains the outcome, not the file list.
+A reports page gains a CSV export. Divided by layer, the history reads `add models`, then `add services`, then `add tests`, then `update docs`. No commit in it produces a working export, and the tests arrive after the code they were meant to check. Divided by work unit:
 
-## Split Examples
+- `feat(reports): turn a report into CSV rows, with unit tests`
+- `feat(reports): serve the CSV download from the reports endpoint, with its integration test`
+- `feat(reports): add the export button and describe it in the user guide`
 
-| Weak split | Better work-unit split |
-|------------|------------------------|
-| `add models` | `feat(auth): add token validation domain model and tests` |
-| `add services` | `feat(auth): wire token validation into login flow` |
-| `add tests` | Tests included with each behavior commit |
-| `update docs` | Docs included with the user-facing change they explain |
+Each of these builds and passes its own tests, each message names what changed for the user or the system, and each one is a natural place to end a pull request.
 
-## PR Relationship
+## Before each commit
 
-Use work-unit commits as the foundation for chained PRs:
+Confirm that:
 
-1. Build the smallest independent work unit.
-2. Include verification for that unit.
-3. Commit it with a Conventional Commit message.
-4. If the PR approaches 400 changed lines, promote commits or groups of commits into chained PRs.
+1. the commit has a single purpose you can state in one sentence;
+2. the repository still makes sense with this commit applied and nothing after it;
+3. the tests or documentation this unit needs are part of it, where the unit needs any;
+4. reverting it would not force reverting unrelated work;
+5. the message says what the commit achieves, not which files it touches.
 
-## SDD Relationship
+Then record the unit's evidence:
 
-When `sdd-tasks` produces a Review Workload Forecast:
+- the focused test command, with its exact result;
+- the runtime harness command or scenario, with its exact result, or an explicit `N/A` together with the reason no runtime boundary exists;
+- the rollback boundary: the exact files or behavior that can be taken out without taking out unrelated work.
 
-- Low risk: keep work-unit commits inside one PR.
-- Medium risk: commit by work unit and monitor changed lines before PR creation.
-- High risk: follow SDD `Delivery strategy` — ask on `ask-on-risk`, auto-slice on `auto-chain`, require `size:exception` on over-budget `single-pr`, or record accepted `size:exception` on `exception-ok`.
-- Count authored additions plus deletions for the `>400` threshold. Exclude generated goldens from that authored count, but include every generated file in complete snapshot identity.
+## From commits to pull requests
 
-Each SDD work unit should map cleanly to a commit or PR with:
+A chain of pull requests is built out of work-unit commits. The loop is: build the smallest unit that stands alone, add the verification for it, commit it with a Conventional Commit message, and repeat. Once a pull request gets close to 400 changed lines, lift one commit, or a run of them, out into its own link of a chain.
 
-- clear start state,
-- clear finished state,
-- verification in the same unit,
-- rollback that does not remove unrelated work.
+## Inside SDD
 
-Its implementation evidence MUST include:
+The risk level in the Review Workload Forecast that `sdd-tasks` writes decides the handling:
 
-- Focused test command and exact result.
-- Runtime harness command/scenario and exact result, or explicit `N/A` with reason.
-- Rollback boundary stated independently of commit creation; uncommitted work units still require it.
+| Forecast risk | What to do |
+|---|---|
+| Low | Keep the work-unit commits together in one pull request. |
+| Medium | Still commit by work unit, and watch the changed-line count before the pull request is created. |
+| High | Do what the SDD `Delivery strategy` says: on `ask-on-risk`, ask; on `auto-chain`, slice automatically; on `single-pr` over the budget, require a `size:exception`; on `exception-ok`, record the accepted `size:exception`. |
 
-## Commands
+For the `>400` threshold, count what was authored: lines added plus lines deleted. Generated goldens do not count toward it, but each generated file is still part of the unit's complete snapshot identity.
 
-```bash
-# Review the story before committing
-git diff --stat
-git diff --cached --stat
+Each SDD work unit should line up with one commit or one pull request, having a known starting state, a known finished state, verification inside the same unit, and a rollback that takes nothing unrelated with it. As implementation evidence it MUST carry the three items listed under "Before each commit": the focused test command and its exact result, the runtime harness command or scenario and its exact result (or `N/A` and why there is no runtime boundary), and the rollback boundary. The rollback boundary is stated independently of whether a commit was created: a unit still sitting uncommitted in the working tree owes it all the same.
 
-# Check recent commit style
-git log --oneline -5
-```
+## Commands worth running
+
+Before committing, read the story the diff tells: `git diff --stat` summarizes what is not yet staged, and `git diff --cached --stat` what is. To match the commit style the history already uses, look at the last few subjects with `git log --oneline -5`.

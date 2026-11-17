@@ -52,16 +52,13 @@ CONTENT = ROOT / "src" / "darq" / "content"
 _WORD_GAP = r"\s+"
 
 #: Paths (relative to `CONTENT`) where naming CLIs is the legitimate point of
-#: the file, not a leak. Each entry says why. Exactly these three -- no
+#: the file, not a leak. Each entry says why. Exactly these two -- no
 #: others -- so the allowlist itself cannot quietly grow into a place where
 #: real leaks hide.
 ALLOWED_TO_NAME_CLIS = {
     # Scans skill directories across roughly 16 agent CLIs; naming them is
     # the content of the reference, not an aside.
     "skills/sdd-init/references/init-details.md",
-    # An issue form's client dropdown, plus a note on which CLIs a setup
-    # script configures.
-    "skills/issue-creation/SKILL.md",
     # A `.git/info/exclude` list of per-CLI artifact directories.
     "skills/project-agents-bootstrap/SKILL.md",
 }

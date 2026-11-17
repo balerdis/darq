@@ -81,9 +81,8 @@ def anchors(text: str) -> list[str]:
 
     Headings that slug to the same thing get GitHub's disambiguating
     suffixes: the first keeps the bare slug, the next becomes `slug-1`, then
-    `slug-2`. The corpus needs this -- `issue-creation/SKILL.md` really does
-    carry two `Required Fields` headings -- so a link to the second one has
-    somewhere to point.
+    `slug-2`. A document is free to repeat a heading, and a link to the
+    second one still needs somewhere to point.
     """
     found: list[str] = []
     counts: dict[str, int] = {}
