@@ -14,38 +14,35 @@ investigate real code instead of guessing, how to compare competing approaches, 
 concise exploration report. A calling skill states when exploration runs and what to do with the
 result; it does not restate how to explore.
 
-## Understand the Request
+## Pin down the question first
 
-Before touching the codebase, parse what is actually being asked:
+Before you open a single file, work out what is really being asked. Is it a new feature, a bug fix
+or a refactor, and which domain does it reach into?
 
-- Is this a new feature? A bug fix? A refactor?
-- What domain does it touch?
+## Look at the code itself
 
-## Investigate the Codebase
-
-Read relevant code to understand:
-- Current architecture and patterns
-- Files and modules that would be affected
-- Existing behavior that relates to the request
-- Potential constraints or risks
+The point of reading is to learn four things: the architecture and patterns in place today, which
+files and modules the request would touch, what the code already does that bears on it, and where
+constraints or risks may lie. Cover all of it:
 
 ```
 INVESTIGATE:
-├── Read entry points and key files
-├── Search for related functionality
-├── Check existing tests (if any)
-├── Look for patterns already in use
-└── Identify dependencies and coupling
+- entry points and the files that matter most: read them
+- functionality related to the request: search for it
+- existing tests, if there are any: check them
+- patterns the code already follows: look for them
+- dependencies and coupling: identify them
 ```
 
-## Analyze Options
+## Weigh the options
 
-If there are multiple approaches, compare them:
+When there is more than one way to do it, set the candidates next to each other, each with its pros,
+its cons and its complexity (Low, Med or High):
 
-| Approach | Pros | Cons | Complexity |
-|----------|------|------|------------|
-| Option A | ... | ... | Low/Med/High |
-| Option B | ... | ... | Low/Med/High |
+| Option | Pros | Cons | Complexity |
+|---|---|---|---|
+| A | … | … | Low, Med or High |
+| B | … | … | Low, Med or High |
 
 ## Report Shape
 
@@ -63,10 +60,10 @@ envelope its phase must emit; an agent with no phase returns the same sections u
 result identity defines. A caller that wraps this report in a larger contract (a phase envelope, a
 next-step field, a persistence rule) appends to this shape; it does not need to replace it.
 
-## Rules
+## Exploration Rules
 
-- Do not modify any existing code or files while exploring — exploration only investigates and reports
-- Always read real code, never guess about the codebase
-- Keep your analysis concise — the reader needs a summary, not a novel
-- If you can't find enough information, say so clearly
-- If the request is too vague to explore, say what clarification is needed
+- Exploring changes nothing: no existing code or file is modified; you investigate and you report
+- Base every claim on code you actually read; never guess what the codebase does
+- Be brief: the reader wants a summary, not a long account
+- When the information you can find is not enough, say so plainly
+- When the request is too vague to explore, name the clarification you need

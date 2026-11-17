@@ -1,122 +1,108 @@
-# OpenSpec File Convention (shared across all SDD skills)
+# Working in the openspec Store
 
-## Directory Structure
+How every SDD skill lays out, names and edits files when the artifact store is `openspec` (or the
+file half of `hybrid`).
+
+## Layout
+
+Each entry names the phase that writes it.
 
 ```
 openspec/
-├── config.yaml              <- Project-specific SDD config
-├── specs/                   <- Source of truth (main specs)
+├── config.yaml  # sdd-init: per-project SDD settings, keys below
+├── specs/  # main specs, the source of truth
 │   └── {domain}/
 │       └── spec.md
-└── changes/                 <- Active changes
-    ├── archive/             <- Completed changes (YYYY-MM-DD-{change-name}/)
-    └── {change-name}/       <- Active change folder
-        ├── state.yaml       <- DAG state (survives compaction)
-        ├── exploration.md   <- (optional) from sdd-explore
-        ├── proposal.md      <- from sdd-propose
-        ├── specs/           <- from sdd-spec
+└── changes/  # everything in flight
+    ├── archive/  # finished changes, one YYYY-MM-DD-{change-name}/ folder each
+    └── {change-name}/  # the folder of one active change
+        ├── state.yaml  # orchestrator: DAG state, on disk so a compaction loses nothing
+        ├── exploration.md  # sdd-explore, only when it saves one
+        ├── proposal.md  # sdd-propose: the proposal
+        ├── specs/  # sdd-spec: one delta per domain
         │   └── {domain}/
-        │       └── spec.md  <- Delta spec
-        ├── design.md        <- from sdd-design
-        ├── tasks.md         <- from sdd-tasks (updated by sdd-apply)
-        ├── apply-evidence/  <- Strict TDD only, from sdd-apply: {n}.md per batch, created once, never edited
-        └── verify-report.md <- from sdd-verify
+        │       └── spec.md  # the delta spec
+        ├── design.md  # sdd-design: the technical design
+        ├── tasks.md  # sdd-tasks: the task list, later ticked by sdd-apply
+        ├── apply-evidence/  # sdd-apply, Strict TDD only: {n}.md per batch
+        └── verify-report.md  # sdd-verify: the verification report
 ```
 
-## Artifact File Paths
+The tree names who writes each file; a few writes need more than a name:
 
-| Skill | Creates / Reads | Path |
-|-------|----------------|------|
-| orchestrator | Creates/Updates | `openspec/changes/{change-name}/state.yaml` |
-| sdd-init | Creates | `openspec/config.yaml`, `openspec/specs/`, `openspec/changes/`, `openspec/changes/archive/` |
-| sdd-explore | Creates (optional) | `openspec/changes/{change-name}/exploration.md` |
-| sdd-propose | Creates | `openspec/changes/{change-name}/proposal.md` |
-| sdd-spec | Creates | `openspec/changes/{change-name}/specs/{domain}/spec.md` |
-| sdd-design | Creates | `openspec/changes/{change-name}/design.md` |
-| sdd-tasks | Creates | `openspec/changes/{change-name}/tasks.md` |
-| sdd-apply | Updates | `openspec/changes/{change-name}/tasks.md` (marks `[x]`) |
-| sdd-apply | Creates (Strict TDD) | `openspec/changes/{change-name}/apply-evidence/{n}.md` (one new file per batch; never edited afterwards) |
-| sdd-verify | Creates | `openspec/changes/{change-name}/verify-report.md` |
-| sdd-archive | Moves | `openspec/changes/{change-name}/` → `openspec/changes/archive/YYYY-MM-DD-{change-name}/` |
-| sdd-archive | Updates | `openspec/specs/{domain}/spec.md` (merges deltas into main specs) |
+- The orchestrator creates `state.yaml` and keeps it current after that.
+- sdd-init creates `openspec/config.yaml` together with the folders `openspec/specs/`,
+  `openspec/changes/` and `openspec/changes/archive/`.
+- sdd-apply marks each finished task `[x]` in `tasks.md`. Under Strict TDD it also adds
+  `openspec/changes/{change-name}/apply-evidence/{n}.md`, a new file per batch that is written
+  once and never edited afterwards.
+- sdd-archive moves the whole change folder into `openspec/changes/archive/` (see "Once a change
+  is archived") and merges each delta into the main spec of its domain, `openspec/specs/{domain}/spec.md`.
 
-## Reading Artifacts
+A phase reads an artifact from the spot it was written to: the proposal, design, tasks and verify
+report inside the change folder, every domain subdirectory of the change's `specs/` for the
+deltas, `openspec/config.yaml` for the project settings, and for the main spec of a domain the
+same `spec.md` under `openspec/specs/{domain}/` that archive merges into.
 
-```
-Proposal:   openspec/changes/{change-name}/proposal.md
-Specs:      openspec/changes/{change-name}/specs/  (all domain subdirectories)
-Design:     openspec/changes/{change-name}/design.md
-Tasks:      openspec/changes/{change-name}/tasks.md
-Verify:     openspec/changes/{change-name}/verify-report.md
-Config:     openspec/config.yaml
-Main specs: openspec/specs/{domain}/spec.md
-```
+## Before writing anything
 
-## Writing Rules
+- The change folder comes first: create it before you write any artifact into it.
+- Find an artifact in place? Read it first, then update it there; never overwrite it blind.
+- A change folder that has artifacts in it is a change you are continuing, not starting over.
+- Per-phase project constraints are taken from the `rules` section of `openspec/config.yaml`.
 
-- Always create the change directory before writing artifacts
-- If a file already exists, READ it first and UPDATE it (don't overwrite blindly)
-- If the change directory already exists with artifacts, the change is being CONTINUED
-- Use `openspec/config.yaml` `rules` section for project-specific constraints per phase
+## Delta spec sections
 
-## Delta Spec Sections
+A delta spec may use any of these four headings, written exactly as shown; each one tells archive
+how to change the main spec:
 
-Delta specs MAY include these sections:
+| Heading | Effect on the main spec | What the delta has to contain |
+|---|---|---|
+| `## ADDED Requirements` | its requirements are appended | the new requirements |
+| `## MODIFIED Requirements` | the requirement with the same name is swapped out, block and all | the updated requirement in full (MUST), including each unchanged scenario that must be kept |
+| `## REMOVED Requirements` | the requirement with the same name is dropped | for each one a `(Reason: ...)` (MUST), plus a `(Migration: ...)` (SHOULD) whenever the removal affects consumers, or behavior that was persisted |
+| `## RENAMED Requirements` | only the requirement's heading or name changes, not what it requires, unless the same delta also holds a `MODIFIED` block for the renamed one | the old name and the new one, both written out (MUST) |
 
-```markdown
-## ADDED Requirements
-## MODIFIED Requirements
-## REMOVED Requirements
-## RENAMED Requirements
-```
+## `openspec/config.yaml`
 
-- `ADDED` appends new requirements to the main spec.
-- `MODIFIED` replaces the full matching requirement block in the main spec. The delta MUST contain the entire updated requirement, including unchanged scenarios that must be preserved.
-- `REMOVED` deletes the matching requirement from the main spec. Each removed requirement MUST include `(Reason: ...)` and SHOULD include `(Migration: ...)` when consumers or persisted behavior are affected.
-- `RENAMED` changes a requirement heading/name without changing behavior unless the delta also includes a `MODIFIED` block for the new requirement. Each rename MUST state old and new names explicitly.
-
-## Config File Reference
+The reference layout of the file, with example `rules` for each phase:
 
 ```yaml
-# openspec/config.yaml
 schema: spec-driven
 
-context: |
+context: |  # filled in by sdd-init from what it detected
   Tech stack: {detected}
   Architecture: {detected}
   Testing: {detected}
   Style: {detected}
 
 rules:
-  proposal:
-    - Include rollback plan for risky changes
-  specs:
-    - Use Given/When/Then for scenarios
-    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
-  design:
-    - Include sequence diagrams for complex flows
-    - Document architecture decisions with rationale
-  tasks:
-    - Group by phase, use hierarchical numbering
-    - Keep tasks completable in one session
-  apply:
+  proposal:  # applied by sdd-propose
+    - Give every risky change a rollback plan
+  specs:  # applied by sdd-spec
+    - Write scenarios as Given/When/Then
+    - State obligations with the RFC 2119 words MUST, SHALL, SHOULD and MAY
+  design:  # applied by sdd-design
+    - Add a sequence diagram for every complex flow
+    - Record each architecture decision together with its rationale
+  tasks:  # applied by sdd-tasks
+    - Group tasks by phase and number them hierarchically
+    - Size each task so that one session can finish it
+  apply:  # applied by sdd-apply
     guidelines:
-      - Follow existing code patterns
-    tdd: false           # Set to true to enable RED-GREEN-REFACTOR
+      - Stay with the code patterns the project already uses
+    tdd: false  # true switches on RED-GREEN-REFACTOR
     test_command: ""
   verify:
     test_command: ""
     build_command: ""
     coverage_threshold: 0
-  archive:
-    - Warn before merging destructive deltas
+  archive:  # applied by sdd-archive
+    - Merging a destructive delta needs a warning first
 ```
 
-## Archive Structure
+## Once a change is archived
 
-When archiving, the change folder moves to:
-```
-openspec/changes/archive/YYYY-MM-DD-{change-name}/
-```
-
-Use today's date in ISO format. The archive is an AUDIT TRAIL — never delete or modify archived changes.
+Archiving moves the change folder to `openspec/changes/archive/YYYY-MM-DD-{change-name}/`, dated
+with today's date in ISO format. What lands there is the AUDIT TRAIL: an archived change is never
+deleted and never modified.

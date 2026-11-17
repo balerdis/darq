@@ -13,10 +13,10 @@ reaches: [arquitecto-darq, darq-explorer, darq-general, darq-implementer, darq-o
 
 # Engram Convention (persistent memory)
 
-Engram is a persistent memory system that survives across sessions and compactions,
-reached through the `mem_save`, `mem_search`, `mem_context`, and the rest of the
-`mem_*` family. This protocol is mandatory and always active whenever those tools
-are present in your session — not something you activate on demand.
+Engram gives you memory that outlives both the session and any compaction. You reach it
+through the `mem_*` tools: `mem_save`, `mem_search`, `mem_context` and the rest of that
+family. Whenever those tools are in your session, everything below applies at all times. It
+is mandatory, not something you switch on when it seems useful.
 
 ## Memory Scope (who writes, and when)
 
@@ -26,8 +26,9 @@ your brief asks for one. You may still read: `mem_search`, `mem_context`,
 `mem_get_observation`. What deserves keeping goes in your reply; whoever launched you
 decides what to save.
 
-If you are the agent talking with the person, ask a launched agent's brief for any
-write you want it to make, and a durable finding in its reply is yours to save.
+The agent talking with the person works the other way round: any write it wants from an
+agent it launches has to be asked for in that agent's brief, and a durable finding that comes
+back in the reply is the launcher's own to save.
 
 ## Sub-Agent Findings (`## Key Learnings`)
 
@@ -38,7 +39,7 @@ have specific findings saved for it without ever calling a memory tool: when its
 brief asks for this, it ends its reply with a `## Key Learnings` section, and that
 section is saved automatically once the reply returns.
 
-The section, exactly:
+The exact format of that section:
 
 - Always write the heading exactly as `## Key Learnings`, on its own line. As
   compatibility forms only, engram v1.20.0's extractor (`ExtractLearnings`,
@@ -65,66 +66,59 @@ launched the sub-agent leaves its `## Key Learnings` items to that capture: it
 does not save them again and never searches memory just to confirm they landed.
 Anything else durable in the reply is still its to save.
 
-## Proactive Save Triggers (if you are the agent talking with the person)
+## When to Save (if you are the agent talking with the person)
 
-Call `mem_save` after any of these:
+Each of these events calls for a `mem_save` once it has happened:
 
-- Architecture or design decision made
-- Team convention documented or established
-- Workflow change agreed upon
-- Tool or library choice made with tradeoffs
-- Bug fix completed (include root cause)
-- Feature implemented with non-obvious approach
-- Notion/Jira/GitHub artifact created or updated with significant content
-- Configuration change or environment setup done
-- Non-obvious discovery about the codebase
-- Gotcha, edge case, or unexpected behavior found
-- Pattern established (naming, structure, convention)
-- User preference or constraint learned
+- **Decisions**: an architecture or design decision; a tool or library chosen, with its
+  tradeoffs; a change of workflow that was agreed on.
+- **Conventions**: a team convention documented or established; a pattern settled on, be it
+  naming, structure or convention.
+- **Work done**: a bug fix completed (save its root cause with it); a feature built through a
+  non-obvious approach; a Notion, Jira or GitHub artifact created or updated with significant
+  content; a configuration change or an environment set up.
+- **Things learned**: a non-obvious discovery about the codebase; a gotcha, an edge case or
+  some unexpected behavior; a preference or constraint of the user's.
 
-When nothing durable happened — a check that only confirmed, an attempt that was
-blocked, a delegation that brought back nothing new — there is nothing to save. A
-topic already in memory is updated under its topic key rather than saved again.
+If nothing durable came out of the work (a check that merely confirmed, an attempt that got
+blocked, a delegation with nothing new in it), save nothing. And if the topic is already in
+memory, update it under its existing topic key instead of saving it a second time.
 
 ## Save Format
 
-Format for `mem_save`:
+A `mem_save` call carries these fields:
 
-- **title**: Verb + what — short, searchable (e.g. "Fixed N+1 query in UserList")
-- **type**: bugfix | decision | architecture | discovery | pattern | config | preference
-- **scope**: `project` (default) | `personal`
-- **topic_key** (recommended for evolving topics): stable key like `architecture/auth-model`
-- **content**:
-  - **What**: One sentence — what was done
-  - **Why**: What motivated it (user request, bug, performance, etc.)
-  - **Where**: Files or paths affected
-  - **Learned**: Gotchas, edge cases, things that surprised you (omit if none)
+| Field | What goes in it |
+|---|---|
+| **title** | a verb plus its object, short and easy to search for, e.g. "Fixed N+1 query in UserList" |
+| **type** | one of `bugfix`, `decision`, `architecture`, `discovery`, `pattern`, `config`, `preference` |
+| **scope** | `project` by default, or `personal` |
+| **topic_key** | recommended whenever a topic will evolve: a stable key such as `architecture/auth-model` |
+| **content** | four labelled parts: **What** (one sentence on what was done), **Why** (what prompted it: a user request, a bug, performance and so on), **Where** (the files or paths affected), **Learned** (gotchas, edge cases, surprises; leave it out when there were none) |
 
 Write the title and the content in normal prose, with a space between words and every word spelled out whole. Memory search matches whole words, so a fused word like `credentialchanges` is never found by a search for `credential`. This holds however long the session has run.
 
 ## Topic Update Rules
 
-- Different topics MUST NOT overwrite each other
-- Same topic evolving → use same `topic_key` (upsert)
-- Unsure about key → call `mem_suggest_topic_key` first
-- Know exact ID to fix → use `mem_update`
+- Two different topics MUST NOT overwrite one another.
+- While one topic evolves, keep reusing its `topic_key`, so each save upserts.
+- Not sure which key fits? Ask `mem_suggest_topic_key` before saving.
+- To correct a specific observation whose ID you know, use `mem_update`.
 
-## When To Search Memory
+## Searching Memory
 
-On any variation of "remember", "recall", "what did we do", "how did we solve", or
-references to past work (in any language the user writes in):
+Whenever the user says any variation of "remember", "recall", "what did we do" or "how did
+we solve", or otherwise points at past work, in whatever language they write, look it up in
+this order:
 
-1. Call `mem_context` — checks recent session history (fast, cheap)
-2. If not found, call `mem_search` with relevant keywords
-3. If found, use `mem_get_observation` for full untruncated content
+1. `mem_context`: recent session history, fast and cheap.
+2. Nothing there? `mem_search` with keywords that fit.
+3. A hit? `mem_get_observation` returns its full, untruncated content.
 
-Also search PROACTIVELY when:
-
-- Starting work on something that might have been done before
-- User mentions a topic you have no context on
-- User's FIRST message references the project, a feature, or a problem — call
-  `mem_search` with keywords from their message to check for prior work before
-  responding
+Search on your own initiative as well: before starting work that may already have been done;
+when the user brings up a topic you have no context on; and when the user's FIRST message
+touches the project, a feature or a problem. In that last case run `mem_search` with
+keywords taken from the message, to check for earlier work before you answer.
 
 ## Session Close Protocol (if you are the agent talking with the person)
 
@@ -136,25 +130,26 @@ it". At a real close, call `mem_session_summary` with this shape:
 
 ```markdown
 ## Goal
-[What we were working on this session]
+[What this session was working on]
 
 ## Instructions
-[User preferences or constraints discovered — skip if none]
+[Preferences or constraints of the user found along the way; skip if none]
 
 ## Discoveries
 - [Technical findings, gotchas, non-obvious learnings]
 
 ## Accomplished
-- [Completed items with key details]
+- [Items completed, with their key details]
 
 ## Next Steps
-- [What remains to be done — for the next session]
+- [What is left to do, for the next session]
 
 ## Relevant Files
 - path/to/file — [what it does or what changed]
 ```
 
-This is NOT optional. If you skip it, the next session starts blind.
+Skipping this is not an option: without it, the next session begins knowing nothing of this
+one.
 
 ## After Compaction (if you are the agent talking with the person)
 
@@ -171,136 +166,120 @@ instead: no `mem_session_summary` unless its brief asks for one.
 
 ## SDD Artifact Naming Convention
 
-NOTE: Critical engram calls (`mem_search`, `mem_save`, `mem_get_observation`) are inlined directly in each skill's SKILL.md. This section is supplementary reference — sub-agents do NOT need to read it to function.
+NOTE: each skill's SKILL.md already carries the engram calls it depends on (`mem_search`, `mem_save`, `mem_get_observation`). What follows is reference material only; a sub-agent does NOT have to read it to do its work.
 
 For an SDD phase sub-agent, the `Artifact store mode` line in your launch — `engram` or `hybrid` — is the brief asking for exactly this artifact write; it is not a license to save anything else. Ad-hoc discovery saves and `mem_session_summary` stay the launching agent's job, not yours, per the Memory Scope rule above.
 
-### Naming Rules
+### How Every SDD Artifact Is Keyed
 
-ALL SDD artifacts persisted to Engram MUST follow this deterministic naming:
+Every SDD artifact persisted to Engram MUST be named the same deterministic way:
 
-```
-title:     sdd/{change-name}/{artifact-type}
-topic_key: sdd/{change-name}/{artifact-type}
-type:      architecture
-scope:     project
-capture_prompt: false
-```
+| Field | Value |
+|---|---|
+| `title` | `sdd/{change-name}/{artifact-type}` |
+| `topic_key` | `sdd/{change-name}/{artifact-type}`, identical to the title |
+| `type` | `architecture` |
+| `scope` | `project` |
+| `capture_prompt` | `false` |
 
-Set `capture_prompt: false` when the Engram tool schema supports it; if an older schema rejects or does not expose the field, omit it rather than failing.
+For SDD artifacts, `capture_prompt: false` is REQUIRED whenever the Engram tool schema
+supports the field. Engram v1.15.3 records the user's prompt by default on human or
+proactive saves, and SDD artifacts are automated pipeline output, not saves of that kind.
+Their `type` cannot tell the two apart, because human architecture decisions use
+`architecture` as well, so never infer the flag from it. On an older schema that rejects the
+field or does not expose it, leave it out rather than letting the call fail.
 
-#### Artifact Types
+### The Artifacts
 
-| Artifact Type | Produced By | Description |
-|---------------|-------------|-------------|
-| `explore` | sdd-explore | Exploration analysis |
-| `proposal` | sdd-propose | Change proposal |
-| `spec` | sdd-spec | Delta specifications (all domains concatenated) |
-| `design` | sdd-design | Technical design |
-| `tasks` | sdd-tasks | Task breakdown |
-| `apply-progress` | sdd-apply | Implementation progress (one artifact, upserted each batch; under Strict TDD it holds the TDD Evidence Ledger) |
-| `apply-evidence/{n}` | sdd-apply | Strict TDD only: batch `{n}`'s TDD Cycle Evidence (topic key `sdd/{change-name}/apply-evidence/{n}`), written once, never updated |
-| `verify-report` | sdd-verify | Verification report |
-| `archive-report` | sdd-archive | Archive closure with lineage |
-| `state` | orchestrator | DAG state for recovery after compaction |
+| Producer | `{artifact-type}` | What it holds |
+|---|---|---|
+| orchestrator | `state` | the DAG state, used to recover after a compaction |
+| sdd-explore | `explore` | the exploration analysis |
+| sdd-propose | `proposal` | the change proposal |
+| sdd-spec | `spec` | the delta specifications, every domain concatenated into one |
+| sdd-design | `design` | the technical design |
+| sdd-tasks | `tasks` | the task breakdown |
+| sdd-apply | `apply-progress` | implementation progress: one single artifact, upserted on every batch; under Strict TDD it carries the TDD Evidence Ledger |
+| sdd-apply | `apply-evidence/{n}` | Strict TDD only: the TDD Cycle Evidence of batch `{n}`, under topic key `sdd/{change-name}/apply-evidence/{n}`; written once, never updated |
+| sdd-verify | `verify-report` | the verification report |
+| sdd-archive | `archive-report` | the archive closure, lineage included |
 
-#### State Artifact
+### Saving and Updating
 
-```
-mem_save(
-  title: "sdd/{change-name}/state",
-  topic_key: "sdd/{change-name}/state",
-  type: "architecture",
-  capture_prompt: false,
-  content: "change: {change-name}\nphase: {last-phase}\nartifact_store: engram\nartifacts:\n  proposal: true\n  specs: true\n  design: false\n  tasks: false\ntasks_progress:\n  completed: []\n  pending: []\nlast_updated: {ISO date}"
-)
-```
-
-Recovery: `mem_search("sdd/{change-name}/state")` → `mem_get_observation(id)` → parse YAML → restore state.
-
-### Recovery Protocol (2 steps)
-
-Memory lifecycle rule (when Engram exposes lifecycle metadata/tooling):
-- At session start or before architecture-sensitive work, call `mem_review` with action `list` for the current project when the tool is available.
-- If `mem_review` is unavailable, do not fail the task. Continue with normal `mem_context`/`mem_search`, and still apply lifecycle metadata from any returned observations when present.
-- `active` memories may be used normally.
-- `needs_review` memories are stale context, not trusted facts.
-- Surface `needs_review` context and verify it against current evidence before relying on it.
-- Do NOT call `mem_review` with action `mark_reviewed` automatically. Only call `mark_reviewed` after explicit user confirmation or through a dedicated memory maintenance command.
+An ordinary write is a single call of this form:
 
 ```
-Step 1: mem_search(query: "sdd/{change-name}/{artifact-type}") → truncated preview + ID
-Step 2: mem_get_observation(id: {observation-id}) → complete content
+mem_save(title: "sdd/{change-name}/{artifact-type}", topic_key: "sdd/{change-name}/{artifact-type}", type: "architecture", capture_prompt: false, content: "{full markdown content}")
 ```
 
-When retrieving multiple artifacts, group all searches first, then all retrievals:
+Saving the proposal of a change called `add-dark-mode`, for instance, reads
+`mem_save(title: "sdd/add-dark-mode/proposal", topic_key: "sdd/add-dark-mode/proposal", type: "architecture", project: "my-app", capture_prompt: false, content: "## Proposal\n\nAdd dark mode toggle...")`.
 
-```
-STEP A — SEARCH (get IDs only):
-  mem_search(query: "sdd/{change-name}/proposal", ...) → save ID
-  mem_search(query: "sdd/{change-name}/spec", ...) → save ID
-  mem_search(query: "sdd/{change-name}/design", ...) → save ID
+The `state` artifact uses the same call with `title` and `topic_key` both set to
+`sdd/{change-name}/state`, `type: "architecture"` and `capture_prompt: false`. Its `content`
+is YAML of this shape:
 
-STEP B — RETRIEVE FULL CONTENT (mandatory):
-  mem_get_observation(id: {proposal_id})
-  mem_get_observation(id: {spec_id})
-  mem_get_observation(id: {design_id})
-```
-
-Loading project context:
-```
-mem_search(query: "sdd-init/{project}") → get ID
-mem_get_observation(id) → full project context
-```
-
-### Writing SDD Artifacts
-
-Standard write:
-```
-mem_save(
-  title: "sdd/{change-name}/{artifact-type}",
-  topic_key: "sdd/{change-name}/{artifact-type}",
-  type: "architecture",
-  capture_prompt: false,
-  content: "{full markdown content}"
-)
+```yaml
+change: {change-name}
+phase: {last-phase}
+artifact_store: engram
+artifacts:
+  proposal: true
+  specs: true
+  design: false
+  tasks: false
+tasks_progress:
+  completed: []
+  pending: []
+last_updated: {ISO date}
 ```
 
-Concrete example — saving a proposal for `add-dark-mode`:
-```
-mem_save(
-  title: "sdd/add-dark-mode/proposal",
-  topic_key: "sdd/add-dark-mode/proposal",
-  type: "architecture",
-  project: "my-app",
-  capture_prompt: false,
-  content: "## Proposal\n\nAdd dark mode toggle..."
-)
-```
+To bring that state back: `mem_search("sdd/{change-name}/state")`, then
+`mem_get_observation(id)`, then parse the YAML and restore the state from it.
 
-`capture_prompt: false` is REQUIRED for SDD artifacts when the Engram tool schema supports it. Engram v1.15.3 captures user prompts by default for human/proactive saves, but SDD artifacts are automated pipeline outputs. Do not infer this from `type` because both SDD artifacts and human architecture decisions use `architecture`. If an older schema rejects or does not expose `capture_prompt`, omit it rather than failing.
+To replace an artifact whose observation ID you hold, call
+`mem_update(id: {observation-id}, content: "{updated full content}")`. The rule of thumb:
+the exact ID in hand means `mem_update`; otherwise upsert, with `mem_save` under the same
+`topic_key`.
 
-Update existing artifact (when you have the observation ID):
-```
-mem_update(id: {observation-id}, content: "{updated full content}")
-```
+### Finding and Reading Artifacts
 
-Use `mem_update` when you have the exact ID. Use `mem_save` with same `topic_key` for upserts.
+A search only ever returns a truncated preview plus the observation ID, so reading an
+artifact always takes two calls:
 
-#### Browsing All Artifacts for a Change
+1. `mem_search(query: "sdd/{change-name}/{artifact-type}")` for the ID;
+2. `mem_get_observation(id: {observation-id})` for the complete content.
 
-```
-mem_search(query: "sdd/{change-name}/")
-→ Returns all artifacts for that change
-```
+Needing several artifacts, run every search first and keep only the IDs (say
+`mem_search(query: "sdd/{change-name}/proposal", ...)`, then the same for `spec` and
+`design`). Only then fetch each one in full, e.g. `mem_get_observation(id: {proposal_id})`,
+`mem_get_observation(id: {spec_id})`, `mem_get_observation(id: {design_id})`. That second,
+full-content pass is mandatory.
+
+`mem_search(query: "sdd/{change-name}/")` lists every artifact of one change. The project
+context comes back through `mem_search(query: "sdd-init/{project}")` for its ID, and then
+`mem_get_observation(id)` for the whole of it.
+
+### Stale Memories
+
+Where Engram exposes lifecycle metadata or tooling:
+
+- At the start of a session, and before architecture-sensitive work, list the current
+  project's memories with `mem_review` (action `list`), if that tool is available.
+- If it is not, the task carries on regardless: use `mem_context`/`mem_search` as usual, and
+  still honor lifecycle metadata on any observation that comes back with it.
+- An `active` memory can be used as usual. A `needs_review` memory is stale context, not a
+  trusted fact: bring it up, and check it against current evidence before you lean on it.
+- Never mark anything reviewed on your own. `mem_review` with action `mark_reviewed` runs
+  only after the user has explicitly confirmed it, or inside a dedicated memory maintenance
+  command.
 
 ### Project Name Resolution (engram v1.11.0+)
 
-**Do not pass `project`. Engram already knows.** It resolves the project once, at
-MCP startup, from the git remote of the tree it was started in, and every call
-without the argument lands there. The `--project` flag and the `ENGRAM_PROJECT`
-env var override that resolution; all names are normalized to lowercase and
-trimmed.
+**Leave `project` out: engram already knows it.** At MCP startup it works the project out a
+single time, from the git remote of the tree it was launched in, and every call that omits
+the argument lands there. The `--project` flag and the `ENGRAM_PROJECT` environment variable
+can override that choice, and every name, however it arrives, is lowercased and trimmed.
 
 Pass the argument only to reach a project other than the current one, and only
 when you know that project already exists — `mem_save` refuses a name it does
@@ -316,18 +295,24 @@ the git remote. The same checkout is `home-serg-work-thing` to one and
 `thing-api` to the other, and neither can resolve the other's spelling. Never
 carry a name across from a tool that just handed you one.
 
-If a memory is saved under a name that does not match existing observations,
-engram warns about potential name drift. Use `mem_merge_projects` (MCP tool) or
-`engram projects consolidate` (CLI) to merge variants.
+Saving under a name that matches none of the existing observations makes engram warn of
+possible name drift. Variants are merged with the `mem_merge_projects` MCP tool, or with
+`engram projects consolidate` on the command line.
 
 ### Upsert Behavior
 
-Same `topic_key` + `project` + `scope` → UPDATE (overwrite), not INSERT. Previous content is lost — `revision_count` increments but old content is NOT saved. This is by design — engram is working memory, not an audit trail. For iteration history or team collaboration, use `openspec` or `hybrid` mode. The Strict TDD evidence records are the exception by construction: each batch saves under a new key (`sdd/{change-name}/apply-evidence/{n}`), so nothing is overwritten and no earlier record is ever saved again.
+A save that matches an existing observation on `topic_key`, `project` and `scope` together
+UPDATEs it in place, an overwrite and never an INSERT. The earlier content is gone:
+`revision_count` goes up, but the old text is NOT kept. That is deliberate, since engram is
+working memory rather than an audit trail; iteration history or team collaboration call for
+`openspec` or `hybrid` mode instead. The Strict TDD evidence records are the exception by
+construction: each batch saves under a new key (`sdd/{change-name}/apply-evidence/{n}`), so
+nothing is overwritten and no earlier record is ever saved again.
 
-### Why This Convention
+### Why It Is Built This Way
 
-- Deterministic titles → recovery works by exact match
-- `topic_key` → enables upserts without duplicates
-- `sdd/` prefix → namespaces all SDD artifacts
-- Two-step recovery → search previews are always truncated; `mem_get_observation` is the only way to get full content
-- Lineage → archive-report includes all observation IDs for complete traceability
+Titles are deterministic so that recovery can match them exactly. The `topic_key` is what
+lets upserts happen without duplicates. The `sdd/` prefix gives every SDD artifact a
+namespace of its own. Recovery takes two steps because search previews are always truncated,
+and `mem_get_observation` is the only route to the full content. Finally, the archive-report
+lists every observation ID involved, which keeps the lineage completely traceable.

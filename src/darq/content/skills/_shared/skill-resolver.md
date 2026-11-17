@@ -1,73 +1,82 @@
-# Skill Resolver — Universal Protocol
+# Skills for Delegated Work
 
-Any agent that **delegates work to sub-agents** MUST use this protocol to resolve relevant skills and pass them safely.
+This protocol binds (MUST) whoever delegates: it is how a delegating agent works out which of the
+project's skills a sub-agent's job needs, and how it gets them to the sub-agent without loss.
 
-## Why This Exists
+The reason: a freshly launched sub-agent has no idea which of the project's skills exist. Its remedy is the
+registry, a cheap catalogue of them for the delegator, and using it never requires anyone to rewrite or
+summarize a skill.
 
-Sub-agents start with no project skill context. The registry gives delegators a cheap index of available skills without rewriting or summarizing those skills.
+Apply it ahead of each launch whose job touches the artifacts of the project in any way: to read them, write,
+review or test them, document them, or create them. Only a command that is mechanical through and
+through goes without.
 
-## When to Apply
+## 1. Locate the registry
 
-Before every sub-agent launch that involves reading, writing, reviewing, testing, documenting, or creating project artifacts. Skip only for purely mechanical commands.
+**Index, not rulebook**: per skill, the registry holds a name, its triggers, its scope and the exact
+location of its `SKILL.md`, and no compacted rules at all. Stop at the first of these that answers:
 
-## The Protocol
+1. a copy cached earlier in this session;
+2. Engram: `mem_search(query: "skill-registry")`, then `mem_get_observation(id)` on the hit to read
+   all of it;
+3. the file `.atl/skill-registry.md` at the root of the project. When creating `.atl/` in a git
+   repository falls to you, list `.atl/` in `.git/info/exclude` (never in `.gitignore`), except when
+   a line already ignores it;
+4. none of them: carry on without the project's skills, and warn that the user needs to run
+   `external registry refresh`.
 
-### Step 1: Obtain the Skill Registry
+## 2. Choose
 
-The registry is an **index** of skill names, triggers, scopes, and exact `SKILL.md` paths. It is not a compact-rules bundle.
+Compare each registry entry's trigger or description with two aspects of the job:
 
-Resolution order:
-1. Use the session cache if present.
-2. `mem_search(query: "skill-registry")` → `mem_get_observation(id)` for full content.
-3. Fallback: read `.atl/skill-registry.md` from the project root.
-   When you create `.atl/` in a git repository, add `.atl/` to `.git/info/exclude` (never `.gitignore`) unless a line already ignores it.
-4. No registry found → proceed without project skills and warn the user to run `external registry refresh`.
+| Aspect | A match names |
+|---|---|
+| Code and files | the framework, language or tool in play, or the paths involved |
+| Task and action | the kind of work, with actions such as tests, docs, a PR, Jira, a release, comments or a review |
 
-### Step 2: Match Relevant Skills
+Send the fewest skills that still help. Above five matches, cut down to the top five by relevance,
+and when ranking them, the code side beats the context of the task.
 
-Match on two dimensions:
+## 3. Send paths
 
-| Context | Match against |
-| --- | --- |
-| Code/files | Registry trigger/description mentions the language, framework, tool, or path context |
-| Task/action | Registry trigger/description mentions actions like PR, review, docs, tests, Jira, comments, release |
-
-Prefer the smallest useful set. If more than five skills match, keep the five most relevant and prioritize code context over task context.
-
-### Step 3: Pass Skill Paths
-
-Inject paths, not summaries:
+Paths go to the sub-agent; summaries never do. Its launch prompt carries a block shaped like this one.
 
 ```markdown
 ## Skills to load before work
 
-Read these exact files before reading, writing, reviewing, testing, or creating artifacts:
+Every file below comes first: do not read, write, review, test or create an artifact until you have read them.
 
-- /absolute/path/to/skills/go-testing/SKILL.md
-- /absolute/path/to/skills/typescript/SKILL.md
+- /absolute/path/to/skills/react-19/SKILL.md
+- (one line per selected skill)
 ```
 
-The sub-agent MUST read those files before task-specific work. `SKILL.md` is the runtime contract and source of truth.
+Reading the listed files comes first, ahead of anything specific to the task, and is a MUST for the
+sub-agent: `SKILL.md` itself is what it runs under, and the authority on what the skill says.
 
-### Step 4: Report Resolution
+## 4. Ask how it went
 
-Sub-agents MUST report `skill_resolution`:
+`skill_resolution` is a MUST in every sub-agent's report, with one of four values:
 
-- `paths-injected` — received exact skill paths from the delegator and loaded them.
-- `fallback-registry` — no paths received, self-loaded paths from the registry.
-- `fallback-path` — loaded an explicit fallback path outside the registry.
-- `none` — no skills loaded.
+| Value | Meaning |
+|---|---|
+| `paths-injected` | the delegating agent sent the precise skill paths, and they were loaded |
+| `fallback-registry` | nothing was sent, so the sub-agent looked registry paths up by itself |
+| `fallback-path` | a fallback path given explicitly, not one in the registry, was loaded |
+| `none` | no skill was loaded |
 
-If a sub-agent reports anything other than `paths-injected`, the orchestrator MUST re-read the registry before the next delegation.
+Any value besides `paths-injected` obliges the orchestrator to go back over the registry, re-reading
+it before it delegates again.
 
-## Compaction Safety
+## Surviving compaction
 
-- The registry persists in Engram and `.atl/skill-registry.md`.
-- Delegators can recover selected paths after compaction by re-reading the registry.
-- Sub-agents receive exact files to read, so skill meaning is not degraded by generated summaries.
+`.atl/skill-registry.md` and Engram both keep the registry, so after a compaction a delegator
+recovers the paths it chose by consulting it once more. Since sub-agents get the precise files rather
+than generated digests, nothing a skill means is lost along the way.
 
-## Integration Points
+## Where it is applied
 
-- **ATL Orchestrator**: resolves paths for all SDD and non-SDD delegations.
-- **judgment-day**: resolves paths before Judge A, Judge B, and Fix Agent.
-- **pr-review and future delegators**: use this protocol when launching sub-agents.
+| Delegator | Applies it |
+|---|---|
+| ATL Orchestrator | to every delegation, SDD or not |
+| judgment-day | ahead of Judge A, Judge B and the Fix Agent |
+| pr-review, and any delegator added later | whenever it starts sub-agents |

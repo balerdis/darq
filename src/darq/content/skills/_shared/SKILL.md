@@ -5,18 +5,16 @@ disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
-## Purpose
+## What lives here
 
-This directory stores shared reference documents consumed by real SDD skills
-(for example: `_shared/sdd-phase-common.md`, `_shared/persistence-contract.md`).
+Reference files the SDD skills read while they run, `_shared/sdd-phase-common.md` and
+`_shared/persistence-contract.md` among them. One of them, `_shared/sdd-session-preflight.md`,
+is where SDD Session Preflight is defined: each SDD command insists on it, yet no command spells
+it out itself.
 
-`_shared/sdd-session-preflight.md` is the canonical definition of SDD Session
-Preflight, which every SDD command asserts but none defines.
+## Never load as a skill
 
-## Not Invokable
-
-`_shared` is a support package only. Do not invoke it as a skill.
+This folder only supports other skills. Nothing should invoke `_shared` as one.

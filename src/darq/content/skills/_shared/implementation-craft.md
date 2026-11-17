@@ -17,11 +17,11 @@ implement.
 
 ## Read Before You Write
 
-Before writing any code:
-1. Read the specs — understand WHAT the code must do
-2. Read the design — understand HOW to structure the code
-3. Read existing code in affected files — understand current patterns
-4. Check the project's coding conventions
+Write no code until you have read, in this order:
+1. The specs, which say WHAT the code has to do
+2. The design, which says HOW that code is to be structured
+3. The code already in the files you will touch, for the patterns it follows today
+4. The coding conventions of the project
 
 ## Test-Driven Discipline
 
@@ -45,7 +45,7 @@ its gate result, never FAILED.
 ### Strict TDD Hard Gate (when Strict TDD Mode is active)
 
 - You MUST produce a **TDD Cycle Evidence** table in your return summary and in the batch's evidence record
-- Each task row MUST have: RED (test written first) → GREEN (implementation passes) → REFACTOR columns
+- Every task row MUST fill three columns in order: RED (the test, written first) → GREEN (the implementation, passing it) → REFACTOR
 - If you complete a task WITHOUT writing tests first, mark it as FAILED in the evidence table
 - Verification WILL reject the work if the TDD Evidence table is missing or incomplete
 - The table is saved once per batch as its own evidence record (`apply-evidence/{n}`), never rewritten; `sdd-apply/SKILL.md` Step 6 owns where it goes
@@ -58,11 +58,11 @@ quietly switch to standard mode.
 Every assigned work unit, including standard mode, MUST produce a **Work Unit Evidence** table
 before its tasks are marked complete:
 
-| Evidence | Required value |
+| Row | What it has to show |
 |---|---|
-| Focused test command and exact result | Smallest command proving this unit; command, exit/result, and relevant counts |
-| Runtime harness command/scenario and exact result | Real integration/runtime path; explicit `N/A` only when no runtime boundary exists, with reason |
-| Rollback boundary | Exact files/behavior that can be reverted without removing unrelated work |
+| The focused test: its command and exact result | the smallest command that proves this unit, with the command itself, its exit/result and the counts that matter |
+| The runtime harness: its command/scenario and exact result | the real integration/runtime path; `N/A` is acceptable only when there is no runtime boundary at all, written out explicitly with the reason |
+| The rollback boundary | exactly which files/behavior can be reverted while every piece of unrelated work stays in place |
 
 If design/tasks contain applicable threat-matrix cases, write and run each mapped RED test before
 the corresponding production change even in standard mode. Preserve Strict TDD's full
@@ -71,16 +71,15 @@ mark the work unit complete if focused tests or an applicable runtime harness fa
 
 ### Standard Task Loop (when Strict TDD Mode is NOT active)
 
-```
-FOR EACH TASK:
-├── Read the task description
-├── Read relevant spec scenarios (these are your acceptance criteria)
-├── Read the design decisions (these constrain your approach)
-├── Read existing code patterns (match the project's style)
-├── Write the code
-├── Mark the task as complete immediately
-└── Note any issues or deviations
-```
+Take the tasks one at a time, and for each:
+
+1. Read what the task says.
+2. Read the spec scenarios it relates to; they are its acceptance criteria.
+3. Read the design decisions, which limit how you may solve it.
+4. Read how the surrounding code is written, and write yours the same way.
+5. Write the code.
+6. Mark the task complete as soon as it is done.
+7. Write down any problem you hit or any deviation you made.
 
 ## Keeping a Diff Reviewable
 
@@ -93,14 +92,14 @@ FOR EACH TASK:
      `feature-branch-chain`) for branch targeting.
   2. **Exception**: continue only if it is explicit that the maintainer accepts the size exception.
 - Chain strategies:
-  - `stacked-to-main`: each PR targets the previous PR's branch (or `main` after the previous merges).
+  - `stacked-to-main`: a PR targets the branch of the PR before it, or `main` once that one has merged.
   - `feature-branch-chain`: PR #1 targets the feature/tracker branch; later PRs target the immediate
     previous PR branch. The tracker PR aggregates the feature branch to `main`; child PR diffs must
     stay focused on only the current work unit and must never target `main` directly.
 - If neither a delivery decision nor a chain strategy is available, stop before writing code and ask
   which chain strategy to use rather than guessing.
 
-## Rules
+## Implementation Rules
 
 - Always read specs before implementing — specs are your acceptance criteria
 - Always follow the design decisions — don't freelance a different approach

@@ -8,9 +8,10 @@ scenarios were never exercised at all. The report was true about the labels
 and false about the work, and it cost two full re-implementation rounds
 before the gap was caught.
 
-`verification-craft.md` already says "Execute relevant tests; static analysis
-alone is never verification," but it says nothing about what to do when the
-same execution is reported under several names. This module pins the fix: a
+`verification-craft.md` already says "Reading or statically analysing the
+code, however carefully, is never verification on its own," but it says
+nothing about what to do when the same execution is reported under several
+names. This module pins the fix: a
 sentence naming the general failure (identical runs under different labels
 are one run), and, separately, the imperative telling a verifier what to do
 about it (resolve each claimed group to what it actually ran, not to its

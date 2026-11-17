@@ -1,27 +1,50 @@
-# SDD Status and Instructions Contract
+# Change Status Contract
 
-Shared OpenSpec-style contract for SDD commands and phase skills. Use this before acting on a change so orchestration does not guess state, paths, or edit scope.
+Before an SDD command or phase skill acts on a change, the change's state is written down as
+structured status, so that orchestration never has to guess the state, the paths or the edit scope.
+The SDD commands and the phase skills share this contract, written in the OpenSpec style.
 
-## Purpose
+## When status is required
 
-Commands that select, continue, apply, verify, or archive an SDD change MUST first produce or consume structured status. The status is the handoff between orchestrator and phase executor.
+A command that selects, continues, applies, verifies or archives an SDD change MUST, before anything
+else, produce structured status or consume status already produced. That status is what passes
+from the orchestrator to the executor of the phase.
 
-## Change Selection
+Before it launches an executor or does any archive work, every command that acts on a change MUST show:
 
-- If a change name is provided, use that exact change after confirming it exists in the selected artifact store.
-- If no change name is provided, infer only when the active change is unambiguous from session state or there is exactly one active change.
-- If multiple active changes match or the active change is unclear, ask the user to choose. Do not guess.
-- If no active changes exist, report that no SDD change is active and suggest `/sdd-new <change>`.
+- which change is active, and how that was decided;
+- the status of each artifact, and the paths or topics used as context;
+- task progress, plus the list of unchecked tasks whenever tasks exist;
+- the next recommended action;
+- `blockedReasons` whenever `nextRecommended` is anything but `verify`, together with any blocker on
+  the edit roots.
 
-## Native Engine
+## Which change
 
-When local native review is disabled, do NOT invoke or trust `legacy upstream dispatcher` or `legacy upstream dispatcher`. Build the status schema manually from the selected artifact backend: OpenSpec files for `openspec`, Engram topics for `engram`, and both selected stores for `hybrid`.
+1. A change name was given: use exactly that change, once you have confirmed it exists in whichever
+   artifact store was selected.
+2. No name was given: infer one only if session state leaves no doubt about the active change, or if
+   exactly one change is active.
+3. More than one active change fits, or which one is active is unclear: let the user pick. Never
+   guess.
+4. Nothing is active: say there is no active SDD change, with `/sdd-new <change>` as the suggestion.
 
-For archive routing, require completed persisted tasks, completed apply-progress, a current passing fresh-context `sdd-verify` report, and no unresolved implementation/test blocker. Local archive routing does not require native review receipts, ledgers, bundles, contexts, states, or gates. A complete artifact set with a missing terminal receipt routes to `archive`, not `resolve-review`.
+## Building status by hand
 
-## Status Schema
+When local native review is disabled, do NOT invoke or trust a status dispatcher left behind by an
+earlier installation. Assemble the status schema yourself from the artifact backend the
+session selected: the OpenSpec files under `openspec`, the Engram topics under `engram`, and both
+selected stores under `hybrid`.
 
-Return status as markdown with these fields, or as equivalent JSON when the host supports it:
+Routing to archive takes four things: completed persisted tasks, completed apply-progress, a current
+passing fresh-context `sdd-verify` report, and no unresolved implementation or test blocker. Local
+archive routing needs no native review receipt, ledger, bundle, context, state or gate. A complete artifact set
+whose terminal receipt is missing routes to `archive`, not to `resolve-review`.
+
+## The schema
+
+Status is markdown that carries the fields below; a host that supports JSON may get the same fields
+as JSON instead.
 
 ```yaml
 schemaName: DARQ baseline.sdd-status
@@ -86,36 +109,42 @@ nextRecommended: propose | spec | design | tasks | apply | verify | archive | sd
 blockedReasons: []
 ```
 
-`phaseInstructions` is optional and appears only when instructions are requested. It carries execution-phase keys (`apply`, `verify`, `archive`); planning-phase instructions (`propose`, `spec`, `design`, `tasks`) are surfaced in dispatcher markdown. Empty path fields MUST be arrays, not null. `changeName` and `changeRoot` are nullable; all other non-optional sections should be present in fallback output so consumers can parse native and manual status the same way.
+- Optional: `phaseInstructions`, which only appears if instructions were requested. It holds the
+  keys of the execution phases, `apply`, `verify` and `archive`; the planning phases' instructions, for
+  `propose`, `spec`, `design` and `tasks`, are carried by markdown from the dispatcher instead.
+- An empty path field MUST be an array, never null.
+- `changeRoot` and `changeName` may be null. Every other section that is not optional should still
+  be there in output built as a fallback, so that consumers read status built natively and status
+  built by hand the same way.
 
-## Apply State
+## What `applyState` means
 
-- `blocked`: Required apply artifacts are missing, task selection is ambiguous, or action context makes edits unsafe.
-- `all_done`: Tasks artifact exists and every implementation task is checked `[x]`.
-- `ready`: Tasks artifact exists, at least one implementation task remains unchecked, and edit scope is safe.
+| Value | When |
+|---|---|
+| `blocked` | the artifacts apply needs are missing, it is ambiguous which tasks to take, or editing is unsafe given the action context |
+| `all_done` | there is a tasks artifact, and all of its implementation tasks are checked `[x]` |
+| `ready` | there is a tasks artifact with one or more implementation tasks still unchecked, and it is safe to edit within the scope |
 
-## Dependency States
+## What `dependencies` means
 
-- `proposal`, `specs`, `design`, and `tasks` report whether prerequisite artifacts are blocked, ready, or all done.
-- `apply` is `ready` only when specs, design, and tasks are available and task progress is not all done.
-- `verify` is `ready` only after every task is complete. Verification evaluates requirements, tests, and change impact; it does not require a review transaction, receipt, or ledger.
-- Failed verification routes back to the relevant implementation work. A fresh `sdd-verify` is the only normal verification authority.
-- `archive` is `ready` only when there are completed persisted tasks, completed apply-progress, a current passing fresh-context `sdd-verify` report, and no unresolved implementation or test blocker. No native review artifacts or review gates are required.
+- For `proposal`, `specs`, `design` and `tasks`, the value says which of blocked, ready and all done
+  applies, given the artifacts each one depends on.
+- `apply` can be `ready` only while specs, design and tasks are on hand and the tasks are not all
+  done.
+- `verify` can be `ready` only after every task is complete. Verification judges requirements, tests
+  and the impact of the change, and needs no review transaction, receipt or ledger to do it. A
+  failed verification sends the work back to the implementation it concerns, and a fresh
+  `sdd-verify` is the only normal verification authority.
+- `archive` can be `ready` only with completed persisted tasks, completed apply-progress, a current
+  passing fresh-context `sdd-verify` report and no unresolved implementation or test blocker. No
+  native review artifact and no review gate is required for it.
 
-## Action Context Guard
+## Edit scope
 
-The orchestrator MUST carry `actionContext` into any phase launch.
+`actionContext` goes into every phase launch; carrying it there is a MUST for the orchestrator.
 
-- If manually reconstructed context cannot prove edit ownership or allowed edit roots, stop before editing.
-- If `allowedEditRoots` is present, only edit files within those roots.
-- If a command cannot prove a file is inside the authoritative workspace or allowed edit roots, stop and ask for clarification.
-
-## Status Output
-
-Every command that acts on a change MUST show status before launching an executor or performing archive work:
-
-- Active change selection and how it was resolved.
-- Artifact statuses and paths/topics used as context.
-- Task progress and unchecked task list when tasks exist.
-- Next recommended action.
-- `blockedReasons` when `nextRecommended` is not `verify`, plus any edit-root blockers.
+- Context rebuilt by hand that fails to prove who owns the edits, or which edit roots are allowed,
+  means: do not edit at all.
+- With `allowedEditRoots` present, nothing outside those roots is edited.
+- A command unable to prove that a file lies within the authoritative workspace, or within the
+  allowed edit roots, halts and asks the user to clarify.

@@ -1,116 +1,97 @@
-# SDD Phase — Common Protocol
+# What Every SDD Phase Shares
 
-Boilerplate identical across all SDD phase skills. Sub-agents MUST load this alongside their phase-specific SKILL.md.
+The protocol the SDD phase skills have in common. Every phase sub-agent MUST load it together with the `SKILL.md` of its own phase.
 
-Executor boundary: every SDD phase agent is an EXECUTOR, not an orchestrator. Do the phase work yourself by default, and do NOT bounce work back unless the phase skill explicitly says to stop and report a blocker. You may never hand the whole phase to another agent — that is a hand-off, not delegation, and this boundary forbids it outright. When your own work divides into genuinely independent parts, read `_shared/sub-delegation-criterion.md` (resolved against the skills root, per Section F below) before fanning any of it out to `darq-general` — today the only target your own descriptor permits; the criterion file owns the criterion, the fan-out shape, and the merge rule for any agent applying it, not just this one. If that reference is missing or unreadable, do the work yourself sequentially and say so in your report — an unreadable criterion blocks delegation, never the phase.
+Who does the work: whoever runs an SDD phase EXECUTES it and never orchestrates. Unless told otherwise the phase's work is yours to do, and you hand work back only when your phase skill says, in so many words, to halt with a blocker report. Giving the whole phase to another agent is a hand-off, not delegation, and is forbidden outright. When your own work divides into genuinely independent parts, read `_shared/sub-delegation-criterion.md` (resolved against the skills root, per Section F below) before you fan any of it out to `darq-general`, which is today the only target your own descriptor permits; that file owns the criterion, the shape of the fan-out and the merge rule, for every agent that applies it and not only for this one. If it is missing or unreadable, work through the parts yourself one after another and say so in your report: an unreadable criterion stops delegation, never the phase.
 
 ## A. Skill Loading
 
-1. Check if the orchestrator injected a `## Skills to load before work` block in your launch prompt. If yes, read those exact `SKILL.md` files before task-specific work.
-2. If no skills block was provided, check for `SKILL: Load` instructions. If present, load those exact skill files.
-3. If neither was provided, search for the skill registry as a fallback:
-   a. `mem_search(query: "skill-registry")` — if found, `mem_get_observation(id)` for full content
-   b. Fallback: read `.atl/skill-registry.md` from the project root if it exists
-   c. From the registry's skills index, match triggers to your task and read the exact listed `SKILL.md` paths.
-4. If no registry exists, proceed with your phase skill only.
+Use the first of these sources that is there:
 
-NOTE: the preferred path is (1) — exact skill paths selected by the orchestrator. Paths (2) and (3) are fallbacks. Searching the registry is SKILL LOADING, not delegation. If `## Skills to load before work` is present, IGNORE redundant `SKILL: Load` instructions.
+1. In the prompt that launched you, the orchestrator's `## Skills to load before work` block. Read precisely the `SKILL.md` files it lists before you start on the task itself. This source wins: while it is present, IGNORE every `SKILL: Load` instruction that repeats it.
+2. A `SKILL: Load` instruction: load precisely the skill files it names.
+3. The skill registry, looked up with `mem_search(query: "skill-registry")` and read whole through `mem_get_observation(id)` on the hit, or else the `.atl/skill-registry.md` file at the root of the project when one exists. Hold the triggers of its index against what you were asked to do, and for each match read the `SKILL.md` it lists, path exactly as written.
+4. Nothing at all: go ahead with only your phase skill.
+
+Source 1 is the preferred route; 2 and 3 stand in when it is absent. A registry lookup is SKILL LOADING; it is not delegation.
 
 ## B. Artifact Retrieval (Engram Mode)
 
-**CRITICAL**: `mem_search` returns 300-char PREVIEWS, not full content. You MUST call `mem_get_observation(id)` for EVERY artifact. **Skipping this produces wrong output.**
+What `mem_search` hands back is a 300-char PREVIEW, never the whole artifact, so you MUST call `mem_get_observation(id)` for EVERY artifact: **build on a preview and the output is wrong.** Run two parallel rounds instead of a sequence of single calls:
 
-**Run all searches in parallel** — do NOT search sequentially.
+1. All searches together, noting each ID: `mem_search(query: "sdd/{change-name}/{artifact-type}")`.
+2. All retrievals together, for the complete content (REQUIRED): `mem_get_observation(id: {saved_id})`.
 
-```
-mem_search(query: "sdd/{change-name}/{artifact-type}") → save ID
-```
-
-Then **run all retrievals in parallel**:
-
-```
-mem_get_observation(id: {saved_id}) → full content (REQUIRED)
-```
-
-Do NOT use search previews as source material.
+Nothing you produce may rest on a preview.
 
 ## C. Artifact Persistence
 
-Every phase that produces an artifact MUST persist it. Skipping this BREAKS the pipeline — downstream phases will not find your output. This is the one memory write your launch brief asks for, per the ambient memory-scope rule: the `Artifact store mode` your launch passed is that ask, and it covers your own artifact only — not a session summary, not a free-standing discovery.
+Persisting the artifact your phase produced is a MUST. Leave it out and the pipeline BREAKS, because the phases downstream will look for it in vain. This is the one memory write your launch brief asks for, per the ambient memory-scope rule: the `Artifact store mode` your launch passed is that request, and it reaches your own artifact only, never a session summary or a discovery saved on its own.
 
-### Engram mode
+| Mode | Your step |
+|---|---|
+| `engram` | the `mem_save` call below |
+| `openspec` | none: the main step of the phase already wrote the file |
+| `hybrid` | both: the file on disk AND the `mem_save` call below |
+| `none` | inline result only, no file written, no `mem_save` |
 
 ```
-mem_save(
-  title: "sdd/{change-name}/{artifact-type}",
-  topic_key: "sdd/{change-name}/{artifact-type}",
-  type: "architecture",
-  capture_prompt: false,
-  content: "{your full artifact markdown}"
-)
+mem_save(title: "sdd/{change-name}/{artifact-type}", topic_key: "sdd/{change-name}/{artifact-type}", type: "architecture", capture_prompt: false, content: "{your full artifact markdown}")
 ```
 
-`topic_key` enables upserts — saving again updates, not duplicates. The exception is the Strict TDD evidence record `sdd/{change-name}/apply-evidence/{n}`: one new key per apply batch, written once and never saved again.
-`capture_prompt: false` is mandatory for SDD artifacts because they are automated pipeline outputs, not human/proactive memory saves. Set it when the Engram tool schema supports it; if an older schema rejects or does not expose the field, omit it rather than failing.
-
-### OpenSpec mode
-
-File was already written during the phase's main step. No additional action needed.
-
-### Hybrid mode
-
-Do BOTH: write the file to the filesystem AND call `mem_save` as above.
-
-### None mode
-
-Return result inline only. Do not write any files or call `mem_save`.
+Because of `topic_key`, saving a second time updates the observation rather than adding a duplicate. One exception: the Strict TDD evidence record `sdd/{change-name}/apply-evidence/{n}`, where each apply batch takes a fresh key, writes it once and never saves to it again. An SDD artifact is pipeline output made by a machine, not a memory a person or a proactive save creates, hence the flag is required. When the schema of the Engram tool offers it, include `capture_prompt: false`; when the schema is older and refuses the field or lacks it, drop it instead of failing.
 
 ## D. Return Envelope
 
-> **CRITICAL — Response ordering**: Your FINAL output MUST be text (the return envelope), NOT a tool call. If you need to save to Engram (`mem_save`), do it BEFORE your final text response. Do NOT call `mem_session_summary` — that's for top-level agents only. **Why**: When a sub-agent's last action is a tool call, the parent agent receives only the tool result — your text response (the actual analysis) is lost.
+> **CRITICAL: text comes last.** The envelope you return, as text, is the very end of your output; NEVER finish on a tool call, and make any `mem_save` before it. `mem_session_summary` is not yours to call; only a top-level agent calls it. **Why**: if a tool call is the last thing a sub-agent does, its parent only ever sees that tool's return value, and the analysis in your text never arrives.
 
-Every phase MUST return a structured envelope to the orchestrator:
+Each phase MUST give the orchestrator an envelope with this structure:
 
-- `status`: `success`, `partial`, or `blocked`
-- `executive_summary`: 1-3 sentence summary of what was done
-- `detailed_report`: (optional) full phase output, or omit if already inline
-- `artifacts`: list of artifact keys/paths written
-- `next_recommended`: the next SDD phase to run, or "none"
-- `risks`: risks discovered, or "None"
-- `skill_resolution`: how skills were loaded — `paths-injected` (received exact skill paths from orchestrator), `fallback-registry` (self-loaded paths from registry), `fallback-path` (loaded via SKILL: Load path), or `none` (no skills loaded)
+| Field | Contents |
+|---|---|
+| `status` | `success`, `partial` or `blocked` |
+| `executive_summary` | between one and three sentences on the work done |
+| `detailed_report` | optional; everything the phase produced, unless it is inline anyway |
+| `artifacts` | the key or the path of each artifact you wrote |
+| `next_recommended` | which SDD phase comes next, or "none" |
+| `risks` | any risk you came across, or "None" |
+| `skill_resolution` | where your skills came from: `paths-injected` when the orchestrator sent exact paths, `fallback-registry` when you took the paths out of the registry yourself, `fallback-path` when they came through SKILL: Load, `none` when you loaded no skill |
 
-The report states the observation, not the action: not "added test X" but "test X: ran `<command>` → 30 tests". If you sub-delegated, say so, and separate what you verified yourself from what you are relaying — an action-shaped report describes an intention, and with depth the evidence arrives under layers of summary.
+Report observations, not actions: never "added test X", always "test X: ran `<command>` → 30 tests". When you sub-delegated, say so, and keep what you checked with your own eyes separate from what you merely relay. A report written as a list of actions describes an intention, and each level of delegation buries the evidence one summary deeper.
 
-Example:
+An example, from a design phase:
 
 ```markdown
 **Status**: success
-**Summary**: Proposal created for `{change-name}`. Defined scope, approach, and rollback plan.
-**Artifacts**: Engram `sdd/{change-name}/proposal` | `openspec/changes/{change-name}/proposal.md`
-**Next**: sdd-spec or sdd-design
+**Summary**: Design of `{change-name}` saved: architecture decisions plus the file changes they imply.
+**Artifacts**: `openspec/changes/{change-name}/design.md` | Engram `sdd/{change-name}/design`
+**Next**: sdd-tasks
 **Risks**: None
-**Skill Resolution**: paths-injected — 3 skills (react-19, typescript, tailwind-4)
-(other values: `fallback-registry`, `fallback-path`, or `none — no registry found`)
+**Skill Resolution**: fallback-registry — 2 skills (go-testing, typescript)
+(other possible values: `none — no registry found`, `paths-injected`, `fallback-path`)
 ```
 
 ## E. Review Workload Guard
 
-SDD must protect reviewer cognitive load, not only generate tasks.
+Producing tasks is not enough: SDD also guards how much a reviewer has to take in. The guard keeps reviewers from burning out and delivery safe, so do not treat it as optional process noise.
 
 - Execution mode: interactive|auto
-- The default PR review budget is **400 changed lines** (`additions + deletions`).
-- Count authored text additions plus deletions only for this threshold. Generated goldens are excluded from authored risk count and remain part of complete snapshot identity.
-- The orchestrator MUST cache a delivery strategy at session start. `_shared/sdd-session-preflight.md` defines the values and the default.
-- The orchestrator MUST pass `Delivery strategy` to `sdd-tasks` and the resolved decision to `sdd-apply`.
-- `sdd-tasks` MUST forecast whether the planned work may exceed that budget.
-- The forecast MUST include exact plain-text guard lines: `Decision needed before apply: Yes|No`, `Chained PRs recommended: Yes|No`, and `400-line budget risk: Low|Medium|High`.
-- If the forecast is high, `sdd-tasks` MUST recommend chained or stacked PRs using deliverable work units.
-- `sdd-apply` MUST NOT start oversized work unless the delivery strategy resolves to chained/stacked PR slices or explicitly accepted `size:exception`.
-- Each chained PR slice must have a clear start, clear finish, autonomous scope, verification, and reasonable rollback.
-- In a Feature Branch Chain, PR #1 targets the feature/tracker branch and later child PRs target the immediate previous PR branch; if GitHub shows previous slices in a child diff, retarget/rebase until the diff is clean.
 
-This guard exists to reduce reviewer burnout and keep implementation delivery safe. Do not treat it as optional process noise.
+**Budget.** By default a PR's review budget is **400 changed lines**, counted as `additions + deletions`. Only authored text counts, additions plus deletions; generated goldens are left out of the authored risk count while remaining part of complete snapshot identity.
+
+**Orchestrator.** When the session starts, a delivery strategy MUST be cached by it, with the values and the default that come from `_shared/sdd-session-preflight.md`. It MUST give `sdd-tasks` the `Delivery strategy`, and give `sdd-apply` the decision that strategy resolved to.
+
+**`sdd-tasks`.** Its forecast MUST say whether the planned work could break the budget, and each guard line below MUST appear in that forecast as exact plain text:
+- `Decision needed before apply: Yes|No`
+- `Chained PRs recommended: Yes|No`
+- `400-line budget risk: Low|Medium|High`
+
+On a high forecast, the recommendation it MUST make is chained or stacked PRs, split into deliverable work units.
+
+**`sdd-apply`.** Unless the delivery strategy lands on chained/stacked PR slices, or on a `size:exception` that somebody accepted explicitly, it MUST NOT take on oversized work.
+
+**Slices.** Every slice of a chain MUST start and end clearly, own a scope that stands alone, carry its own verification and be reasonably easy to roll back. Inside a Feature Branch Chain the first PR, PR #1, has the feature/tracker branch as its target, and each later child PR targets the branch of the PR right before it; if GitHub's diff for a child still shows earlier slices, retarget or rebase it until only that slice is left in the diff.
 
 ## F. Path Resolution
 
-Every reference to a file inside the skills tree is written relative to the skills root, so `_shared/sdd-phase-common.md` and `sdd-apply/references/cbm-index-coherence.md` mean the same thing no matter which skill wrote them.
+A reference to any file in the skills tree is written relative to the skills root, so `_shared/sdd-phase-common.md` or `sdd-apply/references/cbm-index-coherence.md` names the same file whichever skill wrote it.
