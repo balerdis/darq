@@ -3,102 +3,80 @@ name: skill-creator
 description: "Trigger: new skills, agent instructions, documenting AI usage patterns. Create LLM-first skills with valid frontmatter."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
 ## Activation Contract
 
-Create a skill when:
-- A pattern is used repeatedly and AI needs guidance
-- Project-specific conventions differ from generic best practices
-- Complex workflows need step-by-step instructions
-- Decision trees help AI choose the right approach
-
-Do not create a skill when the pattern is trivial, one-off, or better served by normal documentation.
+A skill earns its place when a decision tree would help the AI choose well, when a complex
+workflow needs its steps spelled out in order, when this project's conventions part ways with
+generic best practice, or when the AI meets the same pattern again and again and needs
+direction on it. Anything trivial or one-off, or better served by plain documentation, gets
+no skill.
 
 ## Hard Rules
 
-- When working in this repo, first follow `docs/skill-style-guide.md` as the normative source before creating or updating skills.
-- For installed global skills, use `skill-creator/references/skill-style-guide.md` as the bundled local copy of that guide when `docs/skill-style-guide.md` is unavailable.
-- If neither guide is available, use the compact inline rules below.
-- A skill is a runtime instruction contract for an LLM, not human documentation.
-- Do not add a `Keywords` section; preserve essential trigger words in `description`.
-- References must point to local files.
-- Keep the skill body concise: target 180–450 tokens, recommended max 700, hard max 1000.
+- Style authority, highest first. Inside this repo, `docs/skill-style-guide.md` is normative:
+  read and follow it before you create or change any skill. For installed global skills where
+  that file cannot be found, its bundled local copy,
+  `skill-creator/references/skill-style-guide.md`, takes its place. When neither can be read,
+  the inline rules at the end of this list are what you go by.
+- The thing you are writing is a runtime instruction contract for an LLM; it is never
+  documentation for people.
+- Keep trigger words inside `description`. Never add a `Keywords` section.
+- References lead to local files and nowhere else.
+- Body length in tokens: 180 to 450 targeted, 700 at most by recommendation, 1000 at most
+  without exception.
+- Inline rules, the fallback when no guide is readable:
+  - `description` MUST fit on one physical line, quoted and YAML-safe, with the essential
+    trigger words leading. It SHOULD stay within 160 characters and MUST stay within 250.
+  - The frontmatter MUST carry `name`, `description`, `license`, `metadata.author` and
+    `metadata.version`.
+  - Instructions are imperative; tutorials and background prose stay out.
+  - Supporting material goes to `assets/` or `references/`, never the main body.
+  - Right: `description: "Trigger: Jira task, ticket, issue, task creation. Create Jira tasks in the team format."`
+  - Wrong: a folded `description: >` spread over several lines, or a separate
+    `Keywords: jira, task` line.
 
 ## Decision Gates
 
-| Need | Action |
-|------|--------|
-| Code templates, schemas, fixtures, generated examples | Put them in `assets/` |
-| Conceptual detail, edge cases, existing docs | Put local links in `references/` |
-| Long explanation in `SKILL.md` | Move it to a supporting file |
-| Multiple meaningful paths | Add a compact decision table |
+| When you have | Do this |
+|---|---|
+| more than one meaningful path | add a compact decision table |
+| a long explanation sitting in `SKILL.md` | move it into a supporting file |
+| conceptual detail, edge cases, docs that already exist | link them locally from `references/` |
+| code templates, schemas, fixtures or generated examples | put them in `assets/` |
 
 ## Execution Steps
 
-1. Check whether `docs/skill-style-guide.md` exists; if it does, apply it before the bundled local copy or inline fallback rules.
-2. If the repo guide is unavailable, read `skill-creator/references/skill-style-guide.md` and apply it before the inline fallback rules.
-3. Confirm the skill does not already exist and the pattern is reusable.
-4. Create or update `{skill-name}/SKILL.md` in the target skill root (project-level or user-level), using this required structure:
-
-```
-{skill-name}/
-├── SKILL.md              # Required - main skill file
-├── assets/               # Optional - templates, schemas, examples
-│   ├── template.py
-│   └── schema.json
-└── references/           # Optional - links to local docs
-    └── <concern>.md      # Points to docs/developer-guide/*.mdx
-```
-5. Use this frontmatter shape:
-
-```markdown
----
-name: {skill-name}
-description: "Trigger: {essential trigger words users or agents will say}. {What this skill does}."
-license: Apache-2.0
-metadata:
-  author: "{your-github-username}"
-  version: "1.0"
----
-```
-6. Write sections in this order: Activation Contract, Hard Rules, Decision Gates, Execution Steps, Output Contract, References.
-7. Register the skill in `AGENTS.md` when it is a project skill.
-
-## Inline Fallback Rules
-
-- `description` MUST be one physical line, quoted, YAML-safe, and include essential trigger words first.
-- `description` SHOULD be <=160 chars and MUST be <=250 chars.
-- Frontmatter MUST include `name`, `description`, `license`, `metadata.author`, and `metadata.version`.
-- Use imperative instructions, not tutorials or background prose.
-- Put supporting material in `assets/` or `references/`, not the main skill body.
-
-Good:
-
-```yaml
-description: "Trigger: Jira task, ticket, issue, task creation. Create Jira tasks in the team format."
-```
-
-Bad:
-
-```yaml
-description: >
-  Create Jira tasks in the team format.
-  Trigger: Jira task, ticket, issue, or task creation.
-Keywords: jira, task
-```
+1. Check for `docs/skill-style-guide.md`. Where it exists it governs, ahead of both the
+   bundled copy and the inline rules.
+2. Without that repo guide, read `skill-creator/references/skill-style-guide.md` and let it
+   govern ahead of the inline rules.
+3. Make sure no such skill exists yet and that the pattern is genuinely reusable.
+4. In the target skill root, project-level or user-level, create or update
+   `{skill-name}/SKILL.md`. Its directory holds `SKILL.md` (required, the main skill file),
+   optionally `assets/` (templates, schemas, examples such as `template.py` or
+   `schema.json`), and optionally `references/` (links to local docs, e.g. a `<concern>.md`
+   that points to `docs/developer-guide/*.mdx`).
+5. Give it frontmatter of this shape: `name: {skill-name}`;
+   `description: "Trigger: {essential trigger words users or agents will say}. {What this skill does}."`;
+   `license: Apache-2.0`; and a `metadata` map holding `author: "{your-github-username}"`
+   and `version: "1.0"`.
+6. Lay the body out as Activation Contract, Hard Rules, Decision Gates, Execution Steps,
+   Output Contract, References, in that order.
+7. A project skill also gets registered in `AGENTS.md`.
 
 ## Output Contract
 
-Return:
-- Files created or modified.
-- Whether the repo style guide or inline fallback rules were used.
-- Any AGENTS.md registration change.
-- Any supporting files added under `assets/` or `references/`.
+Report back with:
+- every file you created or modified;
+- which rules you followed: the repo style guide, or the inline fallback rules;
+- any change to the `AGENTS.md` registration;
+- each supporting file you added under `assets/` or `references/`.
 
 ## References
 
-- `docs/skill-style-guide.md` — normative LLM-first skill style guide for this repo.
-- `skill-creator/references/skill-style-guide.md` — bundled local copy for installed global skills when the repo doc is unavailable.
+- `docs/skill-style-guide.md`: the repo's normative style guide for LLM-first skills.
+- `skill-creator/references/skill-style-guide.md`: its bundled local copy, for installed
+  global skills when the repo doc is unavailable.

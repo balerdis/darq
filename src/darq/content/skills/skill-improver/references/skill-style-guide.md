@@ -1,79 +1,73 @@
-# LLM-first Skill Style Guide
+# Skill Authoring Guide
 
-Use this guide when creating or refactoring skills in this repo. A skill is a **runtime instruction contract for an LLM**, not human-facing documentation: it tells the model when to activate, what rules are non-negotiable, how to decide, what to do, and what to return.
+Skills in this repo are written for a model, not for people. Each one is a runtime contract
+the LLM reads to find out when it applies, what may never be broken, how to choose between
+paths, what to do, and what to give back. Follow this guide to write a new skill here or to
+rework an old one.
 
-## Required Structure
+## How a Skill Is Found and Read
 
-Every `SKILL.md` MUST use this order unless a section is truly irrelevant:
+Indexing is done by `external registry refresh`, which neither summarizes nor rewrites
+anything. Per skill it stores four facts: its `name`, the trigger text in `description`, its
+scope, and the exact path of its `SKILL.md`. A delegator passes the matching paths on to its
+subagents, and every subagent reads the entire skill before doing any work. Because the whole
+file is always what gets read, and it is the source of truth, no `## Compact Rules` section is
+required. Auditing or refactoring an existing skill against this guide is the job of
+`skill-improver`.
 
-1. **Frontmatter** — complete metadata for skill discovery.
-2. **Activation Contract** — exact situations that load the skill.
-3. **Hard Rules** — constraints the LLM MUST NOT violate.
-4. **Decision Gates** — short tables or bullets for branching choices.
-5. **Execution Steps** — ordered operational workflow.
-6. **Output Contract** — required final format or artifacts.
-7. **References** — local files only; supporting detail lives outside the skill.
+## Frontmatter
 
-`## Compact Rules` is not required. The skill registry indexes skill names, triggers, scopes, and paths; agents load the full `SKILL.md` as the source of truth.
+Discovery works from the frontmatter alone, so a `Keywords` section must NOT be added. Fill
+in `name`, `description` and `license`, plus `author` and `version` under `metadata`. The
+`description`:
+- is quoted, YAML-safe, and written on one physical line;
+- opens with its trigger words, as in `"Trigger: ... . {What the skill does}."`;
+- SHOULD stay at or under 160 characters and MUST stay at or under 250.
 
-## Frontmatter Rules
+## Length
 
-- `description` MUST be one physical line, YAML-safe, and quoted.
-- Put trigger words first: `"Trigger: ... . {What the skill does}."`
-- `description` SHOULD be <=160 chars and MUST be <=250 chars.
-- Include complete `name`, `description`, `license`, `metadata.author`, and `metadata.version`.
-- Do NOT add a `Keywords` section; discovery uses frontmatter.
+The body has a budget in tokens: 180 to 450 is the goal, 700 the recommended ceiling, 1000
+the absolute one. Whatever does not fit (examples, schemas, background) moves out. Templates,
+schemas, fixtures and generated examples go to `assets/`; local documents that explain a
+concept or an edge case go to `references/`. Keep reference paths stable, and relative to the
+skill directory where you can.
 
-## Body Budget
+## Body Layout
 
-- Target **180–450 tokens** for the skill body.
-- Recommended maximum: **700 tokens**.
-- Hard maximum: **1000 tokens**. Move examples, schemas, and background into `assets/` or `references/`.
+Every `SKILL.md` MUST follow this order, leaving a part out only when it is truly irrelevant:
 
-## Writing Rules
+1. Frontmatter: all the metadata discovery needs.
+2. Activation Contract: exactly which situations load the skill.
+3. Hard Rules: what the LLM MUST NOT violate.
+4. Decision Gates: a short table or bullet list for each fork.
+5. Execution Steps: the workflow, step by step.
+6. Output Contract: the final format, or the artifacts expected back.
+7. References: local files only; detail lives there, not in the skill.
 
-### DO
+## Phrasing
 
-- Write imperative runtime instructions: “Load X”, “Check Y”, “Return Z”.
-- Lead with the activation trigger and hard constraints.
-- Use compact tables for decision gates.
-- Keep examples minimal and executable.
-- Link to local supporting files for details.
+| Write | Not |
+|---|---|
+| imperative runtime instructions ("Load X", "Check Y", "Return Z") | history, motivation, or tutorial background |
+| the activation trigger and hard constraints at the top | a critical rule hidden beneath examples |
+| decision gates as compact tables | generic advice the LLM has no way to execute |
+| the smallest example that still runs | long docs pasted into the skill |
+| links to local supporting files for the detail | external URLs as the primary references |
 
-### DON'T
+## Before It Ships
 
-- Explain history, motivation, or tutorial background.
-- Duplicate long docs inside the skill.
-- Add generic advice the LLM cannot execute.
-- Use external URLs as primary references.
-- Hide critical rules below examples.
+Each of these holds:
+- the frontmatter is complete, with a quoted single-line `description` and its trigger words intact;
+- all required sections are present, in the order given above;
+- every hard rule can be tested or observed;
+- decision gates appear only where a fork matters;
+- the output contract says exactly what the LLM returns;
+- references go to local files only.
 
-## Supporting Files
+## When Reworking a Skill
 
-- Use `assets/` for templates, schemas, fixtures, or generated examples.
-- Use `references/` for local docs that explain concepts or edge cases.
-- Keep references stable and relative to the skill directory when possible.
-
-## Registry Behavior
-
-- `external registry refresh` indexes skills; it does not summarize or rewrite them.
-- The registry records `name`, `description` trigger text, scope, and exact `SKILL.md` path.
-- Delegators pass matching paths to subagents, and subagents read the full skill before work.
-- Use `skill-improver` to audit and refactor existing skills against this guide.
-
-## Quality Gates
-
-- Frontmatter is complete, quoted, single-line, and trigger-preserving.
-- Required sections exist in the expected order.
-- Hard rules are testable or observable.
-- Decision gates cover meaningful forks only.
-- Output contract tells the LLM exactly what to return.
-- References point to local files.
-
-## Refactor Checklist
-
-- [ ] Move explanatory prose to local references.
-- [ ] Collapse repeated rules into one hard rule.
-- [ ] Replace prose branches with a decision table.
-- [ ] Trim examples to the smallest useful case.
-- [ ] Recheck description length and trigger words.
+- [ ] Move explanatory prose out into local references.
+- [ ] Fold repeated rules into one hard rule.
+- [ ] Turn branches described in prose into a decision table.
+- [ ] Shrink each example to the smallest useful case.
+- [ ] Re-check the description's length and its trigger words.

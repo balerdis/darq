@@ -3,52 +3,68 @@ name: skill-improver
 description: "Trigger: improve skills, audit skills, refactor skills, skill quality. Audit and upgrade existing LLM-first skills."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 
 ## Activation Contract
 
-Use this skill when asked to audit, refactor, normalize, or improve existing `SKILL.md` files. Use `skill-creator` instead when creating a brand-new skill from a reusable pattern.
+`SKILL.md` files that already exist, and that someone wants audited, refactored, normalized
+or improved, are this skill's territory. A brand-new skill drawn out of a pattern worth
+reusing is not: that belongs to `skill-creator`.
 
 ## Hard Rules
 
-- Treat `docs/skill-style-guide.md` as the normative style contract when it exists.
-- For installed global skills, use `skill-improver/references/skill-style-guide.md` as the bundled local copy when `docs/skill-style-guide.md` is unavailable.
-- Treat `SKILL.md` as the source of truth; preserve author intent, critical rules, activation semantics, and output requirements.
-- Use `.atl/skill-registry.md` as an index of skill names, triggers, scopes, and exact paths; do not expect generated summaries.
-- Default to audit-only. Modify files only when the user explicitly asks to apply improvements.
-- Never delete meaningful content silently; move long explanation, examples, templates, or schemas into local `references/` or `assets/`.
-- Do not invent triggers, policies, or domain rules. Mark ambiguous cases for human review.
+- Audit only, by default. Change files only once the user explicitly asks for the
+  improvements to be applied.
+- Nothing meaningful disappears without a word: long explanations, examples, templates and
+  schemas move into local `references/` or `assets/` instead of being cut.
+- Never make up triggers, policies or domain rules. Flag anything ambiguous for a human to
+  review.
+- The skill's own `SKILL.md` is the source of truth. What its author meant, its critical
+  rules, how it activates and what it must output all survive your edits.
+- `.atl/skill-registry.md` lists each skill's name, trigger, scope and exact path, and that
+  is all it is. Do not expect summaries generated from the skills in it.
+- Style contract: `docs/skill-style-guide.md` is normative wherever it exists. For installed
+  global skills without it, the bundled local copy,
+  `skill-improver/references/skill-style-guide.md`, takes its place.
 
 ## Decision Gates
 
-| Situation | Action |
-| --- | --- |
-| Missing or invalid frontmatter | Fix `name`, quoted one-line `description`, `license`, and `metadata` |
-| Skill reads like tutorial docs | Convert to runtime instructions and move background to `references/` |
-| Body exceeds budget | Preserve rules, move examples/background to supporting files |
-| Branching logic hidden in prose | Convert to a compact decision table |
-| Rules conflict or intent is unclear | Report the issue; do not rewrite that rule automatically |
+| Finding | Response |
+|---|---|
+| Rules contradict each other, or the intent is unclear | Report it and leave that rule as it is; no automatic rewrite |
+| Branching logic buried in prose | Turn it into a compact decision table |
+| Body over budget | Keep every rule; move examples and background into supporting files |
+| Reads like tutorial documentation | Recast it as runtime instructions, with background moved to `references/` |
+| Frontmatter missing or invalid | Repair it: `name`, `license`, `metadata`, and a `description` that is quoted and on one line |
 
 ## Execution Steps
 
-1. Read `docs/skill-style-guide.md`; if unavailable, read `skill-improver/references/skill-style-guide.md`; if neither exists, enforce the core LLM-first structure: frontmatter, Activation Contract, Hard Rules, Decision Gates, Execution Steps, Output Contract, References.
-2. Read `.atl/skill-registry.md`; use listed paths to select skills. If missing, scan known skill directories for `*/SKILL.md`.
-3. For each selected skill, audit metadata, trigger clarity, section order, body budget, actionability, decision gates, output contract, and local references.
-4. Return an audit report grouped by skill with severity and exact proposed changes.
-5. In apply mode, edit only safe issues, preserve content, create supporting files when needed, then rerun or request `external registry refresh`.
+1. Load the style contract: `docs/skill-style-guide.md`, or failing that
+   `skill-improver/references/skill-style-guide.md`. Should neither exist, hold every skill
+   to the core LLM-first structure instead, which is frontmatter followed by Activation
+   Contract, Hard Rules, Decision Gates, Execution Steps, Output Contract and References.
+2. Pick the skills to review from the paths `.atl/skill-registry.md` lists. No registry
+   file? Then look through the known skill directories for any `*/SKILL.md`.
+3. Go over each chosen skill: its metadata and how clearly its trigger reads; whether its
+   sections come in order and its body fits the budget; whether it is actionable, with sound
+   decision gates and an output contract; and whether every reference is local.
+4. Report per skill, giving each finding a severity and the exact change you propose.
+5. Only in apply mode: fix the safe issues and nothing else, keep the content intact, add
+   supporting files where they are needed, then rerun `external registry refresh` or ask for
+   it to be run.
 
 ## Output Contract
 
-Return:
-- Skills audited and paths used.
-- Issues found, grouped by severity.
-- Files changed, if apply mode was requested.
-- Registry refresh recommendation when skill metadata or paths changed.
-- Ambiguities that need human review.
+Hand back:
+- which skills you audited, and the paths you used for them;
+- the issues, sorted into severity groups;
+- the files you changed, if you were asked to apply changes;
+- a suggestion to refresh the registry whenever a skill's metadata or path changed;
+- anything ambiguous, left for a human to review.
 
 ## References
 
-- `docs/skill-style-guide.md` — normative LLM-first skill style guide for this repo.
-- `skill-improver/references/skill-style-guide.md` — bundled local copy for installed global skills when the repo doc is unavailable.
+- `skill-improver/references/skill-style-guide.md`: the bundled local copy of the style
+  guide, for installed global skills when the repo has no such doc.
+- `docs/skill-style-guide.md`: the repo's own normative style guide for LLM-first skills.
