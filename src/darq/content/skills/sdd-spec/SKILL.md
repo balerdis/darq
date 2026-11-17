@@ -10,201 +10,25 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-spec` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> **ORCHESTRATOR GATE**: Reaching this file through the `skill()` tool means you are
+> the ORCHESTRATOR, and the orchestrator never runs it. STOP here and leave every
+> instruction below unexecuted; hand the phase to the dedicated `sdd-spec`
+> sub-agent through the delegation primitive your platform provides (`task(...)`,
+> sub-agent invocation and the like, for instance). Only EXECUTORS read on.
 
-## Executor Override
+## For the sdd-spec sub-agent
 
-If you ARE the `sdd-spec` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+The gate speaks to the orchestrator alone. When you are the `sdd-spec` sub-agent itself, it does not bind you: carry out the phase below yourself. Do not delegate, and do not invoke the Skill tool; executing is your job.
 
+## What This Phase Does
 
-## Language Domain Contract
+Starting from the proposal, you write the change's specifications as delta specs: structured requirements, each with scenarios, that state what the change ADDS to the system's behavior and what it MODIFIES, REMOVES or RENAMES.
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+The orchestrator launches you with two things: the change name, and the artifact store mode, one of `engram | openspec | hybrid | none`.
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+## What You Hand Back
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
-
-## Purpose
-
-You are a sub-agent responsible for writing SPECIFICATIONS. You take the proposal and produce delta specs — structured requirements and scenarios that describe what's being ADDED, MODIFIED, REMOVED, or RENAMED from the system's behavior.
-
-## What You Receive
-
-From the orchestrator:
-- Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
-
-## Execution and Persistence Contract
-
-> Follow **Section B** (retrieval) and **Section C** (persistence) from `_shared/sdd-phase-common.md`.
-
-- **engram**: Read `sdd/{change-name}/proposal` (required). If specs span multiple domains, concatenate into a single artifact with domain headers. Save as `sdd/{change-name}/spec`.
-- **openspec**: Read and follow `_shared/openspec-convention.md`.
-- **hybrid**: Follow BOTH conventions — persist to Engram (single concatenated artifact) AND write domain files to filesystem.
-- **none**: Return result only. Never create or modify project files.
-
-## What to Do
-
-### Step 1: Load Skills
-Follow **Section A** from `_shared/sdd-phase-common.md`.
-
-### Step 2: Identify Affected Domains
-
-Read the proposal's **Capabilities section** — this is your primary contract:
-
-```
-FOR EACH entry under "New Capabilities":
-├── This becomes a NEW full spec: openspec/specs/<capability-name>/spec.md
-└── Write a complete spec (not a delta) — no existing behavior to reference
-
-FOR EACH entry under "Modified Capabilities":
-├── This becomes a DELTA spec: openspec/changes/{change-name}/specs/<capability-name>/spec.md
-└── Read existing openspec/specs/<capability-name>/spec.md first — your delta modifies it
-```
-
-If the proposal has no Capabilities section (older format), fall back to inferring from "Affected Areas". But always prefer the explicit Capabilities mapping when present.
-
-### Step 3: Read Existing Specs
-
-**IF mode is `openspec` or `hybrid`:** If `openspec/specs/{domain}/spec.md` exists, read it to understand CURRENT behavior. Your delta specs describe CHANGES to this behavior.
-
-**IF mode is `engram`:** Existing specs were already retrieved from Engram in the Persistence Contract. Skip filesystem reads.
-
-**IF mode is `none`:** Skip — no existing specs to read.
-
-### Step 4: Write Delta Specs
-
-**IF mode is `openspec` or `hybrid`:** Create specs inside the change folder:
-
-```
-openspec/changes/{change-name}/
-├── proposal.md              ← (already exists)
-└── specs/
-    └── {domain}/
-        └── spec.md          ← Delta spec
-```
-
-**IF mode is `engram` or `none`:** Do NOT create any `openspec/` directories or files. Compose the spec content in memory — you will persist it in Step 5.
-
-#### MODIFIED Requirements Workflow (CRITICAL — read before writing deltas)
-
-When writing a `## MODIFIED Requirements` section, follow this exact workflow:
-
-```
-1. Locate the requirement in openspec/specs/{domain}/spec.md
-2. COPY the ENTIRE requirement block — from `### Requirement:` through ALL its scenarios
-3. PASTE it under `## MODIFIED Requirements`
-4. EDIT the copy to reflect the new behavior
-5. Add "(Previously: {one-line summary of what changed})" under the requirement text
-
-Why copy-full-then-edit?
-→ The archive step REPLACES the requirement in main specs with your MODIFIED block
-→ If your block is partial, the archive will lose scenarios you didn't copy
-→ Common pitfall: only writing the changed scenario and losing the rest
-→ If adding NEW behavior WITHOUT changing existing behavior, use ADDED instead
-```
-
-#### Delta Spec Format
-
-```markdown
-# Delta for {Domain}
-
-## ADDED Requirements
-
-### Requirement: {Requirement Name}
-
-{Description using RFC 2119 keywords: MUST, SHALL, SHOULD, MAY}
-
-The system {MUST/SHALL/SHOULD} {do something specific}.
-
-#### Scenario: {Happy path scenario}
-
-- GIVEN {precondition}
-- WHEN {action}
-- THEN {expected outcome}
-- AND {additional outcome, if any}
-
-#### Scenario: {Edge case scenario}
-
-- GIVEN {precondition}
-- WHEN {action}
-- THEN {expected outcome}
-
-## MODIFIED Requirements
-
-### Requirement: {Existing Requirement Name}
-
-{Full updated requirement text — replaces the existing one entirely}
-(Previously: {what it was before, in one line})
-
-#### Scenario: {Unchanged scenario — keep if still valid}
-
-- GIVEN {precondition}
-- WHEN {action}
-- THEN {outcome}
-
-#### Scenario: {Updated or new scenario}
-
-- GIVEN {updated precondition}
-- WHEN {updated action}
-- THEN {updated outcome}
-
-## REMOVED Requirements
-
-### Requirement: {Requirement Being Removed}
-
-(Reason: {why this requirement is being deprecated/removed})
-(Migration: {what replaces it, or "None" if no migration is needed})
-
-## RENAMED Requirements
-
-### Requirement: {Old Requirement Name} → {New Requirement Name}
-
-(Reason: {why the requirement is being renamed})
-(Migration: {how references/tests/docs should update, or "None" if no migration is needed})
-```
-
-#### For NEW Specs (No Existing Spec)
-
-If this is a completely new domain, create a FULL spec (not a delta):
-
-```markdown
-# {Domain} Specification
-
-## Purpose
-
-{High-level description of this spec's domain.}
-
-## Requirements
-
-### Requirement: {Name}
-
-The system {MUST/SHALL/SHOULD} {behavior}.
-
-#### Scenario: {Name}
-
-- GIVEN {precondition}
-- WHEN {action}
-- THEN {outcome}
-```
-
-### Step 5: Persist Artifact
-
-**This step is MANDATORY — do NOT skip it.**
-
-Follow **Section C** from `_shared/sdd-phase-common.md`.
-- artifact: `spec`
-- topic_key: `sdd/{change-name}/spec`
-- type: `architecture`
-
-### Step 6: Return Summary
-
-Return to the orchestrator:
+Your final answer to the orchestrator is the return envelope of **Section D** in `_shared/sdd-phase-common.md`, carrying this summary:
 
 ```markdown
 ## Specs Created
@@ -214,7 +38,7 @@ Return to the orchestrator:
 ### Specs Written
 | Domain | Type | Requirements | Scenarios |
 |--------|------|-------------|-----------|
-| {domain} | Delta/New | {N added, M modified, K removed} | {total scenarios} |
+| {domain} | Delta/New | {added N, modified M, removed K} | {scenario count} |
 
 ### Coverage
 - Happy paths: {covered/missing}
@@ -222,34 +46,161 @@ Return to the orchestrator:
 - Error states: {covered/missing}
 
 ### Next Step
-Ready for design (sdd-design). If design already exists, ready for tasks (sdd-tasks).
+Design (sdd-design) can start; if a design already exists, tasks (sdd-tasks) can.
 ```
 
-## Rules
+## Spec Formats
 
-- ALWAYS use Given/When/Then format for scenarios
-- ALWAYS use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY) for requirement strength
-- Read the proposal's **Capabilities section** first — it tells you exactly which spec files to create
-- If existing specs exist, write DELTA specs (ADDED/MODIFIED/REMOVED sections)
-- If NO existing specs exist for the domain, write a FULL spec
-- Every requirement MUST have at least ONE scenario
-- Include both happy path AND edge case scenarios
-- Keep scenarios TESTABLE — someone should be able to write an automated test from each one
-- DO NOT include implementation details in specs — specs describe WHAT, not HOW
-- **MODIFIED requirements MUST be the FULL block** — copy entire requirement + all scenarios from main spec, then edit. Partial MODIFIED blocks lose content at archive time.
-- If adding new behavior without changing existing behavior → use ADDED, not MODIFIED
-- REMOVED requirements MUST include Reason and SHOULD include Migration when consumers, persisted behavior, docs, or tests are affected
-- RENAMED requirements MUST state both old and new names explicitly and SHOULD include Migration guidance for references/tests/docs
-- Apply any `rules.specs` from `openspec/config.yaml`
-- **Size budget**: Spec artifact MUST be under 650 words. Prefer requirement tables over narrative descriptions. Each scenario: 3-5 lines max.
-- Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
+A domain that already has a spec gets a delta in exactly this format:
 
-## RFC 2119 Keywords Quick Reference
+```markdown
+# Delta for {Domain}
 
-| Keyword | Meaning |
-|---------|---------|
-| **MUST / SHALL** | Absolute requirement |
-| **MUST NOT / SHALL NOT** | Absolute prohibition |
-| **SHOULD** | Recommended, but exceptions may exist with justification |
-| **SHOULD NOT** | Not recommended, but may be acceptable with justification |
-| **MAY** | Optional |
+## ADDED Requirements
+
+### Requirement: {Requirement name}
+
+{The requirement in words, its obligations stated with MUST, SHALL, SHOULD or MAY}
+
+The system {MUST/SHALL/SHOULD} {one specific, checkable behavior}.
+
+#### Scenario: {The ordinary case}
+
+- GIVEN {the starting state}
+- WHEN {what happens}
+- THEN {the result that must follow}
+- AND {a further result, when there is one}
+
+#### Scenario: {A boundary or failure case}
+
+- GIVEN {the unusual starting state}
+- WHEN {what happens}
+- THEN {the result that must follow}
+
+## MODIFIED Requirements
+
+### Requirement: {Name of the existing requirement}
+
+{The whole requirement as it now reads, which replaces the old one completely}
+(Previously: {the old requirement, summed up in one line})
+
+#### Scenario: {An existing scenario that still holds, copied over}
+
+- GIVEN {its starting state}
+- WHEN {its trigger}
+- THEN {its result}
+
+#### Scenario: {A scenario that changed, or a new one}
+
+- GIVEN {the starting state, as it is now}
+- WHEN {what happens, as it is now}
+- THEN {the result, as it is now}
+
+## REMOVED Requirements
+
+### Requirement: {Name of the requirement that goes}
+
+(Reason: {why the requirement goes away})
+(Migration: {what takes its place, or "None" when nothing has to migrate})
+
+## RENAMED Requirements
+
+### Requirement: {Current name} → {New name}
+
+(Reason: {why the name changes})
+(Migration: {what references, tests or docs must follow the new name, or "None" when nothing has to migrate})
+```
+
+A domain with no spec yet is completely new, so it gets a FULL spec, not a delta, in this format:
+
+```markdown
+# {Domain} Specification
+
+## Purpose
+
+{What this domain is about, in a sentence or two.}
+
+## Requirements
+
+### Requirement: {Requirement name}
+
+The system {MUST/SHALL/SHOULD} {a behavior}.
+
+#### Scenario: {Scenario name}
+
+- GIVEN {the starting state}
+- WHEN {what happens}
+- THEN {the result}
+```
+
+### Writing a MODIFIED Requirement (CRITICAL: read before writing any delta)
+
+At archive time, the block you put under `## MODIFIED Requirements` takes the place of the requirement in the main spec, whole. Whatever the block leaves out is lost, and the usual way to lose scenarios is to write only the one that changed. So build every MODIFIED block this way, in this order:
+
+1. Find the requirement in `openspec/specs/{domain}/spec.md`.
+2. Copy all of it, from its `### Requirement:` line down through EVERY one of its scenarios.
+3. Paste the copy under `## MODIFIED Requirements`.
+4. Edit the copy until it describes the new behavior.
+5. Under the requirement text, add "(Previously: {one-line summary of what changed})".
+
+When the change adds NEW behavior and leaves the existing behavior as it is, the requirement belongs under ADDED, not MODIFIED.
+
+## Store Contract
+
+Retrieval works as **Section B** of `_shared/sdd-phase-common.md` describes, and persistence as its **Section C**. Per store:
+
+- **engram**: `sdd/{change-name}/proposal` is a required read. Specs that span several domains are concatenated into one artifact, with a header per domain, and saved as `sdd/{change-name}/spec`.
+- **openspec**: read `_shared/openspec-convention.md` and work by it.
+- **hybrid**: both conventions at once, so Engram receives the single concatenated artifact and the filesystem receives one file per domain.
+- **none**: the result is returned and nothing else; no project file is ever created or modified.
+
+## Procedure
+
+**1. Load skills.** Do what **Section A** of `_shared/sdd-phase-common.md` says.
+
+**2. Work out which domains the change touches.** Your primary contract is the **Capabilities section** of the proposal; read it before anything else:
+
+| Proposal entry | What it becomes | Before you write it |
+|---|---|---|
+| listed under "New Capabilities" | a NEW full spec, `openspec/specs/<capability-name>/spec.md`, written complete rather than as a delta | nothing to read: there is no existing behavior to refer to |
+| listed under "Modified Capabilities" | a DELTA spec, `openspec/changes/{change-name}/specs/<capability-name>/spec.md` | read the existing `openspec/specs/<capability-name>/spec.md`, which your delta modifies |
+
+A proposal in the older format, without a Capabilities section, leaves you to infer the domains from its "Affected Areas". Whenever the explicit Capabilities mapping exists, it wins.
+
+**3. Learn the current behavior.** Under openspec or hybrid, read `openspec/specs/{domain}/spec.md` when it exists: it holds CURRENT behavior, and your deltas describe CHANGES to it. Under engram, the existing specs already came from Engram through the store contract, so the filesystem is not read. Under none there are no specs to read.
+
+**4. Write the specs** in the formats of "Spec Formats", building every MODIFIED block as "Writing a MODIFIED Requirement" says. Under openspec or hybrid, they go inside the change folder: each domain's delta spec at `openspec/changes/{change-name}/specs/{domain}/spec.md`, next to the `proposal.md` that is already there. Under engram or none, create no `openspec/` directories and no `openspec/` files; compose the spec content in memory, and step 5 persists it.
+
+**5. Persist the artifact.** Mandatory; never skip this step. Save it per **Section C** of `_shared/sdd-phase-common.md`, as artifact `spec` with topic_key `sdd/{change-name}/spec` and type `architecture`.
+
+**6. Report back** with the summary and envelope of "What You Hand Back".
+
+## Writing Rules
+
+**Which kind of spec.** Let the proposal's **Capabilities section** decide first, since it names exactly the spec files to create. Then: no spec yet for the domain means a FULL spec; specs already there mean DELTA specs, with ADDED/MODIFIED/REMOVED sections.
+
+**Requirements.** Their strength is always expressed in RFC 2119 keywords (MUST, SHALL, SHOULD, MAY). They describe WHAT the system does and never HOW, so implementation details stay out. Not one of them goes without at least ONE scenario.
+
+**Scenarios.** Always in Given/When/Then form, 3-5 lines at most each, and TESTABLE: an automated test should be writable from any one of them. Cover the happy path AND the edge cases, not just one of the two.
+
+**Kinds of change.**
+- New behavior that leaves existing behavior unchanged is ADDED, not MODIFIED.
+- **MODIFIED always means the FULL block**: the whole requirement with all its scenarios, copied from the main spec and only then edited. A partial block loses content at archive time.
+- REMOVED MUST carry its Reason; it SHOULD carry a Migration too whenever consumers, persisted behavior, docs or tests are affected.
+- RENAMED MUST give the old name and the new one explicitly; it SHOULD carry Migration guidance for references, tests and docs.
+
+**Size budget.** Under 650 words for the spec artifact, a MUST. Requirement tables are preferred over narrative descriptions.
+
+**Project rules.** Whatever `rules.specs` says in `openspec/config.yaml` applies.
+
+### The RFC 2119 Vocabulary
+
+MUST and SHALL make a requirement absolute, and MUST NOT and SHALL NOT make a prohibition absolute. SHOULD marks a recommendation that a justified exception may still set aside; SHOULD NOT marks something not recommended that justification can still make acceptable. MAY marks what is optional.
+
+## Artifact Language
+
+Every technical artifact this phase generates is written in English, unless the user explicitly asks for that artifact in another language or the project's own convention requires one. Neither the language of your conversation with the user nor the regional voice of the active persona carries over into SDD artifacts on its own.
+
+When another language has been explicitly requested, keep the register neutral and professional; a different tone or a regional variant needs its own explicit request from the user.
+
+A public or contextual comment takes the language of the context it lands in. An explicit choice of language or tone by the user beats that default; without one, stay neutral and professional unless the context plainly calls for another tone or regional variant.

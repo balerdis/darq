@@ -10,77 +10,50 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-explore` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> **ORCHESTRATOR GATE**: Loading this skill through the `skill()` tool makes you the ORCHESTRATOR,
+> and the ORCHESTRATOR must STOP here: do NOT carry out these instructions inline. Hand the work to
+> the dedicated `sdd-explore` sub-agent, using the delegation primitive your platform provides (e.g.,
+> `task(...)`, sub-agent invocation, etc.). Only EXECUTORS use this skill.
 
 ## Executor Override
 
-If you ARE the `sdd-explore` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+When you ARE the `sdd-explore` sub-agent rather than the orchestrator, the gate above is not addressed to you. Carry on yourself with this phase's work as written below: do NOT delegate, and do NOT call the Skill tool. As the executor, you execute.
 
+## Your Role
 
-## Language Domain Contract
+EXPLORATION is your job as this sub-agent: dig into the codebase, think the problem through, weigh the possible approaches against each other, and come back with a structured analysis. By default your job ends at researching and reporting back; `exploration.md` is created only when this exploration is tied to a named change.
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+## Inputs
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+The orchestrator hands you two things: the topic or feature to explore, and the artifact store mode, which is one of `engram | openspec | hybrid | none`.
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
+## Exploration Rules
 
-## Purpose
+- `exploration.md` inside the change folder, when a change name is provided, is the ONLY file you MAY create.
+- The exploration rules in `_shared/exploration-craft.md` apply to you.
+- Shape the return envelope by **Section D** of `_shared/sdd-phase-common.md`.
 
-You are a sub-agent responsible for EXPLORATION. You investigate the codebase, think through problems, compare approaches, and return a structured analysis. By default you only research and report back; only create `exploration.md` when this exploration is tied to a named change.
+## Reading and Saving per Artifact Store
 
-## What You Receive
+Reading context follows **Section B** of `_shared/sdd-phase-common.md`, and saving follows its **Section C**. What each mode adds:
 
-The orchestrator will give you:
-- A topic or feature to explore
-- Artifact store mode (`engram | openspec | hybrid | none`)
+| Mode | Reading context | Saving the artifact |
+|---|---|---|
+| `engram` | Look up `sdd-init/{project}` for the project context and, if useful, `sdd/` for artifacts that already exist. | Reading project context from `sdd-init/{project}` is optional; save as `sdd/{change-name}/explore`, or as `sdd/explore/{topic-slug}` when standalone. |
+| `openspec` | Open `openspec/config.yaml` together with `openspec/specs/`. | Read and follow `_shared/openspec-convention.md`. |
+| `hybrid` | As Section B says. | Follow BOTH conventions: persist to Engram AND write to the filesystem. |
+| `none` | Rely on the context the orchestrator included in its prompt. | Return the result only. |
 
-## Execution and Persistence Contract
+## Procedure
 
-> Follow **Section B** (retrieval) and **Section C** (persistence) from `_shared/sdd-phase-common.md`.
+1. **Load skills.** Apply **Section A** of `_shared/sdd-phase-common.md`.
+2. **Explore.** `_shared/exploration-craft.md` explains how to understand the request, investigate the codebase and compare approaches; follow it. If that reference is missing or unreadable, explore on your own judgement and say so in your report: an unreadable craft reference never blocks the phase.
+3. **Persist the artifact.** For an exploration tied to a named change this step is MANDATORY, so do NOT skip it. Apply **Section C** of `_shared/sdd-phase-common.md` with artifact `explore`, topic_key `sdd/{change-name}/explore` (`sdd/explore/{topic-slug}` when standalone) and type `architecture`.
+4. **Return the analysis**, as the next section describes.
 
-- **engram**: Optionally read `sdd-init/{project}` for project context. Save artifact as `sdd/{change-name}/explore` (or `sdd/explore/{topic-slug}` if standalone).
-- **openspec**: Read and follow `_shared/openspec-convention.md`.
-- **hybrid**: Follow BOTH conventions — persist to Engram AND write to filesystem.
-- **none**: Return result only.
+## Returning the Analysis
 
-### Retrieving Context
-
-> Follow **Section B** from `_shared/sdd-phase-common.md` for retrieval.
-
-- **engram**: Search for `sdd-init/{project}` (project context) and optionally `sdd/` (existing artifacts).
-- **openspec**: Read `openspec/config.yaml` and `openspec/specs/`.
-- **none**: Use whatever context the orchestrator passed in the prompt.
-
-## What to Do
-
-### Step 1: Load Skills
-Follow **Section A** from `_shared/sdd-phase-common.md`.
-
-### Step 2: Explore
-
-Follow `_shared/exploration-craft.md` for how to understand the request, investigate the codebase,
-and compare approaches. If that reference is missing or unreadable, do the exploration with your
-own judgement and say so in your report — an unreadable craft reference never blocks the phase.
-
-### Step 3: Persist Artifact
-
-**This step is MANDATORY when tied to a named change — do NOT skip it.**
-
-Follow **Section C** from `_shared/sdd-phase-common.md`.
-- artifact: `explore`
-- topic_key: `sdd/{change-name}/explore` (or `sdd/explore/{topic-slug}` if standalone)
-- type: `architecture`
-
-### Step 4: Return Structured Analysis
-
-Return the report shape from `_shared/exploration-craft.md` to the orchestrator (and write the same
-content to `exploration.md` if saving), under this phase's envelope heading and with one field
-appended at the end. The envelope belongs to this phase, not to the craft reference:
+Give the orchestrator the report shape that `_shared/exploration-craft.md` defines, wrapped in this phase's own envelope heading and closed by one extra field; when you are saving, `exploration.md` receives the same content. The envelope is owned by this phase, not by the craft reference:
 
 ```markdown
 ## Exploration: {topic}
@@ -101,22 +74,21 @@ appended at the end. The envelope belongs to this phase, not to the craft refere
 {...}
 
 ### Ready for Proposal
-{Yes/No — and what the orchestrator should tell the user}
+{Yes or No, plus what the orchestrator should pass on to the user}
 ```
 
-The section bodies are defined by `_shared/exploration-craft.md`; this block fixes the envelope
-heading and the order, and adds `Ready for Proposal`.
+What goes into each section is up to `_shared/exploration-craft.md`. This block settles only the envelope heading and the section order, and it adds `Ready for Proposal`.
 
-## Rules
+## Artifact Language
 
-- The ONLY file you MAY create is `exploration.md` inside the change folder (if a change name is provided)
-- Follow the exploration rules in `_shared/exploration-craft.md`
-- Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
+Technical artifacts you generate are in English by default. Neither the language you are chatting in with the user nor the regional voice of the active persona carries over into an SDD artifact; only an explicit request from the user for that artifact's language, or a project convention that requires one, changes it. An artifact the user explicitly wants in another language gets a neutral, professional register, unless the user explicitly asks for a different tone or a regional variant.
+
+Public or contextual comments take the language of the context they land in by default. An explicit language or tone from the user wins over that; absent such a choice, stay neutral and professional, unless what the target context clearly needs is some other tone or a regional variant.
 
 <!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Exploration
 
-Use CBM when exploration needs semantic code understanding: architecture, request/data flows, symbols, routes, dependency relationships, callers/callees, or impact mapping. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
+Bring in CBM when the exploration needs a semantic understanding of the code: the architecture, request and data flows, symbols, routes, dependency relationships, callers and callees, or an impact map. The priority order of its tools and its index-repair rule are in `_shared/mcp/cbm-convention.md`; if that path is missing or unreadable, say so and continue without claiming graph evidence, and do not invent a tool order or fallback conditions of your own.
 
-Do NOT use CBM for tiny tasks where the relevant file is already known.
+Do NOT reach for CBM on tiny tasks where the relevant file is already known.
 <!-- /darq-local:cbm-protocol -->

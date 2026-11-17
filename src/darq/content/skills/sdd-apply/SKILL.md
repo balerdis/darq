@@ -10,103 +10,143 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-apply` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> **ORCHESTRATOR GATE**: Reaching this text through the `skill()` tool makes you the
+> ORCHESTRATOR, so STOP and do not carry these steps out inline. Hand the work to the
+> dedicated `sdd-apply` sub-agent with whatever delegation primitive your platform offers
+> (e.g., `task(...)`, sub-agent invocation, etc.). Only EXECUTORS act on this skill.
 
 ## Executor Override
 
-If you ARE the `sdd-apply` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+When you are the `sdd-apply` sub-agent itself, and not the orchestrator, the gate above is not
+addressed to you. Carry on with the phase work below in person: do NOT delegate it, and do NOT call
+the Skill tool. As the executor, execute.
 
+## Role
 
-## Language Domain Contract
+This phase is IMPLEMENTATION. You are handed specific tasks out of `tasks.md` and you turn them into
+actual code, holding strictly to what the specs and the design say.
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+## Rules for This Phase
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+The general implementation rules, namely reading the specs and design, matching conventions, no
+freelancing, recording deviations instead of hiding them, stopping when blocked and PR-slice
+discipline, are owned by `_shared/implementation-craft.md`. If that reference is missing or
+unreadable, rely on your own judgement and say so in your report.
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
+This phase adds:
 
-## Purpose
+- ALWAYS consume or produce the structured status before implementing; readiness is never inferred
+  from the conversation alone.
+- `applyState: blocked` means STOP with no edits, and so does an unsafe `actionContext` or edit
+  root.
+- In `openspec` mode, tick tasks in `tasks.md` AS you complete them, not in one pass at the end.
+- Finished tasks must be visibly `[x]` in the persisted tasks artifact, which you read again
+  before returning; internal todos are no evidence of completion.
+- Skills are loaded in Step 1, and every loaded skill is followed strictly when you write code.
+- Any `rules.apply` in `openspec/config.yaml` applies to your work.
+- With Strict TDD Mode active (Step 3), load `sdd-apply/strict-tdd.md` and follow its cycle INSTEAD
+  of Step 4: that module's rules OVERRIDE Step 4 entirely.
+- The return envelope follows **Section D** of `_shared/sdd-phase-common.md`.
 
-You are a sub-agent responsible for IMPLEMENTATION. You receive specific tasks from `tasks.md` and implement them by writing actual code. You follow the specs and design strictly.
+## Inputs
 
-## What You Receive
+The orchestrator hands you:
 
-From the orchestrator:
-- Change name
-- The specific task(s) to implement (e.g., "Phase 1, tasks 1.1-1.3")
-- Artifact store mode (`engram | openspec | hybrid | none`)
-- Structured status from `_shared/sdd-status-contract.md`: `schemaName`, `planningHome`, `changeRoot`, `artifactPaths`, `contextFiles`, `applyState`, task progress, dependency states, and `actionContext`
-- Delivery strategy and resolved workload decision (`ask-on-risk | auto-chain | single-pr | exception-ok`, plus PR slice or `size:exception` when applicable)
+- the change name;
+- which task(s) to implement, for instance "Phase 1, tasks 1.1-1.3";
+- the artifact store mode, one of `engram | openspec | hybrid | none`;
+- the structured status described in `_shared/sdd-status-contract.md`, which carries
+  `applyState`, `actionContext`, `contextFiles`, `artifactPaths`, `changeRoot`, `planningHome` and
+  `schemaName`, as well as task progress and dependency states;
+- the delivery strategy together with the workload decision already settled
+  (`ask-on-risk | auto-chain | single-pr | exception-ok`), plus the PR slice or `size:exception`
+  where one applies.
 
-## Execution and Persistence Contract
+## Reading and Writing Artifacts
 
-> Follow **Section B** (retrieval) and **Section C** (persistence) from `_shared/sdd-phase-common.md`.
+Retrieval works as **Section B** of `_shared/sdd-phase-common.md` describes, and persistence as its
+**Section C** does. Per store:
 
-- **engram**: Read `sdd/{change-name}/proposal`, `sdd/{change-name}/spec`, `sdd/{change-name}/design`, `sdd/{change-name}/tasks` (all required — keep tasks ID for updates). Mark tasks complete via `mem_update(id: {tasks-observation-id}, content: "...")`. Save progress as `sdd/{change-name}/apply-progress`.
-- **openspec**: Read and follow `_shared/openspec-convention.md`. Update `tasks.md` with `[x]` marks.
-- **hybrid**: Follow BOTH conventions — persist progress to Engram (`mem_update` for tasks) AND update `tasks.md` with `[x]` marks on filesystem.
-- **none**: Return progress only. Do not update project artifacts.
+| Store | What you do |
+|-------|-------------|
+| `engram` | Read `sdd/{change-name}/tasks`, holding on to that observation's ID because you update it later, together with `sdd/{change-name}/proposal`, `sdd/{change-name}/spec` and `sdd/{change-name}/design`; all four are required. A task is marked done with `mem_update(id: {tasks-observation-id}, content: "...")`, and progress is saved under `sdd/{change-name}/apply-progress`. |
+| `openspec` | Read `_shared/openspec-convention.md` and follow it. Tick tasks off in `tasks.md` with `[x]`. |
+| `hybrid` | Both conventions at once: progress goes to Engram (`mem_update` for the tasks) AND the `[x]` ticks go into `tasks.md` on the filesystem. |
+| `none` | Only return the progress. Project artifacts stay untouched. |
 
-## Status and Workspace Guard
+## Guard: Status and Workspace
 
-Before reading implementation files or writing code, consume the structured status provided by the orchestrator or build the equivalent status from artifacts.
+Before you open an implementation file or write a line of code, take in the structured status the
+orchestrator passed you, or assemble the equivalent from the artifacts yourself, and act on it:
 
-- If `applyState` is `blocked`, STOP and return `blocked` with the missing artifacts or unsafe context.
-- If `applyState` is `all_done`, do not edit. Return `success` with `next_recommended: sdd-verify` or `sdd-archive` based on dependency state.
-- If `applyState` is `ready`, proceed only on the assigned pending tasks.
-- Read context from `contextFiles` / `artifactPaths` instead of assuming fixed filenames. For spec-driven OpenSpec, these normally map to proposal, specs, design, and tasks.
-- If `actionContext.mode` is `workspace-planning` and `allowedEditRoots` is empty, STOP before editing. Treat linked repos and folders as read-only planning context.
-- If `allowedEditRoots` is present, edit only files under those roots. If a needed edit is outside the allowed roots, STOP and report the unsafe path.
+| When | Then |
+|------|------|
+| `applyState` is `blocked` | STOP. Return `blocked`, naming the missing artifacts or the unsafe context. |
+| `applyState` is `all_done` | Edit nothing; return `success`, setting `next_recommended: sdd-verify` or `sdd-archive` to whichever the dependency state points to. |
+| `applyState` is `ready` | Work only on the pending tasks assigned to you. |
+| `allowedEditRoots` is empty while `actionContext.mode` is `workspace-planning` | STOP before any edit. Linked repos and folders are planning context you only read. |
+| `allowedEditRoots` is present | Touch only files under those roots. When a needed edit lies outside them, STOP and report the unsafe path. |
 
-## What to Do
+Take context from `contextFiles` / `artifactPaths` and never from file names you assume. Under
+spec-driven OpenSpec those usually point at the proposal, specs, design and tasks.
 
-### Step 1: Load Skills
-Follow **Section A** from `_shared/sdd-phase-common.md`.
+## Procedure
 
-### Step 2: Read Context
+### Step 1: Load the Project's Skills
 
-Before writing ANY code:
-1. Read the structured status and confirm `applyState: ready`
-2. Read every applicable artifact path/topic in `contextFiles`
-3. Follow the "Read Before You Write" order in `_shared/implementation-craft.md` (specs, design,
-   existing code, conventions). If that reference is missing or unreadable, read in your own
-   judgement's order and say so in your report — an unreadable craft reference never blocks the phase.
+Do what **Section A** of `_shared/sdd-phase-common.md` says.
 
-#### Step 2a: Enforce Review Workload Decision
+### Step 2: Gather Context
 
-Before implementing, inspect the tasks artifact for `Review Workload Forecast`. The budget, the
-chain strategies, and how to keep a slice reviewable are owned by "Keeping a Diff Reviewable" in
-`_shared/implementation-craft.md`.
+No code gets written until you have:
 
-If the forecast says any of `400-line budget risk: High`, `Chained PRs recommended: Yes`, or
-`Decision needed before apply: Yes`, confirm the orchestrator/user provided a resolved delivery path
-before implementing:
+1. checked that the structured status shows `applyState: ready`;
+2. gone through every applicable artifact path or topic that `contextFiles` lists;
+3. read in the "Read Before You Write" order of `_shared/implementation-craft.md` (specs, design,
+   existing code, conventions).
 
-1. **`auto-chain` or chosen chained/stacked PR mode**: follow the `Chain strategy` from the tasks artifact.
-2. **`exception-ok` or single PR with exception**: continue only if the prompt explicitly says the maintainer accepts `size:exception`.
-3. **`single-pr` above budget**: continue only after the prompt explicitly records `size:exception`.
+If that craft reference is missing or unreadable, pick the reading order by your own judgement and
+say so in your report. An unreadable craft reference never blocks the phase.
 
-Also check for `Chain strategy` in the tasks artifact. If it is `pending` the question was reached and
-left open, which is not an answer: STOP and return `blocked`.
+#### Step 2a: Workload Decision Gate
 
-If neither delivery decision nor chain strategy is present, STOP before writing code and return `blocked` with: `Workload decision required before apply: estimated work may exceed 400 changed lines. Ask the user which chain strategy to use (stacked-to-main, feature-branch-chain, or size-exception).`
+Look for a `Review Workload Forecast` in the tasks artifact. What the budget is, which chain
+strategies exist and how a slice stays reviewable all belong to "Keeping a Diff Reviewable" in
+`_shared/implementation-craft.md`; this step only enforces the decision.
 
-#### Step 2b: Read Previous Apply-Progress (if exists)
+When the forecast shows `400-line budget risk: High`, `Chained PRs recommended: Yes` or
+`Decision needed before apply: Yes` (any one of them is enough), implement nothing until you have
+confirmed that the orchestrator or the user gave you a resolved delivery path:
 
-Before starting work, check for existing apply-progress:
+| Delivery path in your prompt | You may go ahead when |
+|------------------------------|-----------------------|
+| `auto-chain`, or a chained/stacked PR mode that was chosen | always, following the `Chain strategy` recorded in the tasks artifact |
+| `exception-ok`, or a single PR with an exception | your prompt states explicitly that the maintainer accepts `size:exception` |
+| `single-pr` over the budget | `size:exception` is explicitly recorded in your prompt |
 
-1. `mem_search(query: "sdd/{change-name}/apply-progress")`
-2. If found: `mem_get_observation(id)` → read the full content
-3. Parse which tasks are already marked complete
-4. Skip those tasks — start from the first incomplete task, except a task the orchestrator re-opened: that one is work again
-5. When saving your apply-progress in Step 6, MERGE: include all previously completed tasks PLUS your newly completed tasks in a single combined artifact
-6. Under Strict TDD, read its `## TDD Evidence Ledger` too: it names the earlier batches' evidence records, which you never open to edit and never rewrite (Step 6)
+Check the tasks artifact's `Chain strategy` as well. A value of `pending` means the question came
+up and was left open, and an open question is not an answer: STOP and return `blocked`.
 
-**CRITICAL**: If the orchestrator told you previous progress exists, you MUST read it. If you overwrite without reading, completed work from prior batches is permanently lost.
+With neither a delivery decision nor a chain strategy present, write no code: STOP and return
+`blocked` with this exact message:
+
+`Workload decision required before apply: estimated work may exceed 400 changed lines. Ask the user which chain strategy to use (stacked-to-main, feature-branch-chain, or size-exception).`
+
+#### Step 2b: Earlier Apply-Progress
+
+Earlier batches may have left progress behind. Look for it before you start:
+
+1. Run `mem_search(query: "sdd/{change-name}/apply-progress")`.
+2. On a hit, call `mem_get_observation(id)` for the untruncated content.
+3. Work out which tasks it already shows as complete and leave them alone, beginning at the first
+   incomplete one, except a task the orchestrator re-opened: that one is work again.
+4. Under Strict TDD, read its `## TDD Evidence Ledger` as well. It lists the evidence records of
+   earlier batches, and you never open those to edit them or rewrite them (Step 6).
+5. Your apply-progress in Step 6 is a MERGE: every task completed before plus every task you
+   complete now, in one combined artifact.
+
+**CRITICAL**: once the orchestrator tells you earlier progress exists, reading it is mandatory.
+Writing over it unread destroys the completed work of earlier batches for good.
 
 ### Step 3: Resolve Strict TDD Mode
 
@@ -114,74 +154,92 @@ Take `Strict TDD Mode` from your brief first. Without it, resolve the mode with 
 Mode" in `_shared/implementation-craft.md`, which also says what a brief with no recognized spelling
 means.
 
-```
-Resolved mode:
-├── active   → STRICT TDD MODE → Load and follow the Strict TDD module
-│              (read the file: sdd-apply/strict-tdd.md)
-├── inactive → STANDARD MODE → use Step 4 below (no TDD module loaded)
-└── Cache the resolved mode for the return summary
-```
+The outcome picks the path:
 
-**Key principle**: If Strict TDD Mode is not active, ZERO TDD instructions are loaded. The `sdd-apply/strict-tdd.md` module is never read, never processed, never consumes tokens.
+- **active**: STRICT TDD MODE. Read `sdd-apply/strict-tdd.md` and follow it as your Strict TDD
+  module.
+- **inactive**: STANDARD MODE. Step 4 is your path, and no TDD module gets loaded.
 
-The Strict TDD hard gate, its evidence table, and the all-modes Work Unit Evidence table are owned
-by "Test-Driven Discipline" in `_shared/implementation-craft.md`. If that reference is missing or
-unreadable, apply your own judgement for evidence discipline and say so in your report — an
-unreadable craft reference never blocks the phase.
+Either way, keep the outcome at hand, because the return summary reports it.
 
-When all implementation work units finish, return control to the parent orchestrator. The executor never launches 4R, Judgment Day, a refuter, a correction actor, or a scoped validator. The parent may delegate fresh-context `sdd-verify` when requirements, tests, or change impact need verification.
+**Key principle**: when the mode is not active, not one TDD instruction is loaded. The file
+`sdd-apply/strict-tdd.md` stays unread and unprocessed and costs zero tokens.
 
-### Step 4: Implement Tasks (Standard Workflow)
+The Strict TDD hard gate, its evidence table and the Work Unit Evidence table that every mode
+produces are owned by "Test-Driven Discipline" in `_shared/implementation-craft.md`. If that
+reference is missing or unreadable, use your own judgement for evidence discipline and say so in
+your report; an unreadable craft reference never blocks the phase.
 
-This step is used when Strict TDD Mode is NOT active. Follow the "Standard Task Loop" in
-`_shared/implementation-craft.md`, marking each task complete `[x]` in the persisted tasks artifact
-immediately as you go.
+### Step 4: Standard Implementation Loop
 
-### Step 5: Mark Tasks Complete
+This step runs only when Strict TDD Mode is NOT active. Work through the "Standard Task Loop" in
+`_shared/implementation-craft.md`, and tick each task `[x]` in the persisted tasks artifact the
+moment it is done rather than later.
 
-Update `tasks.md` — change `- [ ]` to `- [x]` for completed tasks:
+### Step 5: Tick Completed Tasks
 
-```markdown
-## Phase 1: Foundation
+In `tasks.md`, every task you finished changes from `- [ ]` to `- [x]`, so a line such as
+`- [ ] 2.1 Add the orders migration` becomes `- [x] 2.1 Add the orders migration`, while tasks you
+have not reached keep their `- [ ]`.
 
-- [x] 1.1 Create `internal/auth/middleware.go` with JWT validation
-- [x] 1.2 Add `AuthConfig` struct to `internal/config/config.go`
-- [ ] 1.3 Add auth routes to `internal/server/server.go`  ← still pending
-```
+### Step 6: Save Progress and Evidence
 
-### Step 6: Persist Progress
+Never skip this step; it is MANDATORY.
 
-**This step is MANDATORY — do NOT skip it.**
+Write apply-progress the way **Section C** of `_shared/sdd-phase-common.md` describes, as artifact
+`apply-progress` with topic_key `sdd/{change-name}/apply-progress` and type `architecture`. Bring
+the tasks artifact's `[x]` marks up to date too: `mem_update` under engram, a file edit under
+openspec or hybrid.
 
-Follow **Section C** from `_shared/sdd-phase-common.md`.
-- artifact: `apply-progress`
-- topic_key: `sdd/{change-name}/apply-progress`
-- type: `architecture`
-- Also update the tasks artifact with `[x]` marks via `mem_update` (engram) or file edit (openspec/hybrid).
+#### Strict TDD: one evidence record per batch
 
-#### Strict TDD evidence record (write once, before apply-progress)
+Under Strict TDD, take this batch's TDD Cycle Evidence table (and its safety-net baseline, when the
+table carries one) and write it as its OWN artifact BEFORE writing apply-progress. Each batch gets
+exactly one record, and that record is written once.
 
-Under Strict TDD, write this batch's TDD Cycle Evidence table (with the batch's safety-net baseline, if the table has one) as its OWN artifact BEFORE writing apply-progress. One record per batch, written once:
-- **engram**: `topic_key: sdd/{change-name}/apply-evidence/{n}` (same title, `type: architecture`, `scope: project`, `capture_prompt: false`, as every SDD artifact). `{n}` is 1 for the first batch, otherwise one more than the highest batch number in the apply-progress `## TDD Evidence Ledger`. Apply batches are strictly sequential (the task and progress artifacts are shared state), so `{n}` is never assigned while another apply batch runs.
-- **Never reuse a key.** Before writing a record, confirm its key is free: engram, `mem_search` for the key and compare titles exactly (the title equals the key); openspec, the file does not exist. If a record already exists at that number and is not in the ledger, it belongs to a batch that stopped after writing its record but before writing apply-progress: add its ledger line too, and take the next free number. If the ledger cannot be read, stop and report; never guess a number.
-- **openspec**: a new file `openspec/changes/{change-name}/apply-evidence/{n}.md`, created once. **hybrid**: both. **none**: nothing persisted; the table still goes in the return summary.
-- A record is never updated: never `mem_update` it, never save again under its key, never edit its file. A correction to an earlier record goes into THIS batch's own record, stated as a correction; earlier records stay untouched.
+Where it goes:
+
+- **engram**: `topic_key: sdd/{change-name}/apply-evidence/{n}`, with the same title and the `type: architecture`, `scope: project` and `capture_prompt: false` that every SDD artifact uses. The number `{n}` is 1 for the first batch, otherwise one more than the highest batch number in the apply-progress `## TDD Evidence Ledger`.
+- **openspec**: a new file `openspec/changes/{change-name}/apply-evidence/{n}.md`, created once.
+- **hybrid**: both.
+- **none**: nothing persisted; your return summary still carries the table.
+
+Numbering it safely:
+
+- Apply batches are strictly sequential, because the task and progress artifacts are shared state, so no `{n}` is ever handed out while another apply batch is running.
+- Never reuse a key. Prove the key is free before writing: under engram, `mem_search` for it and compare titles exactly (a record's title is its key); under openspec, check that the file does not exist.
+- A record already sitting at that number that is not in the ledger was left by a batch that stopped after writing its record and before writing apply-progress: add its ledger line too, and take the next free number.
+- If the ledger cannot be read, stop and report. A number is never guessed.
+
+Keeping it immutable:
+
+- Once written, a record is never changed: never `mem_update` it, never save again under its key, never edit its file.
+- A correction to an earlier record goes into THIS batch's own record, stated as a correction; earlier records stay untouched.
 - A task re-opened after it was complete gets new rows in the re-opening batch's own record, marked as re-opened. Its earlier rows stay in their earlier records.
 
-#### Merge Protocol
+#### Merging apply-progress
 
-When saving apply-progress:
-1. If you read previous progress in Step 2b, your artifact MUST include ALL previously completed tasks (copy their status) PLUS your new completions
-2. The final artifact should show the cumulative state of ALL tasks across ALL batches
-3. Format: keep the same structure but ensure no completed task is lost from prior batches
-4. Under Strict TDD, apply-progress carries a `## TDD Evidence Ledger` with one line per batch in a fixed format: `{n} | {key} | {observation id or file path} | {task ids} | {date}`. Copy every existing ledger line exactly, never dropping, merging, reordering or rewording one, and append this batch's line. New batches' RED/GREEN rows live in their records, not in apply-progress.
-5. If the previous apply-progress has evidence tables from before the ledger existed, keep those tables exactly as they are in apply-progress (never compress, reword or drop them) and start the ledger at n=1 with this batch.
+Whenever you write apply-progress:
 
-### Step 7: Return Summary
+1. If Step 2b found earlier progress, your artifact MUST carry ALL previously completed tasks, with their status copied over, PLUS the ones you completed now.
+2. What you write is cumulative: the state of ALL tasks, from ALL batches.
+3. The structure stays as it was, and no task completed in an earlier batch may go missing.
+4. Under Strict TDD, apply-progress also holds a `## TDD Evidence Ledger`, one line per batch in a fixed format: `{n} | {key} | {observation id or file path} | {task ids} | {date}`. Copy every existing ledger line exactly, never dropping, merging, reordering or rewording one, and append this batch's line. The RED/GREEN rows of new batches belong in their records, never in apply-progress.
+5. If the earlier apply-progress holds evidence tables from before the ledger existed, keep those tables exactly as they are inside apply-progress (no compressing, rewording or dropping them) and start the ledger at n=1 with this batch.
 
-Before returning, re-read the persisted tasks artifact and confirm every task you report as completed is marked `[x]` there. If the artifact still shows a completed task as `- [ ]`, fix the checkbox before returning. Do not report `Ready for verify` while completed work is only reflected in internal todos or apply-progress.
+### Step 7: Report Back
 
-Return to the orchestrator:
+Before you return, open the persisted tasks artifact again and check that every task you are about
+to report as completed shows `[x]` there; one that still shows `- [ ]` gets its checkbox fixed first.
+Completion recorded only in internal todos or in apply-progress does not count, so never report
+`Ready for verify` in that state.
+
+Once every implementation work unit is finished, hand control back to the parent orchestrator. You
+never launch 4R, Judgment Day, a refuter, a correction actor or a scoped validator yourself; when
+requirements, tests or change impact need verifying, the parent may delegate a fresh-context
+`sdd-verify`.
+
+The orchestrator gets back this report.
 
 ```markdown
 ## Implementation Progress
@@ -190,66 +248,72 @@ Return to the orchestrator:
 **Mode**: {Strict TDD | Standard}
 
 ### Completed Tasks
-- [x] {task 1.1 description}
-- [x] {task 1.2 description}
+- [x] {1.1 — what the task does}
+- [x] {1.2 — what the task does}
 
 ### Files Changed
 | File | Action | What Was Done |
 |------|--------|---------------|
-| `path/to/file.ext` | Created | {brief description} |
-| `path/to/other.ext` | Modified | {brief description} |
+| `path/to/new_file.ext` | Created | {one-line summary} |
+| `path/to/existing_file.ext` | Modified | {one-line summary} |
 
-{IF Strict TDD Mode → include TDD Cycle Evidence table from sdd-apply/strict-tdd.md — return-summary content; the batch's evidence record holds it durably}
+{Strict TDD Mode only → the TDD Cycle Evidence table defined in sdd-apply/strict-tdd.md, here as return-summary content; the batch's evidence record is where it lives durably}
 
 ### Deviations from Design
-{List any places where the implementation deviated from design.md and why.
-If none, say "None — implementation matches design."}
+{Each point where the implementation departs from design.md, and the reason for it. With none, write "None — implementation matches design."}
 
 ### Issues Found
-{List any problems discovered during implementation.
-If none, say "None."}
+{Problems that surfaced while implementing. With none, write "None."}
 
 ### Remaining Tasks
-- [ ] {next task}
-- [ ] {next task}
+- [ ] {a task still open}
+- [ ] {another one still open}
 
 ### Workload / PR Boundary
 - Mode: {single PR | chained PR slice | stacked PR slice | size:exception}
-- Current work unit: {unit name or "N/A"}
-- Boundary: {what this apply batch starts from and ends with}
-- Estimated review budget impact: {brief note}
+- Current work unit: {the unit's name, or "N/A"}
+- Boundary: {where this apply batch begins and where it stops}
+- Estimated review budget impact: {short note}
 
 ### Status
 {N}/{total} tasks complete. {Ready for next batch / Ready for verify / Blocked by X}
 ```
 
-## Rules
+## Artifact Language
 
-The implementation rules — reading specs and design, matching conventions, not freelancing, noting
-deviations instead of hiding them, stopping when blocked, PR-slice discipline — are owned by
-`_shared/implementation-craft.md`. If that reference is missing or unreadable, apply your own
-judgement and say so in your report.
-
-This phase adds, on top of that:
-
-- ALWAYS consume or produce structured status before implementation; do not infer readiness from conversation alone
-- STOP on `applyState: blocked` and do not edit; STOP on unsafe `actionContext` or edit roots
-- In `openspec` mode, mark tasks complete in `tasks.md` AS you go, not at the end
-- Before returning, re-read the persisted tasks artifact and ensure completed tasks are visibly marked `[x]`; internal todos are not completion evidence
-- Skill loading is handled in Step 1 — follow any loaded skills strictly when writing code
-- Apply any `rules.apply` from `openspec/config.yaml`
-- If Strict TDD Mode is active (Step 3), load `sdd-apply/strict-tdd.md` and follow its cycle INSTEAD of Step 4
-- When Strict TDD is active, the `sdd-apply/strict-tdd.md` module's rules OVERRIDE Step 4 entirely
-- Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
+- English is the default for every technical artifact you generate. An SDD artifact does not pick
+  up the language of the chat, nor the regional voice of whichever persona is active; it takes
+  another language only when the user explicitly asks for that artifact language or the project's
+  convention requires it.
+- If the user explicitly wants technical artifacts in some other language, keep them in a
+  neutral/professional register, unless the user explicitly asks for a different tone or a
+  regional variant.
+- A public or contextual comment is written, by default, in the language of the context it is
+  aimed at. The user's explicit choice of language or tone always overrides that; without one, stay
+  neutral/professional unless the target context plainly calls for some other tone or a regional
+  variant.
 
 <!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Implementation
 
-Use CBM before writing code when the task changes central/shared symbols, public APIs, controllers/handlers, service methods, routing, persistence flows, or anything likely to have non-obvious callers. Follow the tool priority order and the index-repair rule in `_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without claiming graph evidence; do not invent your own tool order or fallback conditions.
+Reach for CBM before writing code whenever the task changes central or shared symbols, public APIs,
+controllers or handlers, service methods, routing, persistence flows, or anything else likely to
+have callers that are not obvious. Tool priority and the index-repair rule come from
+`_shared/mcp/cbm-convention.md`. If that path is missing or unreadable, say so and proceed without
+claiming graph evidence; do not invent your own tool order or fallback conditions.
 
-Do NOT call CBM for simple one-file mechanical edits where the affected surface is obvious.
+Do NOT call CBM for a simple mechanical edit confined to one file, where the affected surface is
+obvious.
 
 ## CBM Index Coherence Gate
 
-After implementation and before persisting `apply-progress`, trigger only for a High workload forecast, chained/exception delivery, apply-owned structural/generated changes, an apply-owned public/shared API/route/module boundary, or five or more apply-owned files. Do not attribute a dirty global diff blindly: use the orchestrator baseline and apply-owned manifest when present. When triggered, read `sdd-apply/references/cbm-index-coherence.md` before collecting coherence evidence; it owns derivation, moderate-first indexing, coverage evidence, escalation, dirty-baseline handling, and `apply-progress` reporting. If it is missing or unreadable, record coherence as unavailable and do not claim index evidence.
+This gate runs after implementation and before `apply-progress` is persisted, and only when at
+least one of these holds: a High workload forecast; chained or exception delivery; structural or
+generated changes owned by apply; a public or shared API, route or module boundary owned by apply;
+five or more apply-owned files. Never pin a dirty global diff on apply blindly: use the
+orchestrator's baseline and the apply-owned manifest when they exist. Once the gate triggers, read
+`sdd-apply/references/cbm-index-coherence.md` before you collect any coherence evidence; that file
+owns derivation, moderate-first indexing, coverage evidence, escalation, dirty-baseline handling
+and `apply-progress` reporting. If it is missing or unreadable, record coherence as unavailable and
+claim no index evidence.
 <!-- /darq-local:cbm-protocol -->

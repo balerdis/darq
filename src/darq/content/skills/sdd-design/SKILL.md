@@ -10,155 +10,72 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-design` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> **ORCHESTRATOR GATE.** Whoever opens this file with the `skill()` tool is the orchestrator, and must not
+> run the phase inline: halt here and launch the `sdd-design` sub-agent through the platform's delegation
+> primitive (`task(...)`, sub-agent invocation, and so on). What follows is for executors only.
 
-## Executor Override
+## For the sdd-design sub-agent
 
-If you ARE the `sdd-design` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+That gate is for the orchestrator, not for you. Do the phase yourself, delegating NONE of it and never
+invoking the Skill tool: executing is your job, so execute.
 
+## Artifact language
 
-## Language Domain Contract
+- Default: English, for every generated technical artifact. Neither the conversation's own language nor the
+  persona's regional voice carries into an SDD artifact, unless the user explicitly asks for that artifact
+  language or a project convention requires it.
+- A language the user explicitly asked for is written neutrally and professionally, unless the user
+  explicitly asks for a particular tone or a regional variant.
+- Comments meant for the public or for a specific context take that context's language by default. Whatever
+  the user says explicitly about language or tone wins; short of that they stay neutral and professional,
+  unless their context plainly needs another tone or a regional variant.
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+## Your job
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+You own the TECHNICAL DESIGN of one change. Read its proposal and its specs, then write `design.md`, the
+document that settles HOW the change gets built: the architecture decisions behind it, the way data moves
+through it, which files it touches, and the technical reasoning that holds all of that together.
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
+Two things arrive with your launch: the name of the change, and the artifact store mode, which is one of
+`engram | openspec | hybrid | none`.
 
-## Purpose
+## Inputs and outputs per store mode
 
-You are a sub-agent responsible for TECHNICAL DESIGN. You take the proposal and specs, then produce a `design.md` that captures HOW the change will be implemented — architecture decisions, data flow, file changes, and technical rationale.
+Fetching follows **Section B** of `_shared/sdd-phase-common.md`; saving follows its **Section C**. For this
+phase the modes mean:
 
-## What You Receive
+- `engram`: the proposal is required, at `sdd/{change-name}/proposal`. The spec, at `sdd/{change-name}/spec`,
+  is optional: sdd-spec may be running alongside you and not have saved it yet. Your result is saved under
+  `sdd/{change-name}/design`.
+- `openspec`: do what `_shared/openspec-convention.md` prescribes, after reading it.
+- `hybrid`: honor both conventions together: the Engram save and a `design.md` on disk. Inputs come from
+  Engram first; the filesystem is the fallback.
+- `none`: hand the result back and nothing more; no project file is created or changed.
 
-From the orchestrator:
-- Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
+## Procedure
 
-## Execution and Persistence Contract
+1. **Skills.** Load them as **Section A** of `_shared/sdd-phase-common.md` describes.
+2. **Code before design.** Before deciding anything, open the code this change will affect and learn from
+   the source itself where its entry points are and how its modules are arranged, which conventions and
+   patterns it already follows, what it depends on and which interfaces are involved, and what test
+   infrastructure exists, if any does.
+3. **Threat matrix check.** Ask whether the design changes routing, shell commands or subprocesses, VCS/PR
+   automation, the classification of files as executable, or process integration. If it changes any of
+   them, read `sdd-design/references/threat-matrix.md` and bring its matrix into the design: each row gets
+   `Applicable` or an explicit `N/A` with its reason, and each applicable case gets its expected
+   safe/failure behavior and the RED tests planned for it. If none of these boundaries is present, note the matrix as
+   not applicable and invent no tasks on its account.
+4. **Write the design** as "The design.md template" below lays it out, following "Design rules". Under
+   `openspec` or `hybrid` that is the file `openspec/changes/{change-name}/design.md`, placed in the change
+   directory beside `proposal.md` and `specs/`. Under `engram` or `none`, create neither an
+   `openspec/` directory nor any file inside one; the design waits in memory for step 5.
+5. **Persist. This step is mandatory and is never skipped.** Apply **Section C** of
+   `_shared/sdd-phase-common.md` with artifact `design`, topic_key `sdd/{change-name}/design`, and type
+   `architecture`.
+6. **Report** to the orchestrator with the summary in the next section, inside the return envelope that
+   **Section D** of `_shared/sdd-phase-common.md` defines.
 
-> Follow **Section B** (retrieval) and **Section C** (persistence) from `_shared/sdd-phase-common.md`.
-
-- **engram**: Read `sdd/{change-name}/proposal` (required) and `sdd/{change-name}/spec` (optional — may not exist if running in parallel with sdd-spec). Save as `sdd/{change-name}/design`.
-- **openspec**: Read and follow `_shared/openspec-convention.md`.
-- **hybrid**: Follow BOTH conventions — persist to Engram AND write `design.md` to filesystem. Retrieve dependencies from Engram (primary) with filesystem fallback.
-- **none**: Return result only. Never create or modify project files.
-
-## What to Do
-
-### Step 1: Load Skills
-Follow **Section A** from `_shared/sdd-phase-common.md`.
-
-### Step 2: Read the Codebase
-
-Before designing, read the actual code that will be affected:
-- Entry points and module structure
-- Existing patterns and conventions
-- Dependencies and interfaces
-- Test infrastructure (if any)
-
-### Step 2a: Applicability-Driven Threat Matrix
-
-If the design changes routing, shell commands, subprocesses, VCS/PR automation, executable-file classification, or process integration, read `sdd-design/references/threat-matrix.md` and include its matrix in the design. Mark every row `Applicable` or explicit `N/A` with a reason. Define expected safe/failure behavior and planned RED tests for every applicable case. If none of these boundaries exists, record the matrix as not applicable; do not manufacture irrelevant tasks.
-
-### Step 3: Write design.md
-
-**IF mode is `openspec` or `hybrid`:** Create the design document:
-
-```
-openspec/changes/{change-name}/
-├── proposal.md
-├── specs/
-└── design.md              ← You create this
-```
-
-**IF mode is `engram` or `none`:** Do NOT create any `openspec/` directories or files. Compose the design content in memory — you will persist it in Step 4.
-
-#### Design Document Format
-
-```markdown
-# Design: {Change Title}
-
-## Technical Approach
-
-{Concise description of the overall technical strategy.
-How does this map to the proposal's approach? Reference specs.}
-
-## Architecture Decisions
-
-### Decision: {Decision Title}
-
-**Choice**: {What we chose}
-**Alternatives considered**: {What we rejected}
-**Rationale**: {Why this choice over alternatives}
-
-### Decision: {Decision Title}
-
-**Choice**: {What we chose}
-**Alternatives considered**: {What we rejected}
-**Rationale**: {Why this choice over alternatives}
-
-## Data Flow
-
-{Describe how data moves through the system for this change.
-Use ASCII diagrams when helpful.}
-
-    Component A ──→ Component B ──→ Component C
-         │                              │
-         └──────── Store ───────────────┘
-
-## File Changes
-
-| File | Action | Description |
-|------|--------|-------------|
-| `path/to/new-file.ext` | Create | {What this file does} |
-| `path/to/existing.ext` | Modify | {What changes and why} |
-| `path/to/old-file.ext` | Delete | {Why it's being removed} |
-
-## Interfaces / Contracts
-
-{Define any new interfaces, API contracts, type definitions, or data structures.
-Use code blocks with the project's language.}
-
-## Testing Strategy
-
-| Layer | What to Test | Approach |
-|-------|-------------|----------|
-| Unit | {What} | {How} |
-| Integration | {What} | {How} |
-| E2E | {What} | {How} |
-
-## Threat Matrix
-
-{For routing/shell/process integration, include the applicability matrix from `sdd-design/references/threat-matrix.md`. Otherwise: `N/A — no routing, shell, subprocess, VCS/PR automation, executable-file classification, or process-integration boundary.`}
-
-## Migration / Rollout
-
-{If this change requires data migration, feature flags, or phased rollout, describe the plan.
-If not applicable, state "No migration required."}
-
-## Open Questions
-
-- [ ] {Any unresolved technical question}
-- [ ] {Any decision that needs team input}
-```
-
-### Step 4: Persist Artifact
-
-**This step is MANDATORY — do NOT skip it.**
-
-Follow **Section C** from `_shared/sdd-phase-common.md`.
-- artifact: `design`
-- topic_key: `sdd/{change-name}/design`
-- type: `architecture`
-
-### Step 5: Return Summary
-
-Return to the orchestrator:
+## What you send back
 
 ```markdown
 ## Design Created
@@ -167,35 +84,113 @@ Return to the orchestrator:
 **Location**: `openspec/changes/{change-name}/design.md` (openspec/hybrid) | Engram `sdd/{change-name}/design` (engram) | inline (none)
 
 ### Summary
-- **Approach**: {one-line technical approach}
-- **Key Decisions**: {N decisions documented}
-- **Files Affected**: {N new, M modified, K deleted}
-- **Testing Strategy**: {unit/integration/e2e coverage planned}
+- **Approach**: {a single line naming the technical approach}
+- **Key Decisions**: {how many decisions the design records}
+- **Files Affected**: {counts of files created, modified and deleted}
+- **Testing Strategy**: {the coverage planned at the unit, integration and e2e levels}
 
 ### Open Questions
-{List any unresolved questions, or "None"}
+{every question still open, or "None"}
 
 ### Next Step
-Ready for tasks (sdd-tasks).
+The tasks phase (sdd-tasks) can start.
 ```
 
-## Rules
+## Design rules
 
-- ALWAYS read the actual codebase before designing — never guess
-- Every decision MUST have a rationale (the "why")
-- Include concrete file paths, not abstract descriptions
-- Use the project's ACTUAL patterns and conventions, not generic best practices
-- If you find the codebase uses a pattern different from what you'd recommend, note it but FOLLOW the existing pattern unless the change specifically addresses it
-- Keep ASCII diagrams simple — clarity over beauty
-- Apply any `rules.design` from `openspec/config.yaml`
-- If you have open questions that BLOCK the design, say so clearly — don't guess
-- **Size budget**: Design artifact MUST be under 800 words. Architecture decisions as tables (option | tradeoff | decision). Code snippets only for non-obvious patterns.
-- Applicable threat-matrix rows are design requirements and MUST propagate to tasks and RED tests unchanged; explicit `N/A` rows require no task.
-- Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
+Ground everything in the code:
+- Read the existing code before any design work, ALWAYS; a design built on guesses is not acceptable.
+- What the project really does, in its own conventions and patterns, outranks generic best practice. When
+  the code follows a pattern you would not have chosen, say so, and still FOLLOW it, unless the change
+  specifically addresses that pattern.
+- Name concrete file paths; describing a file in the abstract does not count.
 
-## References
+Decide with reasons:
+- Every decision MUST carry its rationale, the "why".
+- An open question that BLOCKS the design gets stated plainly; never guess your way past it.
+- Whatever `rules.design` says in `openspec/config.yaml` applies here.
 
-- [sdd-design/references/threat-matrix.md](sdd-design/references/threat-matrix.md) — load only for routing, shell, subprocess, VCS/PR automation, executable-file classification, or process-integration designs.
+Keep it lean:
+- The design artifact MUST stay under 800 words. Architecture decisions go in tables with the columns
+  option | tradeoff | decision; code snippets appear only for patterns that are not obvious.
+- ASCII diagrams stay simple: being clear matters more than being pretty.
+
+Carry threats forward:
+- An applicable threat-matrix row is a design requirement. It MUST reach the tasks and the RED tests
+  without changes. A row marked with an explicit `N/A` needs no task.
+
+## Reference files
+
+- [sdd-design/references/threat-matrix.md](sdd-design/references/threat-matrix.md): load it only when the
+  design crosses one of the boundaries step 3 of the procedure lists.
+
+## The design.md template
+
+```markdown
+# Design: {Change Title}
+
+## Technical Approach
+
+{A few sentences on the overall technical strategy: how it delivers the approach the proposal picked, and
+which specs it answers to.}
+
+## Architecture Decisions
+
+### Decision: {Decision Title}
+
+**Choice**: {what was adopted}
+**Alternatives considered**: {what was turned down}
+**Rationale**: {what makes the adopted option better}
+
+### Decision: {Decision Title}
+
+**Choice**: {what was adopted}
+**Alternatives considered**: {what was turned down}
+**Rationale**: {what makes the adopted option better}
+
+## Data Flow
+
+{The route data travels across the system in this change, with an ASCII diagram wherever one helps.}
+
+    Client ──→ API ──→ Service
+                          └──→ Repository ──→ Database
+
+## File Changes
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/area/new_part.ext` | Create | {the job the new file does} |
+| `src/area/current_part.ext` | Modify | {the change made to it, and its reason} |
+| `src/area/old_part.ext` | Delete | {the reason it is removed} |
+
+## Interfaces / Contracts
+
+{Any interface, API contract, type definition or data structure the change introduces, each in a code block
+in whatever language the project is written in.}
+
+## Testing Strategy
+
+| Layer | What to Test | Approach |
+|-------|-------------|----------|
+| Unit | {target} | {technique} |
+| Integration | {target} | {technique} |
+| E2E | {target} | {technique} |
+
+## Threat Matrix
+
+{When routing, shell or process integration is involved: the applicability matrix of `sdd-design/references/threat-matrix.md`, filled in. When none is:
+`N/A — no routing, shell, subprocess, VCS/PR automation, executable-file classification, or process-integration boundary.`}
+
+## Migration / Rollout
+
+{How any data migration, feature flag or phased rollout will be handled; if the change needs none of them,
+write "No migration required."}
+
+## Open Questions
+
+- [ ] {a technical point nobody has settled yet}
+- [ ] {a choice that is waiting on the team}
+```
 
 <!-- darq-local:cbm-protocol -->
 ## Local Codebase Memory Protocol for Design

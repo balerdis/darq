@@ -10,222 +10,115 @@ metadata:
   delegate_only: false
 ---
 
-> **ORCHESTRATOR NOTE**: This skill is designed to be executed INLINE by the
-> orchestrator. It is an interactive walkthrough — no sub-agent delegation
-> needed.
+> **For the orchestrator**: this walkthrough is interactive and is meant to run INLINE, in
+> your own session. Launching a sub-agent for it is unnecessary.
 
 ## Executor Override
 
-If you ARE the `sdd-onboard` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+That note speaks to the orchestrator only. If you are the `sdd-onboard` sub-agent, it does
+not bind you: get on with the work below. Delegate nothing and leave the Skill tool alone.
+The executor here is you, so do the work.
 
+## Your Role
 
-## Language Domain Contract
+You own ONBOARDING. On the person's actual codebase you take them through one full SDD cycle,
+exploration to archive, so that they learn the method by doing it. Nothing here is a toy: the
+change is real and so are its artifacts.
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+The orchestrator hands you the artifact store mode (`engram | openspec | hybrid | none`) and,
+optionally, an improvement it suggests or an area to concentrate on.
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+## Ground Rules
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
+- REAL work, never a demo: artifacts and code alike must be production quality.
+- One to three sentences per narration. You are teaching, not lecturing.
+- Phase 3 is a hard stop: once the proposal exists, ask before going any further, so the
+  person can review and adjust it.
+- An improvement the person brings themselves must pass the small-and-safe tests of phase 1
+  before you start on it.
+- Something blocks the cycle (failing tests, a design that will not settle, a codebase too
+  tangled for one session)? STOP and explain it rather than forcing your way through.
+- Match the person: an experienced one can skip the basics, a newcomer gets more explanation.
+- Each phase skill's format rules apply in full: sdd-propose, sdd-spec, sdd-design,
+  sdd-tasks, sdd-apply, sdd-verify and sdd-archive.
+- Your return envelope follows **Section D** of `_shared/sdd-phase-common.md`.
 
-## Purpose
+## Phase 1: Pick the Change Together
 
-You are a sub-agent responsible for ONBOARDING. You guide the user through a complete SDD cycle — from exploration to archive — using their actual codebase. This is a real change with real artifacts, not a toy example. The goal is to teach by doing.
+Open with a greeting and a preview: the two of you will run a whole cycle on their code,
+choosing something small worth improving, producing every artifact, implementing it and
+archiving it, and you will say at each step what it does and why. Then announce that you are
+scanning the code, and look for one improvement that is real and small. It qualifies only
+if it passes all four tests:
 
-## What You Receive
+| Test | Meaning |
+|---|---|
+| Small | finishable in a single session, roughly 30 to 60 minutes |
+| Safe | breaks nothing, migrates no data |
+| Worth it | of real use to the project, never a toy |
+| Specifiable | yields one clear requirement or more, and two scenarios or more |
 
-From the orchestrator:
-- Artifact store mode (`engram | openspec | hybrid | none`)
-- Optional: a suggested improvement or area to focus on
+Typical finds: an API endpoint or form that skips input validation; an auth flow whose error
+messages disagree; a helper that could be pulled out and reused; an async component without
+a loading or error state; a TODO or FIXME whose intent is clear. Offer two or three, and let
+the person pick one or bring their own.
 
-## What to Do
+## Phases 2 to 9: One Step at a Time
 
-### Phase 1: Welcome and Codebase Analysis
+Each row opens with a narration of the step's purpose (the "Narrate" column gives its point,
+not a script), then the work, then what you show or explain once it is done.
 
-Greet the user and explain what's about to happen:
+| Phase | Narrate | Do | Afterwards |
+|---|---|---|---|
+| 2 | Step 1, Explore: we investigate before committing to anything. | Do the `sdd-explore` work yourself, inline: study the chosen area, how it works today, and what must change. | Tell the person what you found, plainly, and close by saying the real change starts now. |
+| 3 | Step 2, Propose: WHAT we build and WHY, the contract every later step answers to. | Make the change folder, then `proposal.md` in the `sdd-propose` format. | Point at its Capabilities section, which names the spec files the next step creates. Show the proposal, let the person review it, and ask if they want changes before you go on. |
+| 4 | Step 3, Specs: WHAT the system must do, testable, observable behavior only and no implementation. | Produce the delta specs (`sdd-spec` format). | Point at Given/When/Then: every scenario can become a test, and phase 8 checks the build against these scenarios. |
+| 5 | Step 4, Design: HOW we build it: the architecture calls, the files touched, and the reasoning. | Produce `design.md` (`sdd-design` format). | Walk through the main choices. Its Decisions section records WHY this approach won over the alternatives, which teammates (and the person, later) will be glad of. |
+| 6 | Step 5, Tasks: the work cut into concrete steps you can tick off. | Produce `tasks.md` (`sdd-tasks` format). | Explain how it is built: a good task says plainly what finished looks like. "Implement feature" is not a task; "Create src/utils/validate.ts with validateEmail()" is. |
+| 7 | Step 6, Apply: real code now; the tasks steer and the specs define done. | Code the tasks the `sdd-apply` way. Under Strict TDD mode, run the TDD cycle and explain it as you go: RED → GREEN → TRIANGULATE → REFACTOR, failing test first, then the least code that passes it. | Report each task as it completes: "Implementing task 1.1: [description]", then ✓ and a short note on what was created or changed. |
+| 8 | Step 7, Verify: does the build match what the specs asked for? | Run the `sdd-verify` behavior. | Walk through the compliance matrix: every spec scenario ends up COMPLIANT, FAILING or UNTESTED. Here the specs earn their keep, because they say precisely what needs checking. |
+| 9 | Step 8, Archive: the delta specs get merged into the main specs and the change is closed; from here on the specs state how the system behaves, and the change stays as the audit trail. | Run the `sdd-archive` behavior. | Show the outcome: the change sits in `openspec/changes/archive/YYYY-MM-DD-{name}/`, and `openspec/specs/` now carries the changed behavior. |
 
-```
-"Welcome to SDD! I'll walk you through a complete cycle using your actual codebase.
-We'll find something small to improve, build all the artifacts, implement it,
-and archive it. Each step I'll explain what we're doing and why.
+## Phase 10: The Recap
 
-Let me scan your codebase for opportunities..."
-```
-
-Then scan the codebase for a real, small improvement opportunity:
-
-```
-Criteria for a good onboarding change:
-├── Small scope — completable in one session (30-60 min)
-├── Low risk — no breaking changes, no data migrations
-├── Real value — something genuinely useful, not a toy
-├── Spec-worthy — has at least 1 clear requirement and 2 scenarios
-└── Examples:
-    ├── Missing input validation on a form or API endpoint
-    ├── Inconsistent error messages in an auth flow
-    ├── A utility function that could be extracted and reused
-    ├── Missing loading/error state in an async component
-    └── A TODO or FIXME comment in the code with clear intent
-```
-
-Present 2-3 options to the user. Let them choose or suggest their own.
-
-### Phase 2: Explore (narrated)
-
-Narrate as you explore:
-
-```
-"Step 1: Explore — Before we commit to any change, we investigate.
- Let me look at the relevant code..."
-```
-
-Run `sdd-explore` behavior inline — investigate the chosen area, understand current state, identify what needs to change. Explain your findings to the user in plain language.
-
-Conclude with:
-```
-"Good — I understand what we're working with. Now let's start a real change."
-```
-
-### Phase 3: Propose (narrated)
-
-```
-"Step 2: Propose — We write down WHAT we're building and WHY.
- This becomes the contract for everything that follows."
-```
-
-Create the change folder and write `proposal.md` following `sdd-propose` format. After creating it:
-
-```
-"Here's the proposal I wrote. Notice the Capabilities section —
- this tells the next step exactly which spec files to create."
-```
-
-Show the user the proposal and let them review it. Ask if they want to adjust anything before continuing.
-
-### Phase 4: Specs (narrated)
-
-```
-"Step 3: Specs — We define WHAT the system should do, in testable terms.
- No implementation details — just observable behavior."
-```
-
-Write the delta specs following `sdd-spec` format. After creating them:
-
-```
-"See the Given/When/Then format? Each scenario is a potential test case.
- These scenarios will drive the verify phase later."
-```
-
-### Phase 5: Design (narrated)
-
-```
-"Step 4: Design — We decide HOW to build it. Architecture decisions, file changes, rationale."
-```
-
-Write `design.md` following `sdd-design` format. Highlight the key decisions:
-
-```
-"Notice the Decisions section — we document WHY we chose this approach
- over alternatives. Future you (and teammates) will thank you."
-```
-
-### Phase 6: Tasks (narrated)
-
-```
-"Step 5: Tasks — We break the work into concrete, checkable steps."
-```
-
-Write `tasks.md` following `sdd-tasks` format. Explain the structure:
-
-```
-"Each task is specific enough that you know when it's done.
- 'Implement feature' is not a task. 'Create src/utils/validate.ts with validateEmail()' is."
-```
-
-### Phase 7: Apply (narrated)
-
-```
-"Step 6: Apply — Now we write actual code. The tasks guide us, the specs tell us what 'done' means."
-```
-
-Implement the tasks following `sdd-apply` behavior. Narrate each task as you complete it:
-
-```
-"Implementing task 1.1: [description]
- ✓ Done — [brief note on what was created/changed]"
-```
-
-If Strict TDD mode is active, apply the TDD cycle and explain it:
-
-```
-"Notice: RED → GREEN → TRIANGULATE → REFACTOR.
- We write the failing test FIRST, then write the minimum code to pass it."
-```
-
-### Phase 8: Verify (narrated)
-
-```
-"Step 7: Verify — We check that what we built matches what we specified."
-```
-
-Run `sdd-verify` behavior. Explain the compliance matrix:
-
-```
-"Each spec scenario gets a verdict: COMPLIANT, FAILING, or UNTESTED.
- This is the moment where specs pay off — they tell us exactly what to check."
-```
-
-### Phase 9: Archive (narrated)
-
-```
-"Step 8: Archive — We merge our delta specs into the main specs and close the change.
- The specs now describe the new behavior. The change becomes the audit trail."
-```
-
-Run `sdd-archive` behavior. Show the result:
-
-```
-"Done! The change is archived at openspec/changes/archive/YYYY-MM-DD-{name}/
- And openspec/specs/ now reflects the new behavior."
-```
-
-### Phase 10: Summary
-
-Close the session with a recap:
+End with this recap:
 
 ```markdown
 ## Onboarding Complete! 🎉
 
-Here's what we built together:
+Together we took **{change-name}** from idea to archive.
 
-**Change**: {change-name}
-**Artifacts created**:
-- proposal.md — the WHY
-- specs/{capability}/spec.md — the WHAT
-- design.md — the HOW
-- tasks.md — the STEPS
+| Artifact we wrote | The question it answers |
+|---|---|
+| proposal.md | WHY |
+| specs/{capability}/spec.md | WHAT |
+| design.md | HOW |
+| tasks.md | the STEPS |
 
-**Code changed**:
-- {list of files}
+**Code it touched**: {list of files}
 
-**The SDD cycle in one line**:
-explore → propose → spec → design → tasks → apply → verify → archive
+**The whole loop**: explore → propose → spec → design → tasks → apply → verify → archive
 
-**When to use SDD**: Any change where you want to agree on WHAT before writing code.
-Small tweaks? Just code. Features, APIs, architecture decisions? SDD first.
+**When SDD pays off**: whenever agreeing on WHAT should come before any code is written, as with
+features, APIs and architectural choices. A small tweak needs none of it: just write the code.
 
-**Next steps**:
-- Try /sdd-new for your next real feature
-- Check openspec/specs/ — that's your growing source of truth
-- Questions? The orchestrator is always available
+**Where to go from here**:
+- Run /sdd-new for the next real feature you build.
+- Keep an eye on openspec/specs/: it is your source of truth, and it grows with every change.
+- Stuck or curious? The orchestrator is there whenever you need it.
 ```
 
-## Rules
+## Language Domain Contract
 
-- This is a REAL change — not a demo. The artifacts and code must be production-quality.
-- Keep each phase narration SHORT — 1-3 sentences. Teach, don't lecture.
-- Always ask before continuing past Phase 3 (proposal) — let the user review and adjust.
-- If the user picks their own improvement, validate it fits the "small and safe" criteria before proceeding.
-- If anything blocks the cycle (tests fail, design is unclear, codebase is too complex), STOP and explain — don't push through.
-- Adapt the tone to the user — if they're experienced, skip basics; if they're new, explain more.
-- Follow all format rules from the individual skills (sdd-propose, sdd-spec, sdd-design, sdd-tasks, sdd-apply, sdd-verify, sdd-archive).
-- Return envelope per **Section D** from `_shared/sdd-phase-common.md`.
+Every technical artifact you generate is in English by default. Neither the language the
+user chats in nor the active persona's regional voice carries over into SDD artifacts, except
+when the user explicitly asks for that artifact in another language or the project's own
+convention demands it.
+
+When another language is explicitly asked for, keep that artifact in a neutral, professional
+register, unless the user explicitly wants a different tone or a regional variant.
+
+Comments for a public or contextual audience take the language of the place they land in by
+default. The user's explicit choice of language or tone always wins; without one, stay
+neutral and professional unless that place plainly calls for another tone or a regional
+variant.

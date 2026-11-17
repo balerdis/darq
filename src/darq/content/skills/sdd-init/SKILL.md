@@ -10,65 +10,81 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-init` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> **ORCHESTRATOR GATE.** Whoever opens this file with the `skill()` tool is the orchestrator, and must not
+> run the phase inline: halt here and launch the `sdd-init` sub-agent through the platform's delegation
+> primitive (`task(...)`, sub-agent invocation, and so on). What follows is for executors only.
 
-## Executor Override
+## For the sdd-init sub-agent
 
-If you ARE the `sdd-init` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
-
-## Language Domain Contract
-
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
-
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
-
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
+That gate is for the orchestrator, not for you. Do the phase yourself, delegating NONE of it and never
+invoking the Skill tool: executing is your job, so execute.
 
 ## Activation Contract
 
-Run this phase when the orchestrator/user asks to initialize SDD in a project. You are the phase executor: do the work yourself, do not delegate, and do not behave like the orchestrator.
+Trigger: a request, from the orchestrator or from the user, that a project be made ready for SDD. As the
+phase executor you do this work in person: nothing is delegated, and you never take on the orchestrator's
+role.
 
 ## Hard Rules
 
-- Detect the real stack, conventions, architecture, testing tools, and persistence mode; never guess.
-- In `engram` mode, do **not** create `openspec/`.
-- In `openspec` mode, follow `_shared/openspec-convention.md` and write file artifacts.
-- In `hybrid` mode, write both openspec files and Engram observations.
-- Always persist testing capabilities separately as `sdd/{project}/testing-capabilities` or `openspec/config.yaml` `testing:`.
-- Always build `.atl/skill-registry.md`; also save `skill-registry` to Engram when available.
-- Use `capture_prompt: false` for automated SDD/config saves when supported; omit it if the tool schema lacks it.
-- If `openspec/` already exists, report what exists and ask before updating it.
+- Detect, and never guess: the project's real architecture, its stack and the conventions it keeps, the
+  persistence mode, the tools it tests with.
+- Should `openspec/` exist already, say what is in it, and ask before you update it.
+- Testing capabilities ALWAYS get a record of their own, kept apart from the rest: the Engram observation
+  `sdd/{project}/testing-capabilities`, or the `testing:` key of `openspec/config.yaml`.
+- `.atl/skill-registry.md` is built EVERY time; when Engram is reachable, `skill-registry` goes there as well.
+- Automated SDD and config saves pass `capture_prompt: false` where the tool takes that field, and leave it
+  out if the tool's schema has no such field.
+- English is the default for every technical artifact you generate. Neither the conversation's language nor
+  the persona's regional voice enters an SDD artifact, except when the user explicitly wants that language for
+  the artifact or the conventions of the project call for it. Another language the user explicitly asked for
+  gets a neutral, professional register, unless the user explicitly names a different tone or a regional
+  variant.
+- Comments addressed to the public or to a particular context use that context's language by default. An
+  explicit instruction from the user on language or tone wins; without one they stay neutral and
+  professional, unless the context clearly demands a different tone or a regional variant.
 
 ## Decision Gates
 
 | Input | Action |
 |---|---|
-| `mode=engram` | Save context and capabilities to Engram only. |
-| `mode=openspec` | Create/update openspec bootstrap files only. |
-| `mode=hybrid` | Do both Engram and openspec persistence. |
-| `mode=none` | Return detected context only; write no SDD artifacts except registry if required. |
+| Store mode `engram` | Engram, and nothing else, receives both the testing capabilities and the project context; `openspec/` is never created. |
+| Store mode `openspec` | Nothing but the files that bootstrap openspec gets created or updated, written as file artifacts by the rules of `_shared/openspec-convention.md`. |
+| Store mode `hybrid` | Persist both ways at once: the openspec files and the Engram observations. |
+| Store mode `none` | Hand back what you detected, and write no SDD artifact at all, with one exception: the registry, whenever it is needed. |
 | Strict TDD Mode | Resolve it with "Resolving Strict TDD Mode" in `_shared/implementation-craft.md`, then persist the result as `strict_tdd`. |
 
 ## Execution Steps
 
-1. Inspect project files (`package.json`, `go.mod`, `pyproject.toml`, CI, lint/test config) and summarize stack/conventions.
-2. Detect test runner, test layers, coverage, linter, type checker, and formatter.
+1. Read the project's own files, then summarize what stack it runs on and which conventions it keeps:
+   manifests such as `pyproject.toml`, `go.mod` or `package.json`, the CI setup, and whatever configures
+   linting and tests.
+2. Find the test runner and the test layers, then coverage, then the formatter, the linter and the type
+   checker.
 3. Resolve Strict TDD Mode with "Resolving Strict TDD Mode" in `_shared/implementation-craft.md`, using the runner step 2 found.
-4. Initialize persistence for the resolved mode.
-5. Build `.atl/skill-registry.md` using the skill-registry scan rules; in a git repository, also add `.atl/` to `.git/info/exclude` (never `.gitignore`) unless a line already ignores it.
-6. Persist testing capabilities and project context.
-7. Return the structured initialization envelope.
+4. Bring up the persistence that the chosen store mode requires.
+5. Write `.atl/skill-registry.md` by the scan rules in "Building the skill registry" of
+   `sdd-init/references/init-details.md`. In a git repository, list `.atl/` in `.git/info/exclude` too,
+   unless a line already ignores it; never use `.gitignore` for this.
+6. Store what was found: the project context, and with it the testing capabilities.
+7. Reply with the envelope described under Output Contract.
 
 ## Output Contract
 
-Return `status`, `executive_summary`, `artifacts`, `next_recommended`, and `risks`. Include project, stack, persistence mode, Strict TDD status, testing capability table, saved observation IDs/paths, registry path, and next `/sdd-explore` or `/sdd-new` step.
+The envelope you answer with has five fields:
+
+- `status`
+- `executive_summary`
+- `artifacts`
+- `next_recommended`
+- `risks`
+
+Include project, stack, persistence mode, Strict TDD status, testing capability table, saved observation IDs/paths, registry path, and next `/sdd-explore` or `/sdd-new` step.
 
 ## References
 
-- [sdd-init/references/init-details.md](sdd-init/references/init-details.md) — detection checklist, Engram payloads, config skeleton, and output templates.
-- `_shared/mcp/engram-convention.md` — Engram artifact naming (present only when the `engram` server is chosen).
-- `_shared/openspec-convention.md` — openspec layout and rules.
+- `sdd-init/references/init-details.md`: what to detect and where, what each Engram save carries, the
+  skeleton of the openspec config, and the templates for the reply.
+- `_shared/mcp/engram-convention.md`: the naming of what Engram stores; it exists only when the `engram`
+  server was chosen.
+- `_shared/openspec-convention.md`: the layout of openspec and the rules it keeps.
