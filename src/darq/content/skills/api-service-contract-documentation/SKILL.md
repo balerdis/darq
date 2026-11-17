@@ -3,7 +3,6 @@ name: api-service-contract-documentation
 description: "Trigger: documentar services, documentar servicios implementados, especificar request response, API request response contract, document API services, subamos estos services al repo, ya funcionan los services. Document verified API service contracts."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 

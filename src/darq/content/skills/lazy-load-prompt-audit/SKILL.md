@@ -3,7 +3,6 @@ name: lazy-load-prompt-audit
 description: "Trigger: agent prompt, lazy-load, prompt audit, instruction refactor, contradiction, prompt length. Audit or correct prompt architecture."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
   version: "1.0"
 ---
 

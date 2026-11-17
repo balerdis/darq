@@ -66,10 +66,10 @@ class FlowListTest(unittest.TestCase):
 
 class NestedMappingTest(unittest.TestCase):
     def test_parses_one_level_mapping(self):
-        text = "metadata:\n  author: gentleman-programming\n  version: \"1.0\"\n"
+        text = "metadata:\n  author: example-author\n  version: \"1.0\"\n"
         self.assertEqual(
             frontmatter.parse(text, "<test>"),
-            {"metadata": {"author": "gentleman-programming", "version": "1.0"}},
+            {"metadata": {"author": "example-author", "version": "1.0"}},
         )
 
     def test_nested_mapping_may_contain_a_boolean(self):

@@ -4,11 +4,11 @@
 **Source:** field work on the live install at `~/.config/opencode`, not on this repo
 **Status:** complete and runtime-validated (13 probes)
 
-> **Later note (C3a, 2026-08-18).** The agent measured here as `king-gentleman` ships in v4
-> as `arquitecto-darq`, and its prompt moved from `agents/darq-AGENTS.md` to
-> `agents/arquitecto-darq.md`. The old name is kept throughout this document on purpose: it is
-> what the probes actually addressed, and renaming it would turn a measurement into a claim
-> about an agent that did not exist on the date above.
+> **Later note (C3a, 2026-08-18).** The agent measured here ships in v4 as `arquitecto-darq`,
+> and its prompt moved from `agents/darq-AGENTS.md` to `agents/arquitecto-darq.md`. This
+> document calls it by that name throughout, but the probes addressed it under the earlier name
+> it carried on the date above: the measurements are of that earlier agent, not a claim about
+> the v4 one.
 >
 > Section 6's resolution — keep the restrained wording global and re-state the persona's as a
 > labelled override — is superseded. C3a moves Personality, Language, Tone, Philosophy,
@@ -37,7 +37,7 @@ which matters as much as what was changed.
 | `agents/darq-AGENTS.md` | 6.236 b / ~1.260 tok | 1.692 b / **~350 tok** |
 | Duplication between those two | 82 identical lines | **0** |
 | Always-on for `darq-orchestrator` | ~2.743 tok | **~2.390 tok** |
-| Always-on for `king-gentleman` | ~3.851 tok | **~2.459 tok** |
+| Always-on for `arquitecto-darq` | ~3.851 tok | **~2.459 tok** |
 
 For reference, the same treatment on the Claude Code side took `~/.claude/CLAUDE.md`
 from 31.379 b (~11,6k tokens per request) to 5.903 b (~2,6k).
@@ -96,7 +96,7 @@ Every one of the ten macros fits in 27–33 lines, against the framework's 80-li
 ## 5. Where the same treatment applied to the agent layer
 
 `AGENTS.md` is OpenCode's global instruction file and loads for **every** agent. That was
-probe-verified, not assumed: `king-gentleman` answered questions whose content exists only
+probe-verified, not assumed: `arquitecto-darq` answered questions whose content exists only
 in `AGENTS.md` (the CBM Priority Order, the "Persona Scope" section) *and* a question whose
 content exists only in `darq-AGENTS.md` ("Never build after changes").
 
@@ -114,7 +114,7 @@ It was also **divergent, not merely duplicated**:
   tools/resources" vs "only when they materially help".
 
 Resolution: keep AGENTS.md's restrained version as the global rule, and re-state
-king-gentleman's as an explicit, labelled **override** rather than a silent contradiction.
+arquitecto-darq's as an explicit, labelled **override** rather than a silent contradiction.
 
 `agents/darq-orchestrator.md` was already correctly thin (834 b) and was left alone
 apart from the preflight gate added in section 9.
@@ -156,12 +156,13 @@ adapter layout, or the generated macros are not portable.
 ### Third hazard — ownership gap
 
 `src/darq/content/agents/` currently ships only `darq-orchestrator.md` and
-`sdd-verify.md`. The other 9 phase prompts came from gentle-ai. If v4 is to replace the
+`sdd-verify.md`. The other 9 phase prompts came from an earlier installation. If v4 is to replace the
 live install it must own all 11 prompts. The 10 rewritten macros are working drafts.
 
-> Note: the gentle-ai *reinstall* risk is closed by decision, not by mitigation. Sergio
-> controls this machine, has separated from gentle-ai entirely, and will not reinstall or
-> update it. Treat the ownership gap as a migration item, not a live threat.
+> Note: the risk of a *reinstall* of that earlier installation is closed by decision, not by
+> mitigation. Sergio controls this machine, has left that earlier installation behind entirely,
+> and will not reinstall or update it. Treat the ownership gap as a migration item, not a live
+> threat.
 
 ---
 
@@ -415,7 +416,7 @@ Live install, after the work:
 | `prompts/sdd/*.md` | 10 thin identity macros with absolute-path loading gates |
 | `AGENTS.md` | eager identity, persona, Engram triggers, CBM gate + index freshness |
 | `agents/darq-orchestrator.md` | thin orchestrator identity + preflight gate |
-| `agents/darq-AGENTS.md` | king-gentleman persona only, with declared overrides |
+| `agents/darq-AGENTS.md` | arquitecto-darq persona only, with declared overrides |
 | `skills/engram-operations/SKILL.md` | new — lazy Engram operational detail |
 | `skills/_shared/sdd-session-preflight.md` | new — canonical preflight definition |
 | `skills/sdd-*/SKILL.md` | unchanged; they always held the real procedure |

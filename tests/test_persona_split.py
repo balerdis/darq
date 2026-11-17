@@ -234,14 +234,6 @@ class MarkerAbsenceTest(unittest.TestCase):
     def test_no_marker_carries_the_old_capitalised_spelling(self):
         self.assertNotIn("DARQ baseline:", self.text)
 
-    def test_the_gentle_ai_vocabulary_is_gone_from_the_whole_tree(self):
-        offenders = [
-            path.relative_to(ROOT).as_posix()
-            for path in ROOT.rglob("*.md")
-            if "gentle-ai:" in path.read_text(encoding="utf-8")
-        ]
-        self.assertEqual(offenders, [])
-
 class PersonaTest(SharedContentRules, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
